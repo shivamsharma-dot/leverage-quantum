@@ -1577,11 +1577,11 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                 <PremKPI label="Total Leads" value={fmtN(monthlyTotals.opp_count)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork Human Queued" value={fmtN(monthlyTotals.futwork_queued)} sub={monthlyScopeLabel} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI Queued" value={fmtN(monthlyTotals.futwork_ai_queued)} sub={monthlyScopeLabel} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.ai} />
-                <PremKPI label="Superbot Queued" value={fmtN(monthlyTotals.superbot_queued)} sub={monthlyScopeLabel} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.bot} />
                 <PremKPI label="Total QLs" value={fmtN(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork Human QLs" value={fmtN(monthlyTotals.futwork_qualified)} sub={'SR ' + fmtN(monthlyTotals.futwork_qualified_sr) + ' · AC ' + fmtN(monthlyTotals.futwork_qualified_ac)} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI QLs" value={fmtN(monthlyTotals.futwork_ai_qualified)} sub={'SR ' + fmtN(monthlyTotals.futwork_ai_qualified_sr) + ' · AC ' + fmtN(monthlyTotals.futwork_ai_qualified_ac)} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.ai} />
-                <PremKPI label="Superbot QLs" value={fmtN(monthlyTotals.superbot_qualified)} sub={monthlyScopeLabel} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.bot} />
+                <PremKPI label="AC Total" value={fmtN(monthlyTotals.futwork_qualified_ac + monthlyTotals.futwork_ai_qualified_ac)} sub={'Human ' + fmtN(monthlyTotals.futwork_qualified_ac) + ' · AI ' + fmtN(monthlyTotals.futwork_ai_qualified_ac)} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.total} />
+                <PremKPI label="SR Total" value={fmtN(monthlyTotals.futwork_qualified_sr + monthlyTotals.futwork_ai_qualified_sr)} sub={'Human ' + fmtN(monthlyTotals.futwork_qualified_sr) + ' · AI ' + fmtN(monthlyTotals.futwork_ai_qualified_sr)} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.total} />
               </div>
               <Card title="Source performance: volume vs. conversion" sub={monthlyScopeLabel + ' -- qualified volume and queued-to-QL conversion by source'} style={{ marginBottom: 14 }}>
                 {(() => {

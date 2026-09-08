@@ -6,10 +6,10 @@
 
 import { getSession, setSession, hasLoaded } from './sessionLoad'
 import { resolveSheetUrl } from './dataSources'
+import { fetchMonthlyQlsRows } from './monthlyQlsCache'
 
 const AD_ACCOUNT = 'act_641914389215638'
 const QLOPS_DAILY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops'
-const QLOPS_MONTHLY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot'
 const GOOGLE_LEADS_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads'
 const GLEAD_MON = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06', Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' }
 function parseGoogleLeadDate(raw) {
@@ -155,29 +155,23 @@ async function fetchQlopsDaily() {
   }
 }
 
+// Reads the same public.monthly_qls_daily Supabase cache LeadQualificationDashboard.jsx's
+// Monthly QLs view reads (src/lib/monthlyQlsCache.js) -- no more Google Sheet CSV here.
+// See CLAUDE.md, 2026-09-08, "do not depend on sheet now": that migration only covered
+// the dashboard page itself; this is the Summary page's own independent consumer of the
+// old QLSnapshot sheet, now moved onto the same pipeline.
 async function fetchQlopsMonthly() {
   try {
-    const url = await resolveSheetUrl('qlopsMonthly', QLOPS_MONTHLY_DEFAULT)
-    const csv = await fetch(url).then(r => (r.ok ? r.text() : ''))
-    if (!csv) return []
-    const rows = csv.trim().split('\n').map(parseCsvRow)
-    const [hdr, ...data] = rows
-    const low = hdr.map((x) => x.toLowerCase().trim())
-    const h = (k) => low.indexOf(k)
-    const num = (v) => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
-    const iPeriod = h('period')
-    if (iPeriod === -1) return []
-    return data
-      .filter((r) => r.length > 1 && (r[iPeriod] || '').trim())
-      .map((r) => ({
-        period: (r[iPeriod] || '').trim(),
-        source: (r[h('source')] || '').trim(),
-        oppCount: num(r[h('opp_count')]),
-        floorQueued: num(r[h('floor_queued')]),
-        futworkQualified: num(r[h('futwork_qualified')]),
-        superbotQualified: num(r[h('superbot_qualified')]),
-        futworkAiQualified: num(r[h('futwork_ai_qualified')]),
-      }))
+    const rows = await fetchMonthlyQlsRows()
+    return rows.map((r) => ({
+      period: r.period,
+      source: r.source,
+      oppCount: r.opp_count,
+      floorQueued: r.floor_queued,
+      futworkQualified: r.futwork_qualified,
+      superbotQualified: r.superbot_qualified,
+      futworkAiQualified: r.futwork_ai_qualified,
+    }))
   } catch (e) {
     console.error('summaryData: qlops monthly fetch failed', e)
     return []
