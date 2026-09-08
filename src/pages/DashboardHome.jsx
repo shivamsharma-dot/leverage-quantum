@@ -232,7 +232,7 @@ function qlAnalystLine(M) {
   const q = M.qlDeltaPct
   const qlVerb = (q === null || Math.abs(q) < 3) ? 'held roughly flat' : q > 0 ? ('climbed ' + Math.abs(q).toFixed(0) + '% day-on-day') : ('slipped ' + Math.abs(q).toFixed(0) + '% day-on-day')
   const share = M.futworkSharePct
-  const mixNote = (share === null || share === undefined) ? '' : (' Futwork is driving ' + share.toFixed(0) + '% of this month\u2019s qualified volume, with Superbot contributing the remaining ' + (100-share).toFixed(0) + '%.')
+  const mixNote = (share === null || share === undefined) ? '' : (' Futwork is driving ' + share.toFixed(0) + '% of this month\u2019s qualified volume.')
   return 'Qualified leads ' + qlVerb + ' to ' + fmtN(M.lastDay.ql) + ' yesterday.' + mixNote
 }
 
@@ -348,7 +348,7 @@ export default function DashboardHome() {
         <div className='lq-kpi-grid' style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28, animation:'fadeUp .4s ease .05s both' }}>
           <StatCard label='MTD Spend' value={fmtC(M.curMonthRow.spend||0)} sub='Meta Ads, month to date' loading={loading}
             icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><circle cx='12' cy='12' r='10'/></svg>}/>
-          <StatCard label='MTD Qualified Leads' value={fmtN(M.curMonthRow.ql||0)} sub={'Futwork '+fmtN(M.curMonthRow.futwork||0)+' \u00b7 Superbot '+fmtN(M.curMonthRow.superbot||0)} loading={loading}
+          <StatCard label='MTD Qualified Leads' value={fmtN(M.curMonthRow.ql||0)} sub={'Futwork '+fmtN(M.curMonthRow.futwork||0)} loading={loading}
             icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><polyline points='20 6 9 17 4 12'/></svg>}/>
           <StatCard label='Blended CPQL (MTD)' value={fmtC(M.mtdCPQL||0)} sub={M.prevMonthCPQL ? ('vs '+fmtC(M.prevMonthCPQL)+' last month') : 'Cost per qualified lead'} loading={loading}
             icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><line x1='12' y1='1' x2='12' y2='23'/><path d='M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'/></svg>}/>
@@ -382,12 +382,12 @@ export default function DashboardHome() {
           />
 
           <AnalysisSection
-            icon='qlops' color={C.green} title='Lead Qualification' tagline='Qualified lead volume by Futwork and Superbot -- last day, day-on-day, month-on-month'
+            icon='qlops' color={C.green} title='Lead Qualification' tagline='Qualified lead volume by Futwork -- last day, day-on-day, month-on-month'
             insight={qlAnalystLine(M)} loading={loading}
             stats={[
               { label:'Yesterday QLs', value: fmtN(M.lastDay?.ql||0), deltaPct: M.qlDeltaPct, deltaLabel:'vs day before' },
               { label:'Futwork (MTD)', value: fmtN(M.curMonthRow.futwork||0), deltaLabel: M.futworkSharePct!==null ? (M.futworkSharePct.toFixed(0)+'% of month total') : 'Month to date' },
-              { label:'Superbot (MTD)', value: fmtN(M.curMonthRow.superbot||0), deltaLabel: M.futworkSharePct!==null ? ((100-M.futworkSharePct).toFixed(0)+'% of month total') : 'Month to date' },
+              { label:'Total QLs (MTD)', value: fmtN(M.curMonthRow.ql||0), deltaLabel:'Month to date' },
             ]}
             dod={{ data:M.dod, key:'ql', fmt:(v)=>fmtN(v), type:'bar' }}
             mom={{ data:M.mom, key:'ql', fmt:(v)=>fmtN(v), type:'bar' }}
