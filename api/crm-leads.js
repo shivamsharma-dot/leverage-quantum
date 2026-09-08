@@ -3483,6 +3483,26 @@ async function upsertBatchesConcurrent(supabaseAdmin, table, records, batchSize,
 // 2026-08-24 it runs no SQL at all and reads only the Supabase cache, so it
 // stays gated on the leverage_careers page grant rather than on Settings/admin,
 // letting an ordinary viewer of that page load its own data at zero BigQuery cost.
+// Short-lived, warm-lambda-only cache for the Overall (BigQuery) dashboard's read path
+// -- see the long comment inside handleBigQuery for why this exists. Deliberately a
+// plain module-level Map (not Supabase/Redis/etc): it only needs to survive across
+// requests hitting the SAME warm serverless instance for a few minutes, exactly the
+// pattern already used elsewhere in this app (e.g. Ask AI's baseline-context caches).
+// A cold start or a different warm instance simply starts empty again -- that's fine,
+// the point is cutting REPEATED identical fetches within a short window, not a global
+// guarantee.
+const OVERALL_BQ_CACHE_TTL_MS = 5 * 60 * 1000
+const overallBqCache = new Map() // key -> { at, data }
+function overallBqCacheGet(key) {
+  const hit = overallBqCache.get(key)
+  if (hit && Date.now() - hit.at < OVERALL_BQ_CACHE_TTL_MS) return hit.data
+  return null
+}
+function overallBqCacheSet(key, data) {
+  overallBqCache.set(key, { at: Date.now(), data })
+  if (overallBqCache.size > 200) overallBqCache.delete(overallBqCache.keys().next().value)
+}
+
 async function handleBigQuery(req, res, me) {
   const auth = await import('../lib/auth.mjs')
   const mode = (req.query && req.query.mode) || 'ping'
@@ -3538,6 +3558,102 @@ async function handleBigQuery(req, res, me) {
       // totalBytesProcessed stays in the payload for shape compatibility with the
       // bundles that used to read it. It is genuinely 0 now.
       return res.status(200).json({ configured: true, cached: true, source: 'supabase_cache', rows, totalBytesProcessed: 0 })
+    } catch (err) {
+      return res.status(500).json({ error: String((err && err.message) || err) })
+    }
+  }
+
+  // The Overall (BigQuery) dashboard's own read path (src/lib/overallBqCache.js) used to
+  // fetch overall_bq_daily / overall_bq_daily_agg directly from the browser with the
+  // public Supabase anon key. Investigated live 2026-09-08 (Supabase's own Logs Explorer,
+  // grouped by request path over 24h): overall_bq_daily alone was generating ~6,451
+  // requests/day -- by far the single biggest table on the project -- which lined up
+  // almost exactly with the org's real measured egress (~580MB/day average against a
+  // 5GB/month free-tier cap) and is what pushed the account over quota two billing
+  // cycles running. Same page, same charts, same numbers either way -- this only changes
+  // where the data is fetched FROM.
+  //
+  // Fix: these four modes mirror overallBqCache.js's four exported functions exactly
+  // (same keyset-pagination-on-row_key technique as careers_leads above, for the same
+  // reason -- PostgREST caps every response at 1000 rows and an unordered page boundary
+  // is not stable), but run server-side and keep a short-lived in-memory copy of
+  // whatever was last fetched for a given (mode, since, until, sources) combination.
+  // The underlying table only actually changes 2-3x/day (overall-bq-sync.yml), so a
+  // 5-minute-old cached answer is never meaningfully stale.
+  const OVERALL_BQ_READ_MODES = ['overall_bq_rows', 'overall_bq_agg_rows', 'overall_bq_bounds', 'overall_bq_synced_at']
+  if (OVERALL_BQ_READ_MODES.includes(mode)) {
+    const { supabaseAdmin } = await import('../lib/auth.mjs')
+    const { since, until, sources } = req.query || {}
+    const sourceList = String(sources || '').split(',').map(s => s.trim()).filter(s => s && s !== 'All')
+    const cacheKey = JSON.stringify([mode, since || '', until || '', sourceList])
+    const cached = overallBqCacheGet(cacheKey)
+    if (cached) return res.status(200).json(Object.assign({}, cached, { fromCache: true }))
+
+    try {
+      let payload
+      if (mode === 'overall_bq_bounds') {
+        const one = async dir => {
+          const p = 'overall_bq_daily?select=lead_date_iso&lead_date_iso=not.is.null&order=lead_date_iso.' + dir + '&limit=1'
+          const r = await supabaseAdmin(p)
+          if (!r.ok) throw new Error('overall_bq_daily bounds read failed (' + r.status + ')')
+          const j = await r.json()
+          return j[0] ? j[0].lead_date_iso : null
+        }
+        const [min, max] = await Promise.all([one('asc'), one('desc')])
+        payload = { min, max }
+      } else if (mode === 'overall_bq_synced_at') {
+        const r = await supabaseAdmin('overall_bq_daily?select=synced_at&order=synced_at.desc&limit=1')
+        if (!r.ok) throw new Error('overall_bq_daily synced_at read failed (' + r.status + ')')
+        const j = await r.json()
+        payload = { synced_at: j[0] && j[0].synced_at ? j[0].synced_at : null }
+      } else {
+        if (!isIsoDate(since) || !isIsoDate(until)) {
+          return res.status(400).json({ error: 'since and until are required as YYYY-MM-DD' })
+        }
+        // Column lists and quoting rule copied verbatim from overallBqCache.js's
+        // BQ_COLUMNS / AGG_COLUMNS, named EXACTLY as BigQuery/the sync return them --
+        // that byte-identical naming is what lets a row drop straight into
+        // OverallDashboard's existing mapRow() with no translation layer.
+        const table = mode === 'overall_bq_agg_rows' ? 'overall_bq_daily_agg' : 'overall_bq_daily'
+        const columns = mode === 'overall_bq_agg_rows' ? [
+          'lead_date', 'month', 'Source',
+          'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+          'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+          'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+        ] : [
+          'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
+          'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+          'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+          'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+        ]
+        const select = columns.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
+        const PAGE = 1000
+        const rows = []
+        let cursor = null
+        for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
+          let path = table + '?select=' + encodeURIComponent(select + ',row_key')
+            + '&lead_date_iso=gte.' + since + '&lead_date_iso=lte.' + until
+            + '&order=row_key.asc&limit=' + PAGE
+          if (sourceList.length) {
+            const list = '(' + sourceList.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
+            path += '&Source=in.' + encodeURIComponent(list)
+          }
+          if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
+          const r = await supabaseAdmin(path)
+          if (!r.ok) {
+            const detail = await r.text().catch(() => '')
+            return res.status(502).json({ error: table + ' read failed (' + r.status + '): ' + detail.slice(0, 300) })
+          }
+          const page = await r.json()
+          if (!Array.isArray(page) || page.length === 0) break
+          for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+          if (page.length < PAGE) break
+          cursor = page[page.length - 1].row_key
+        }
+        payload = { rows }
+      }
+      overallBqCacheSet(cacheKey, payload)
+      return res.status(200).json(Object.assign({}, payload, { fromCache: false }))
     } catch (err) {
       return res.status(500).json({ error: String((err && err.message) || err) })
     }
