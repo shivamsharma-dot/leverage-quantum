@@ -654,17 +654,29 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const monthlyScoped = useMemo(() =>
     monthlyFiltered.filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
   , [monthlyFiltered, selMonthlySource])
-  // Month-on-month aggregation respecting source filter
+  // Period + source ONLY, deliberately NOT narrowed by the Days/custom-range
+  // window -- feeds ONLY the "Monthly breakdown" table below, whose own
+  // subtitle reads "All months - summed across sources"/"All months - <source>".
+  // monthlyScoped (above) already passes through monthlyFiltered's date-window
+  // filter, which is correct for the KPI cards/source chart/day-on-day table
+  // (their own labels state the active window) but was wrongly narrowing this
+  // table too -- e.g. the default MTD window silently zeroed out every month
+  // except the current one, even though the table claims to show them all.
+  const monthlyPeriodSourceOnly = useMemo(() =>
+    (selPeriod === 'all' ? monthlyRows : monthlyRows.filter(r => r.period === selPeriod))
+      .filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
+  , [monthlyRows, selPeriod, selMonthlySource])
+  // Month-on-month aggregation respecting source filter (never the date window)
   const monthlyByPeriodScoped = useMemo(() =>
     monthlyPeriods
       .map(p => {
-        const rs = monthlyScoped.filter(r => r.period === p)
+        const rs = monthlyPeriodSourceOnly.filter(r => r.period === p)
         const row = { period: p }
         MQ_METRICS.forEach(m => { row[m.key] = rs.reduce((s,r) => s + mNum(r[m.key]), 0) })
         return row
       })
       .filter(row => MQ_METRICS.some(m => row[m.key] > 0) || selMonthlySource === 'All')
-  , [monthlyScoped, monthlyPeriods, MQ_METRICS, selMonthlySource])
+  , [monthlyPeriodSourceOnly, monthlyPeriods, MQ_METRICS, selMonthlySource])
   // Day-on-day aggregation (period + source + date window), newest first
   const pctN = (a, b) => b > 0 ? (a / b) * 100 : null
   const heatColor = (v) => v == null ? C.muted : v >= 50 ? C.green : v >= 25 ? C.cyan : v >= 10 ? C.blue : C.navy
