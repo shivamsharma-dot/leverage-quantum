@@ -44,5 +44,6 @@ export const PAGE_LIST = [
   { id:'marketing_performance', label:'Marketing Performance', path:'/dashboard/marketing-performance', adminOnly:true },
   { id:'ceo_b2c_pnl', label:'Daily P&L', path:'/dashboard/ceo-b2c-pnl', adminOnly:true },
   { id:'ceo_b2c_cashflow', label:'Daily Cash Flow', path:'/dashboard/ceo-b2c-cashflow', adminOnly:true },
+  { id:'marketing_review', label:'Marketing Review', path:'/dashboard/marketing-review', adminOnly:true },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]

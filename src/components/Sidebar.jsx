@@ -60,6 +60,7 @@ export const NAV = [
           { to: '/dashboard/ceo-b2c-cashflow', label: 'Daily Cash Flow', matchType: 'route' },
         ]
       },
+      { to: '/dashboard/marketing-review', icon: <MarketingReviewIcon />, label: 'Marketing Review', end: false },
     ]
   },
   {
@@ -181,6 +182,10 @@ function PeopleIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fi
 // Rupee, not dollar -- every figure behind Revenue and the B2C page is INR.
 function RevenueIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg> }
 function OrganicSocialIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5"/><path d="M8.6 13.5 15.4 17.5"/></svg> }
+// Marketing Review -- a presentation deck (frame + play glyph), distinct from
+// ChartIcon (used for the Agent-generated Marketing Performance report):
+// this page is a manually-built, presentation-first review, not a report.
+function MarketingReviewIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M10.5 8.2v4.6l3.6-2.3z" fill="currentColor" stroke="none"/><path d="M8 21h8"/><path d="M12 17v4"/></svg> }
 function MetaIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> }
 // Leverage Careers -- a briefcase, distinct from the generic MetaIcon glyph
 // used for the main Meta Ads account since this is a separate ad account.
@@ -253,7 +258,7 @@ function FieldSchemaIcon(){ return <svg width="14" height="14" viewBox="0 0 24 2
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallBigQueryIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
-  'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>, 'Apps': <AppsIcon/>,
+  'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Marketing Review': <MarketingReviewIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>, 'Apps': <AppsIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'Lead Qualification': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
   'Human QL Detail': <FunnelIcon/>,
   'AI QL Detail': <BotIcon/>,

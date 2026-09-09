@@ -1,0 +1,93 @@
+/* Marketing Monthly Review — a dedicated presentation surface.
+   Keyframes / print rules / scrollbar-hiding live here because inline style
+   objects can't express @keyframes, @media print, or ::-webkit-scrollbar. */
+
+@keyframes mrFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mrSlideIn {
+  from { opacity: 0; transform: scale(.965) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes mrSheen {
+  from { transform: translateX(-120%) skewX(-12deg); opacity: 0; }
+  15%  { opacity: .9; }
+  to   { transform: translateX(220%) skewX(-12deg); opacity: 0; }
+}
+@keyframes mrBarGlow {
+  0%, 100% { opacity: .92; }
+  50%      { opacity: 1; }
+}
+@keyframes mrDrift1 {
+  0%   { transform: translate(-6%, -4%) rotate(0deg) scale(1); }
+  50%  { transform: translate(4%, 6%) rotate(180deg) scale(1.12); }
+  100% { transform: translate(-6%, -4%) rotate(360deg) scale(1); }
+}
+@keyframes mrDrift2 {
+  0%   { transform: translate(6%, 4%) rotate(0deg) scale(1.05); }
+  50%  { transform: translate(-5%, -6%) rotate(-180deg) scale(0.95); }
+  100% { transform: translate(6%, 4%) rotate(-360deg) scale(1.05); }
+}
+@keyframes mrDrift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-3%, 5%) scale(1.08); }
+}
+@keyframes mrParticleFloat {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: .55; }
+  90%  { opacity: .35; }
+  100% { transform: translateY(-140px) translateX(18px); opacity: 0; }
+}
+@keyframes mrLogoBar {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes mrPulseRing {
+  0%   { transform: scale(0.9); opacity: .55; }
+  70%  { opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes mrCoverTitleIn {
+  from { opacity: 0; transform: translateY(22px); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes mrKenBurns {
+  0%   { transform: scale(1) translate(0,0); }
+  100% { transform: scale(1.08) translate(-1%, -1%); }
+}
+
+.hideScroll { -ms-overflow-style: none; scrollbar-width: none; }
+.hideScroll::-webkit-scrollbar { display: none; }
+
+.staggerItem { animation: mrFadeUp .5s cubic-bezier(.22,1,.36,1) both; }
+
+.thumbBtn { transition: transform .18s cubic-bezier(.22,1,.36,1), box-shadow .18s ease, border-color .18s ease; }
+.thumbBtn:hover { transform: translateY(-3px); }
+
+.mrChevron { transition: background .15s ease, transform .12s ease; }
+.mrChevron:hover:not(:disabled) { transform: scale(1.08); }
+.mrChevron:active:not(:disabled) { transform: scale(.94); }
+
+.mrLaunchBtn { transition: transform .18s cubic-bezier(.22,1,.36,1), box-shadow .25s ease; }
+.mrLaunchBtn:hover { transform: translateY(-2px) scale(1.015); }
+.mrLaunchBtn:active { transform: translateY(0) scale(.99); }
+
+.mrGalleryCard { transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s ease, border-color .2s ease; }
+.mrGalleryCard:hover { transform: translateY(-5px); }
+
+@media print {
+  .noPrint { display: none !important; }
+  .printRoot {
+    position: static !important; display: block !important; overflow: visible !important;
+    height: auto !important; background: #fff !important; padding: 0 !important;
+  }
+  .printSlideOuter {
+    width: 100% !important; margin: 0 !important; box-shadow: none !important;
+    page-break-after: always; break-after: page; border-radius: 0 !important;
+  }
+  .printSlideInner {
+    transform: none !important; width: 100% !important; height: auto !important;
+    aspect-ratio: 16 / 9; position: relative !important; border-radius: 0 !important;
+  }
+}

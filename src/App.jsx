@@ -41,6 +41,7 @@ const AskAI = lazy(COMPONENT_IMPORTS.AskAI)
 const AgentsDashboard = lazy(COMPONENT_IMPORTS.AgentsDashboard)
 const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceReport)
 const CeoB2CDashboard = lazy(COMPONENT_IMPORTS.CeoB2CDashboard)
+const MarketingReviewDashboard = lazy(COMPONENT_IMPORTS.MarketingReviewDashboard)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
@@ -52,6 +53,7 @@ const PAGE_TITLES = {
   '/dashboard/overall-bigquery': 'Overall (BigQuery)',
   '/dashboard/ceo-b2c-pnl': 'Daily P&L',
   '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
+  '/dashboard/marketing-review': 'Marketing Review',
   '/dashboard/meta-ads': 'Meta Ads',
   '/dashboard/creative-downloader': 'Creative Downloader',
   '/dashboard/leverage-careers': 'Leverage Careers',
@@ -294,6 +296,7 @@ export default function App() {
           <Route path="/dashboard/ceo-b2c" element={<Navigate to="/dashboard/ceo-b2c-pnl" replace />} />
           <Route path="/dashboard/ceo-b2c-pnl" element={<ProtectedRoute dashboardId="ceo_b2c_pnl"> <CeoB2CDashboard statement="pnl" /></ProtectedRoute>} />
           <Route path="/dashboard/ceo-b2c-cashflow" element={<ProtectedRoute dashboardId="ceo_b2c_cashflow"> <CeoB2CDashboard statement="cashflow" /></ProtectedRoute>} />
+          <Route path="/dashboard/marketing-review" element={<ProtectedRoute dashboardId="marketing_review"> <MarketingReviewDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
