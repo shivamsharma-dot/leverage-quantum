@@ -6000,3 +6000,43 @@ User asked to "fill" three KPI cards -- Total QLs, Human QLs, AI QLs -- with the
 **Note for future sessions, per CLAUDE.md's own standing "KPI Card Standard" rule** ("always import from the shared KPICard, never a local one"): this is a deliberate, explicit, user-requested exception for exactly these 3 cards on this one page -- not a new pattern to reuse elsewhere. If another page ever wants a similar highlight, it should get its own explicit ask, not silently copy this component.
 
 **Live-verified on both routes**: Sheet mode -- Total QLs 3,078 (▲27.3%), Human QLs 1,807 (▲12.3%), AI QLs 1,271 (▲57.1%), all three rendering the solid green fill with white text, correctly distinct from the rest of the ~20-card grid; clicking Total QLs' delta pill correctly toggled to "was 2,418"; clicking Human QLs still correctly opened the "Human QL Detail" drill-down modal (the existing `onClickCapture` wiring is unaffected by the new component). BigQuery mode -- identical figures (3,078 / 1,807 / 1,271), confirming both pages stay in lockstep since they share the underlying `kpis` computation, just a different data source. Zero console errors on either page.
+
+## 2026-09-09 -- Overall (BigQuery): Funnel summary Month tab was minutes-slow after the Jan-2026 fix -- switched to the pre-aggregated table
+
+Direct follow-up to the previous entry's Month-tab fix (making it fetch January-onward
+instead of only the narrow on-screen window). That fix was correct in principle but had
+a real, severe performance regression only visible under live testing: it used
+`fetchOverallBqRows`, which reads the full per-campaign `overall_bq_daily` table.
+Live SQL confirmed each month holds 20,000-50,000+ campaign-level rows, so a 9-month
+range (Jan-Sep) could be 150,000-300,000+ rows -- the server-side endpoint's own ~60s
+time budget couldn't finish that, handing off to `fetchTailDirect`'s client-side keyset
+pagination, which then took several minutes to page through directly against Supabase.
+
+`byMonth`'s own aggregation only ever sums up to month-level, never campaign-level, so
+it never actually needed the per-campaign table. Switched `summaryMonthBqRows`'s fetch
+to `fetchOverallBqAggRows` (the pre-aggregated day+Source companion table, already used
+by the month-trend chart for the identical reason) -- resolves in seconds regardless of
+range width, since that table "stays at most a few thousand rows for the whole history"
+per its own comment.
+
+**Trade-off, disclosed rather than silently swallowed**: agg rows carry no
+`campaign_name`, so Corridor filter / campaign search / Advanced filter conditions
+(all keyed on `r.campaign`) can't be applied to this one table without either zeroing
+the whole Month tab out (an active Corridor filter would classify every empty-string
+campaign the same way) or misclassifying every row into one bucket. `summaryMonthRows`
+now only applies the Source filter (a real field on the agg table) in BQ mode; the
+other three are skipped outright for the Month tab specifically, and the table's own
+subtitle says so ("Corridor / campaign search / Advanced filter are not applied to this
+tab") whenever one of them is active elsewhere on the page.
+
+**Live-verified end-to-end** on `/dashboard/overall-bigquery`: confirmed via the
+deployed chunk's own source that `fetchOverallBqAggRows` and the disclosure-note string
+are genuinely live. Clicking the Month tab now fires exactly ONE request
+(`mode=overall_bq_agg_rows&since=2026-01-01&until=2026-09-09`), resolving in under 3
+seconds. All 9 months (Jan'26 through Sep'26) render real, non-zero figures --
+Jan'26: 1,46,170 leads / 28,554 floor queued / 1,67,060 total queued / 1,17,616 Futwork
+Human queued, and so on through Sep'26 -- and the TOTAL row's Leads (13,04,448)
+reconciles exactly to the sum of all 9 months' individual figures, confirming no data
+loss or double-counting. Setting Source=Facebook correctly re-narrowed every month's
+figures (13,04,448 -> 6,27,252 total leads) with a fresh, fast agg-table refetch,
+confirming Source filtering still genuinely applies in BQ mode. Zero console errors.
