@@ -284,3 +284,74 @@ Fix: `DeltaCell` got a `showPrior` prop (default `true`); the vs-prior-month cal
 passes `showPrior={false}`, the vs-last-year call site is untouched. Commit `b5b72ef`.
 `npm run build` passed clean; not yet clicked through live (same no-browser-session
 limitation as the rest of this page — see "Verification status" above).
+
+## 2026-09-09 (later) — slides 4/5 go live, plus 3 new channel-spotlight slides
+
+User: "the 4th slide should also be taken from overall big query only... same goes for
+5th... We should have 3 separate slides one for google, second for meta ads, third for
+organic (Most important)." Clarified via AskUserQuestion: add 3 new slides AFTER slide 5
+(don't replace 4/5); "Organic" definition left to me — went with the app's own existing
+`overallFunnelCache.js` `mapChannel`/`CHANNELS` classification (Facebook→Meta Ads,
+Google→Google Ads, Content+Brand→Organic, else→Other) rather than a broader
+"everything non-paid" definition, since Remarketing/Affiliate carry real spend and are
+classified paid elsewhere in this app — lumping them into Organic would have diluted its
+whole point (a channel that should show near-zero spend/CPQL).
+
+**Data layer**: `aggregateReviewMonth` gained a `queued` field (Floor + Futwork Human/AI +
+Superbot, additive only — doesn't touch anything slide 3 already reads). New
+`aggregateReviewMonthByChannel(rows, key)` rolls the same rows up by channel via
+`reviewMapChannel`. Provider now also exposes `aggByMonth`, `byChannelByMonth`,
+`channelRowsByChannel` (per-channel headline-style rows, built by a new `buildChannelRows`
+— same 3-months+2-deltas shape as `buildHeadlineRows` but scoped to one channel, AC
+Sales/CPS dropped since neither has a real per-channel figure).
+
+**Slide 4** ("Where the QLs came from") now shows real QL volume by channel for the
+current month, ranked bars, zero-QL channels filtered out. **Slide 5** ("How leads moved
+through the pipeline") shows a real 4-stage funnel (Leads → Total Queued → Total QL →
+Applications) for the current month. **New slides 6/7/8** (Google Ads / Meta Ads /
+Organic) — one shared `ChannelSpotlightBody` component + 3 named wrapper slides (never
+threaded a `channel` prop through `SLIDES`' fixed `{active, period}` Body signature).
+Deck grows 9 → 12 slides.
+
+**Two real Rules-of-Hooks fixes before push**: `ChannelPerformanceSlide`/`FunnelSlide`
+initially called `useMemo` *after* an early `if (!ctx) return null` — unlike
+`HeadlineSlide`'s own safe pattern (all hooks first, then branch). Since the provider
+always wraps the whole page, `ctx` can never actually toggle null↔non-null for one
+mounted instance, so this wouldn't have crashed in practice — but fixed to match the
+established safe pattern rather than leave a technically-fragile one. `ChannelSpotlightBody`
+never used a hook after its own early return, so it needed no change.
+
+**Two real bugs found live-testing the funnel slide, both fixed same session (see the
+`fix(marketing-review)` commit right after the feature commit)**:
+1. `max` was hardcoded to `stages[0].value` (Leads) — but Total Queued is summed by its
+   own queuing-timestamp month, independent of the underlying lead's generation month, so
+   it can genuinely exceed Leads (real Aug'26 data: 1,27,299 queued vs 1,11,941 leads).
+   That produced a bar wider than its own row. Fixed to the true max across all stages.
+2. Label+value text was rendered INSIDE each bar (`justify-content:space-between`) —
+   collided illegibly once a stage's bar shrank to a few percent width (Leads-to-
+   Applications spans 2+ orders of magnitude on real data: Total QL ≈6.8% width,
+   Applications ≈0.3%, floored to 3%). Moved label/value above the bar as plain text; the
+   bar underneath is now a purely proportional visual indicator.
+
+**Live-verified end-to-end** (real browser, authenticated session): landing page shows
+"12 SLIDES · AUGUST 2026" with all 12 real thumbnails in the right order. Slide 4: Meta
+Ads 5,444 / Google Ads 1,444 / Affiliate 1,265 / Other 427 / Remarketing 53 — sums to
+8,633, exactly matching slide 3's Aug'26 QL total. Slide 5, after the fix: Leads
+1,11,941 (88% width) / Total Queued 1,27,299 (100% width, correctly the widest) / Total
+QL 8,633 (visible ~7% sliver, fully legible) / Applications 393 (floored 3% sliver, fully
+legible) — no collision, no overflow. Slide 6 (Google Ads) QL Aug'26 = 1,444, slide 7
+(Meta Ads) QL Aug'26 = 5,444 — both exactly match their bars on slide 4. Zero real
+console errors (only the pre-existing benign extension "message channel closed" noise).
+
+**Real, non-bug finding worth surfacing, not glossed over**: slide 8 (Organic) shows
+every cell as "—" across all 4 months (Jun/Jul/Aug'26 and Aug'25) — `Content+Brand`, the
+literal Source label this classification maps to "Organic," has had **zero** measurable
+QL activity in the whole trailing window. This is correct rendering of real data, not a
+bug — but the user explicitly called Organic "most important," so this is worth a direct
+conversation: either Organic traffic is tracked under a different Source label in this
+business (candidate: the 427-QL "Other" bucket on slide 4, which is whatever didn't map
+to Meta/Google/Remarketing/Affiliate/Content+Brand) and the classification needs
+widening, or Organic genuinely has no measurable contribution right now and that itself
+is the finding. Flagged to the user directly rather than left to be discovered later.
+
+Commits: `10a15de` (feature), `9da84e4` (funnel-slide bug fixes).
