@@ -93,6 +93,24 @@ function defaultReviewPeriod() {
   return mostRecentCompletedMonth().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
+// Same shared, admin-configurable assumptions OverallDashboard.jsx's own Est.
+// SR Revenue KPI reads (Settings > Data > SR Revenue Assumptions) -- same
+// keys, same default/clamp logic -- so the funnel slide's Total Revenue
+// figure can never silently drift from what Overall itself would show for
+// the same month.
+const SR_FEE_KEY = 'lq_sr_fee'
+const SR_FEE_DEFAULT = 350000
+const RAU_PCT_KEY = 'lq_rau_conversion_pct'
+const RAU_PCT_DEFAULT = 75
+function readSrFee() {
+  try { const s = localStorage.getItem(SR_FEE_KEY); const n = s ? Number(s) : SR_FEE_DEFAULT; return isNaN(n) || n <= 0 ? SR_FEE_DEFAULT : n }
+  catch { return SR_FEE_DEFAULT }
+}
+function readRauPct() {
+  try { const s = localStorage.getItem(RAU_PCT_KEY); const n = s ? Number(s) : RAU_PCT_DEFAULT; return isNaN(n) || n <= 0 || n > 100 ? RAU_PCT_DEFAULT : n }
+  catch { return RAU_PCT_DEFAULT }
+}
+
 function fmtINR(n) { return '₹' + Math.round(n).toLocaleString('en-IN') }
 function fmtN(n) { return Math.round(n).toLocaleString('en-IN') }
 // Cr/L shorthand -- same convention as OverallDashboard.jsx's own fmtINRShort:
@@ -149,7 +167,7 @@ function aggregateReviewMonth(rows, key) {
   for (const r of rows) {
     if (r.month !== key) continue
     const src = r.Source || 'Unknown'
-    const e = bySource.get(src) || { leads: 0, ql: 0, humanQl: 0, aiQl: 0, superbotQl: 0, apps: 0, spend: 0, queued: 0, floorQueued: 0 }
+    const e = bySource.get(src) || { leads: 0, ql: 0, humanQl: 0, aiQl: 0, superbotQl: 0, apps: 0, spend: 0, queued: 0, floorQueued: 0, deposits: 0 }
     e.leads += reviewNum(r['Total Leads Generated'])
     e.humanQl += reviewNum(r['Futwork Human QL'])
     e.aiQl += reviewNum(r['Futwork AI QL'])
@@ -157,6 +175,7 @@ function aggregateReviewMonth(rows, key) {
     e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
     e.apps += reviewNum(r['Total Apps'])
     e.spend += reviewNum(r['Total_Spends'])
+    e.deposits += reviewNum(r['Total Deposits'])
     // Total Queued (funnel slide only) -- matches OverallDashboard.jsx's own
     // `const totalQueued = kpis.futworkHumanQ + kpis.futworkAiQ + kpis.superbotQ`
     // EXACTLY (verified live against production Supabase, Aug'26: 86,532).
@@ -173,14 +192,14 @@ function aggregateReviewMonth(rows, key) {
     e.floorQueued += reviewNum(r['floor_queued'])
     bySource.set(src, e)
   }
-  let leads = 0, ql = 0, humanQl = 0, aiQl = 0, superbotQl = 0, apps = 0, spend = 0, queued = 0, floorQueued = 0, paidLeads = 0, paidQl = 0, paidApps = 0
+  let leads = 0, ql = 0, humanQl = 0, aiQl = 0, superbotQl = 0, apps = 0, spend = 0, queued = 0, floorQueued = 0, deposits = 0, paidLeads = 0, paidQl = 0, paidApps = 0
   for (const e of bySource.values()) {
     leads += e.leads; ql += e.ql; humanQl += e.humanQl; aiQl += e.aiQl; superbotQl += e.superbotQl
-    apps += e.apps; spend += e.spend; queued += e.queued; floorQueued += e.floorQueued
+    apps += e.apps; spend += e.spend; queued += e.queued; floorQueued += e.floorQueued; deposits += e.deposits
     if (e.spend > 0) { paidLeads += e.leads; paidQl += e.ql; paidApps += e.apps }
   }
   return {
-    hasData: bySource.size > 0, leads, ql, humanQl, aiQl, superbotQl, apps, spend, queued, floorQueued,
+    hasData: bySource.size > 0, leads, ql, humanQl, aiQl, superbotQl, apps, spend, queued, floorQueued, deposits,
     cpl: paidLeads > 0 ? spend / paidLeads : null,
     cpql: paidQl > 0 ? spend / paidQl : null,
     cpa: paidApps > 0 ? spend / paidApps : null,
@@ -405,6 +424,8 @@ function MarketingReviewDataProvider({ children }) {
   const [acSales, setAcSales] = useState({})
   const [acSalesLoaded, setAcSalesLoaded] = useState(false)
   const [acSaving, setAcSaving] = useState(false)
+  const [acRevenue, setAcRevenue] = useState({})
+  const [acRevenueSaving, setAcRevenueSaving] = useState(false)
   const [syncedAt, setSyncedAt] = useState(null)
   const [organicSubRows, setOrganicSubRows] = useState(null)
 
@@ -464,7 +485,13 @@ function MarketingReviewDataProvider({ children }) {
     let dead = false
     fetch('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { prefs: {} })
-      .then(d => { if (!dead) { setAcSales((d.prefs && d.prefs.ac_sales_manual) || {}); setAcSalesLoaded(true) } })
+      .then(d => {
+        if (!dead) {
+          setAcSales((d.prefs && d.prefs.ac_sales_manual) || {})
+          setAcRevenue((d.prefs && d.prefs.ac_actual_revenue_manual) || {})
+          setAcSalesLoaded(true)
+        }
+      })
       .catch(() => { if (!dead) setAcSalesLoaded(true) })
     return () => { dead = true }
   }, [])
@@ -488,6 +515,28 @@ function MarketingReviewDataProvider({ children }) {
       setAcSaving(false)
     }
   }, [acSales])
+
+  // AC Actual Revenue -- a NEW, separate manual ₹ entry (per user's explicit
+  // choice, 2026-09-10: NOT derived from the existing AC Sales count, which
+  // is a unit count used for CPS, not a revenue figure). Same optimistic-
+  // write/revert-on-failure pattern as saveAcSales above.
+  const saveAcRevenue = useCallback(async (next) => {
+    const prev = acRevenue
+    setAcRevenue(next); setAcRevenueSaving(true)
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'ac_actual_revenue_manual', value: next }),
+      })
+      if (!r.ok) throw new Error('Save failed')
+      return true
+    } catch (e) {
+      setAcRevenue(prev)
+      return false
+    } finally {
+      setAcRevenueSaving(false)
+    }
+  }, [acRevenue])
 
   const aggByMonth = useMemo(() => {
     if (!rows) return null
@@ -546,11 +595,11 @@ function MarketingReviewDataProvider({ children }) {
 
   const value = useMemo(() => ({
     months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
-    acSales, acSaving, saveAcSales, syncedAt,
-    aggByMonth, byChannelByMonth, channelRowsByChannel,
+    acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
+    aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
     organicSubSourceBreakdown, fetchChannelCampaigns,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubSourceBreakdown, fetchChannelCampaigns])
+  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns])
 
   return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
@@ -952,14 +1001,14 @@ function ChannelPerformanceSlide({ active, period }) {
 // as the parent stage bars (label/value above, proportional bar below) but
 // smaller and indented, so a click reads as "expanding" the row it came from
 // rather than opening something disconnected.
-function FunnelSubRow({ label, value, max, hue, active, delay }) {
+function FunnelSubRow({ label, value, max, hue, active, delay, money }) {
   const widthPct = active ? Math.max(3, Math.min(100, (value / max) * 100)) : 0
   return (
     <div style={{ paddingLeft: 22 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: '#475569' }}>{label}</span>
         <span style={{ fontSize: 13.5, fontWeight: 800, color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
-          <AnimatedNumber value={value} active={active} delay={delay} duration={700} />
+          <AnimatedNumber value={value} money={money} active={active} delay={delay} duration={700} />
         </span>
       </div>
       <div style={{ height: 9, borderRadius: 5, background: '#F1F5F9', overflow: 'hidden' }}>
@@ -972,7 +1021,13 @@ function FunnelSubRow({ label, value, max, hue, active, delay }) {
 function FunnelSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const aggByMonth = ctx && ctx.aggByMonth
+  const acRevenue = ctx && ctx.acRevenue
+  const saveAcRevenue = ctx && ctx.saveAcRevenue
+  const months = ctx && ctx.months
   const [expanded, setExpanded] = useState(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [draftRevenue, setDraftRevenue] = useState('')
+  const [savingRevenue, setSavingRevenue] = useState(false)
   const stages = useMemo(() => {
     if (!aggByMonth) return []
     const a = aggByMonth.current
@@ -990,6 +1045,43 @@ function FunnelSlide({ active, period }) {
       { key: 'apps', label: 'Applications', value: a.apps },
     ]
   }, [aggByMonth])
+  // Est. SR Revenue reuses Overall's own live, shared formula (Settings >
+  // Data > SR Revenue Assumptions): Estimated RAU = Deposits x rauPct%,
+  // Est. SR Revenue = Estimated RAU x SR Fee -- same keys/defaults, so this
+  // can never silently drift from what Overall itself would show. AC Actual
+  // Revenue is a brand-new, separate manual ₹ entry (per explicit user
+  // choice, 2026-09-10) -- deliberately NOT derived from the existing AC
+  // Sales count on the headline slide, which is a unit count for CPS, not a
+  // revenue figure.
+  const revenue = useMemo(() => {
+    if (!aggByMonth || !months) return null
+    const a = aggByMonth.current
+    const estimatedRaus = a.deposits * (readRauPct() / 100)
+    const estSrRevenue = estimatedRaus * readSrFee()
+    const ym = ymOf(months.current)
+    const hasAcActual = acRevenue && acRevenue[ym] != null
+    const acActual = hasAcActual ? acRevenue[ym] : 0
+    return { estSrRevenue, acActual, hasAcActual, total: estSrRevenue + acActual }
+  }, [aggByMonth, acRevenue, months])
+
+  const openRevenueEdit = () => {
+    const ym = months ? ymOf(months.current) : null
+    setDraftRevenue(ym && acRevenue && acRevenue[ym] != null ? String(acRevenue[ym]) : '')
+    setEditOpen(true)
+  }
+  const saveRevenueDraft = async () => {
+    const trimmed = draftRevenue.trim()
+    const n = Number(trimmed)
+    if (trimmed !== '' && (!Number.isFinite(n) || n < 0)) return
+    setSavingRevenue(true)
+    const ym = ymOf(months.current)
+    const next = { ...acRevenue }
+    if (trimmed === '') delete next[ym]; else next[ym] = n
+    const ok = await saveAcRevenue(next)
+    setSavingRevenue(false)
+    if (ok) setEditOpen(false)
+  }
+
   if (!ctx) return null
   // The true max across every stage, NOT stages[0] (Leads) -- Total Queued
   // is a same-CALENDAR-MONTH sum of its own queuing timestamp, independent
@@ -1053,7 +1145,58 @@ function FunnelSlide({ active, period }) {
             </div>
           )
         })}
+        {/* Total Revenue -- deliberately NOT one of the proportional funnel
+            bars above (a rupee figure and a lead COUNT don't share a
+            meaningful scale), so it's its own clickable summary row instead,
+            revealing Est. SR Revenue vs AC Actual Revenue on click -- those
+            two genuinely do share a scale (both money), unlike Revenue vs Leads. */}
+        {revenue && (
+          <div style={{ paddingTop: 4, borderTop: '1px solid #F1F5F9' }}>
+            <div
+              onClick={() => setExpanded(v => v === 'revenue' ? null : 'revenue')}
+              style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', cursor: 'pointer' }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                Total Revenue
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: expanded === 'revenue' ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                {active && (
+                  <button type="button" onClick={e => { e.stopPropagation(); openRevenueEdit() }} className={styles.noPrint} title="Enter AC Actual Revenue"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BLUE, padding: 2, display: 'inline-flex' }}>
+                    <EditIcon />
+                  </button>
+                )}
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                <AnimatedNumber value={revenue.total} money active={active} delay={0.12 * stages.length} duration={1000} />
+              </span>
+            </div>
+            {expanded === 'revenue' && (
+              <div className={styles.staggerItem} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, paddingTop: 4 }}>
+                <FunnelSubRow label="Estimated SR Revenue" value={revenue.estSrRevenue}
+                  max={Math.max(1, revenue.estSrRevenue, revenue.acActual)} hue={NAVY} active={active} delay={0} money />
+                <FunnelSubRow label={revenue.hasAcActual ? 'AC Actual Revenue' : 'AC Actual Revenue (not entered yet)'} value={revenue.acActual}
+                  max={Math.max(1, revenue.estSrRevenue, revenue.acActual)} hue={BLUE} active={active} delay={0.08} money />
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      {editOpen && (
+        <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 320, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Actual Revenue</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — entered here for {period}, in rupees.</div>
+            <input type="number" min="0" value={draftRevenue} onChange={e => setDraftRevenue(e.target.value)}
+              placeholder="0" style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, fontFamily: FONT, boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+              <Button size="sm" variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={saveRevenueDraft} disabled={savingRevenue}>{savingRevenue ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </LiveDataFrame>
   )
 }
@@ -1128,6 +1271,78 @@ function ChannelSpotlightBody({ active, period, channel }) {
 function GoogleAdsChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Google Ads" /> }
 function MetaAdsChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Meta Ads" /> }
 function OrganicChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Organic" /> }
+
+// TOF (top-of-funnel) / branding campaigns -- per explicit user confirmation
+// (2026-09-10, "use exactly what I found"), this is a real naming-pattern
+// rule inferred FROM the exact real campaigns that surfaced this session
+// (Branding_Unipoles_DU_Nov2024, several Newspaper-TOI-*/Newspaper-NBT-*
+// entries, RJ_Abhinav, ThinkSchool_July2024) -- offline/reach-oriented plays
+// sitting under Organic with ~0 QLs, which is expected (brand awareness,
+// not lead-gen). A fixed pattern rather than a hardcoded one-off list of
+// this month's exact names, so it keeps working as new offline insertions
+// run in future months. Reuses organicSubRows (already fetched for the
+// Organic spotlight slide) -- no new data fetch.
+const TOF_SUB_SOURCE_PATTERN = /^(branding_|newspaper-|rj_|thinkschool_)/i
+function TofCampaignsSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const tof = useMemo(() => {
+    if (!ctx || !ctx.organicSubRows) return null
+    const bySub = new Map()
+    for (const r of ctx.organicSubRows) {
+      const sub = r.Sub_Source || ''
+      if (!TOF_SUB_SOURCE_PATTERN.test(sub)) continue
+      const e = bySub.get(sub) || { name: sub, leads: 0, ql: 0 }
+      e.leads += reviewNum(r['Total Leads Generated'])
+      e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+      bySub.set(sub, e)
+    }
+    return [...bySub.values()].sort((a, b) => b.leads - a.leads)
+  }, [ctx])
+  if (!ctx) return null
+  const { months } = ctx
+  return (
+    <LiveDataFrame ctx={ctx} label="Top-of-Funnel & Branding" title="Awareness & offline campaigns" period={period} active={active}>
+      <div style={{ fontSize: 12.5, color: '#64748B', lineHeight: 1.6, marginBottom: 18, maxWidth: 560 }}>
+        Reach-oriented campaigns (print, radio, out-of-home) — near-zero QLs is expected
+        here; these are measured on awareness, not direct lead conversion.
+      </div>
+      {tof == null ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14 }}>
+          <span className={styles.mrSpinner} />Loading campaign activity…
+        </div>
+      ) : tof.length === 0 ? (
+        <div style={{ color: '#94A3B8', fontSize: 14 }}>No branding/offline campaign activity recorded for {months ? monthShort(months.current) : 'this month'}.</div>
+      ) : (
+        <div>
+          {tof.map((t, i) => {
+            const max = Math.max(1, ...tof.map(x => x.leads))
+            const pct = active ? Math.max(3, Math.min(100, (t.leads / max) * 100)) : 0
+            return (
+              <div key={t.name} className={active ? styles.staggerItem : undefined}
+                style={{ marginBottom: 16, animationDelay: active ? (0.06 * i) + 's' : undefined }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#334155' }}>{t.name}</span>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+                    <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 700 }}>{fmtN(t.ql)} QL</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                      <AnimatedNumber value={t.leads} active={active} delay={0.06 * i} duration={800} /> leads
+                    </span>
+                  </span>
+                </div>
+                <div style={{ height: 12, borderRadius: 6, background: '#F1F5F9', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', borderRadius: 6, width: pct + '%', transition: `width .8s cubic-bezier(.22,1,.36,1) ${0.06 * i}s`,
+                    background: `linear-gradient(90deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[i % 4]}CC)`,
+                  }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </LiveDataFrame>
+  )
+}
 
 function CalloutIcon({ kind }) {
   if (kind === 'win') return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -1311,6 +1526,7 @@ const SLIDES = [
   { id: 'channel-google', section: 'Channel Spotlight', title: 'Google Ads', Body: GoogleAdsChannelSlide },
   { id: 'channel-meta', section: 'Channel Spotlight', title: 'Meta Ads', Body: MetaAdsChannelSlide },
   { id: 'channel-organic', section: 'Channel Spotlight', title: 'Organic', Body: OrganicChannelSlide },
+  { id: 'tof', section: 'Top-of-Funnel & Branding', title: 'Awareness & offline campaigns', Body: TofCampaignsSlide },
   { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide },
   { id: 'risks', section: 'Risks & Watch-outs', title: 'What needs attention', Body: RisksSlide },
   { id: 'next', section: "Next Month's Priorities", title: "What we're doing next", Body: NextStepsSlide },
