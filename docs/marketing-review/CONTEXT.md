@@ -268,3 +268,19 @@ Next step whenever a session with real credentials is available: open the page a
 click through Start presentation → thumbnail nav → every keyboard shortcut →
 Fullscreen → Presenter view → Print/Export PDF → Read view → the headline slide's
 AC Sales edit modal (open, type a number, Save, confirm it persists on reload).
+
+## 2026-09-09 (later) — headline slide: dropped a redundant "(was X)" annotation
+
+User caught it live: the "vs {prior month}" delta column showed "▲ 12.3% (was ₹54.0L)"
+where ₹54.0L is exactly the prior month's own value — already sitting right there as
+its own column in the trio (June/July/August). Showing it twice was noise.
+
+`priorForDeltaVsPrior` in `buildHeadlineRows()` is literally `v1` (the middle month),
+i.e. `row.values[1]` — so the redundancy was exact, not approximate. The "vs same
+month last year" delta's prior value is NOT shown anywhere else in the table (last
+year isn't a column), so that one keeps its "(was X)".
+
+Fix: `DeltaCell` got a `showPrior` prop (default `true`); the vs-prior-month call site
+passes `showPrior={false}`, the vs-last-year call site is untouched. Commit `b5b72ef`.
+`npm run build` passed clean; not yet clicked through live (same no-browser-session
+limitation as the rest of this page — see "Verification status" above).
