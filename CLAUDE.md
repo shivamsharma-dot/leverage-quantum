@@ -1239,6 +1239,48 @@ Confirmed the deployed chunk contains zero remaining references to the removed s
 classes and does contain the new insight strings, before trusting any of the above.
 Zero console errors. `npm run build` clean.
 
+## 2026-09-10 -- Marketing Review: real Organic misclassification fixed, interactive drill-downs, laser write mode, fullscreen space reclaim (commit `fc7fa17`)
+
+User feedback made clear "more animation" was never really about the count-up
+numbers alone (that was "just an example") -- the real asks were deeper
+interactivity and a genuine data investigation. Biggest finding: the shared
+`mapChannel()` in `overallFunnelCache.js` keys Organic traffic off a Source
+label ('Content+Brand') that no longer exists in production BigQuery data --
+confirmed live, the real Source value is now literally 'Organic'. Every real
+Organic row had been silently falling into 'Other' as a result (Aug'26 real
+Organic QL = 415, not the 0 this deck had shown for weeks). Fixed with a
+LOCAL, corrected classification inside `MarketingReviewDashboard.jsx` (no
+longer imports the shared, still-buggy mapping); flagged the shared file for
+a separate fix via `spawn_task` since `MarketingPerformanceReport.jsx` also
+depends on it and fixing that consumer is out of scope for this page.
+
+Also shipped: Organic's spotlight slide drops Spend/CPL/CPQL/CPA (no real
+spend exists there) and shows a real QL-by-Sub_Source breakdown instead
+(Web/Inbound phone call/Blog/App/...), fetched on-demand from the bigger
+per-campaign table scoped to Source=Organic + current month only (small,
+fast -- NOT the whole month across all sources, which this codebase has
+already learned runs 20-50k+ rows). The funnel slide's Total QL is now
+click-to-expand, revealing the real Futwork Human/AI/Superbot split. The
+Channel Performance slide's every bar is now click-to-expand too, showing
+real top-5 campaigns for that channel this month (highest-QL among
+at-or-below-median-CPQL campaigns for paid channels, reusing this app's own
+established campaign-performance-heuristic; highest-QL alone for Organic) --
+fetched on demand per channel, never prefetched for all of them. Added a
+write/annotate mode (W) alongside the existing laser (L): freehand ink drawn
+over the current slide, each stroke fading out ~2.6s after it's drawn.
+Fullscreen: the stage now reclaims the screen space chrome was reserving
+once auto-hide has actually hidden it, so Fullscreen visibly, substantially
+grows the slide instead of leaving the same fixed insets regardless of
+Fullscreen state (previously the most likely reason it "didn't look wider").
+
+Full detail, the ranking heuristic, and what's still pending clarification
+(TOF/branding campaign identification, the exact "AC Actual Revenue" figure
+for a planned funnel-slide revenue graph) in `docs/marketing-review/
+CONTEXT.md`. Live-verified end-to-end in a real authenticated browser
+session -- including confirming the ink-stroke render/fade via direct DOM
+inspection, since the visual fade window (2.6s) is shorter than a
+screenshot round-trip in this environment. `npm run build` clean.
+
 ## 2026-09-09 (later still) -- Overall Sheet vs BigQuery: confirmed same query, two real (non-code) sources of numeric drift found and documented
 
 User pasted the live "Overall" BigQuery saved query and asked to deep-dive why Sheet-mode

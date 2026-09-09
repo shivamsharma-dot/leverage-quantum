@@ -460,6 +460,131 @@ landing page (no subtitle, confirmed), slide 4 (all 6 channels including Organic
 slide 3 (headline table, no footer/pill), slide 5 (Total Queued = 86,532, corrected),
 digit-jump, blackout, laser pointer — all matched expectations. Zero console errors.
 
+## 2026-09-10 — real Organic misclassification found + fixed, interactive drill-downs, laser write mode, fullscreen space reclaim (commit `fc7fa17`)
+
+User corrected the previous turn directly: "Real count-up numbers (i just said this is
+just an example)" — the count-up build was a literal reading of one example, not the
+actual ask. The real asks this round: research more animation ideas (not yet acted on,
+see below); explain WHY Organic ever shows Spend when the business doesn't spend on it,
+and split Organic down to sub-source; a new slide for TOF/branding campaigns; make the
+funnel slide interactive (Total QL → Human/AI split; a new Total Revenue graph → Est. SR
+Revenue vs. manually-entered AC Actual Revenue); make every channel's QL bar reveal its
+real top-5 campaigns on click; fix Fullscreen not actually widening the slide; add a
+"write" annotation mode alongside the laser.
+
+**The most consequential finding of this pass, by far: a real, confirmed data bug, not
+a feature request.** Investigated the Organic-has-no-spend question by querying live
+production data (`overall_bq_daily`) for real distinct `Source` values — and found the
+actual value is literally `'Organic'`, not `'Content+Brand'` (the key this page's shared
+import, `overallFunnelCache.js`'s `mapChannel`, has always used). Since `'Organic'` was
+never a key in that map, every real Organic row has been silently falling into `'Other'`
+— explaining, precisely, why this deck showed "Organic: 0" for weeks and why the earlier
+"Organic has zero measurable QL activity" finding (logged two entries above) was WRONG.
+Real Aug'26 Organic QL is 415 (verified via a direct scratch-script query before touching
+any code) — a real number this deck had simply never surfaced. Fixed by defining a small,
+LOCAL, corrected `CHANNEL_LABELS`/`reviewMapChannel`/`REVIEW_CHANNELS` directly in
+`MarketingReviewDashboard.jsx` (Facebook→Meta Ads, Google→Google Ads, Remarketing,
+Affiliate, **Organic→Organic** directly, else→Other) — this page no longer imports the
+shared, still-buggy mapping at all. The shared file itself (and its other consumer,
+`MarketingPerformanceReport.jsx`) was flagged via `spawn_task` for a separate fix, since
+touching shared infra is out of this page's scope.
+
+**"Why show Spend for Organic" + sub-source split, both answered by the same
+investigation.** `buildChannelRows` now omits Spend/CPL/CPQL/CPA entirely for the
+`'Organic'` channel (they'd render as a column of dashes otherwise — reads as broken
+data on a CEO slide, not "unpaid by design"). The real Sub_Source breakdown the
+investigation surfaced (Web 157 QL, Inbound phone call 101, Whatsapp ChatBot - Blog 75,
+Blog-High Priority 62, App 19, Remarketing 1, several offline one-offs at 0 QL) is now
+rendered on Organic's own spotlight slide as its own bar-chart section, fetched via a
+NEW, narrow, on-demand query: `fetchOverallBqRows` scoped to `Source=Organic` + current
+month only (~1,700 rows, 2 pages, fast) against the full per-campaign `overall_bq_daily`
+table — deliberately NOT the whole month across all sources, which this codebase has
+already learned the hard way runs 20,000–50,000+ rows and is too slow to prefetch
+unconditionally (see the Overall-BigQuery Month-tab entry in CLAUDE.md). This fetch lives
+in the Provider (`organicSubRows` state + `organicSubSourceBreakdown` memo), always
+loaded once per page load (not lazy/click-triggered), since the Organic slide is a fixed,
+always-reachable part of the deck, not an optional drill-down.
+
+**Funnel slide (5), Total QL is now interactive.** `aggregateReviewMonth` gained
+additive `humanQl`/`aiQl`/`superbotQl` fields (alongside the existing combined `ql`,
+untouched). The Total QL stage row is now click-to-expand (`FunnelSlide`'s new
+`expanded` state + a `FunnelSubRow` component reusing the same label-above-bar visual
+language as the parent stages, just smaller/indented) revealing the real 3-way split.
+Live-verified: 5,082 Human + 3,551 AI + 0 Superbot = 8,633, exact match to the parent row.
+
+**Channel Performance slide (4), every bar is now click-to-expand — real top-5
+campaigns.** New `RAW_SOURCE_BY_CHANNEL` (reverse of `CHANNEL_LABELS`) + a new
+`fetchChannelCampaigns(channel)` helper in the Provider: for a named channel, fetches
+`overall_bq_daily` scoped to that one raw Source + current month; for `'Other'` (which
+has no single raw Source), fetches the whole month unfiltered and excludes the five
+known raw sources client-side. Ranking (`rankTopCampaigns`), per the user's own spec —
+paid channels: "highest QLs and lowest CPQL"; non-paid: "max QLs" — implemented by
+reusing this app's ALREADY-ESTABLISHED campaign-performance-heuristic (saved as a
+standing memory: high CPQL is a red flag regardless of volume) rather than inventing a
+new rule: rank by QL among campaigns at-or-below the channel's own median CPQL this
+month, falling back to plain top-QL if too few campaigns clear that bar to fill 5 slots;
+Organic (no cost dimension) is simply top-QL. Fetched on demand per channel (never
+prefetched for all 6), with its own loading spinner and result cache so re-opening an
+already-fetched channel doesn't re-fetch. Live-verified: clicking Meta Ads showed 5 real
+named campaigns (e.g. `PMX_FB_Ger_NAS_08July2026_Ad2`, 646 QL, ₹873 CPQL), ranked
+sensibly by QL among the efficient ones.
+
+**Write/annotate mode (W), alongside the existing laser (L).** Freehand ink drawn over
+the current slide via mousedown/mousemove/mouseup on the deck root (new `writeMode`
+state + `inkStrokes`/`liveInkPath`, an SVG overlay, `.mrInkStroke` CSS class with a
+2.6s fade-and-remove — matching the explicit ask, "show up for seconds and then go
+away," not a persistent annotation layer). Cyan, on-brand, same color family as the
+laser dot. Verified via direct DOM/computed-style inspection (not a screenshot, since
+the 2.6s fade window is shorter than this environment's screenshot round-trip) that a
+real stroke's path data, color, and fade animation are all genuinely present the moment
+after drawing.
+
+**Fullscreen — a real, buildable fix for "still doesn't change the slide to full-
+screen wide."** Read through the whole Fullscreen/`useElementSize`/`scale` pipeline and
+found no outright bug in the resize-detection logic itself (a real Fullscreen viewport
+change should already be picked up by the `ResizeObserver` on `stageWrapRef`). The
+actual, concrete problem: the stage's `top:88 / bottom:128 / left,right:6vw` insets
+were FIXED regardless of Fullscreen state, permanently reserving the same chrome-sized
+margins even after the just-shipped chrome-auto-hide (from the previous feedback pass)
+had already faded the toolbar away — so entering Fullscreen never actually let the
+slide grow into that now-empty space. Fixed: a new `fsWide` flag (`fullscreen &&
+!chromeVisible && !presenterOpen`) shrinks those insets to `16px`/`1.5vw` the moment
+chrome has genuinely auto-hidden, all transitioned smoothly. This is a real, verifiable
+code fix regardless of whether true OS-level Fullscreen can be reliably exercised in
+this environment's own browser-automation tooling (a documented, recurring limitation
+elsewhere in this codebase) — the resulting bigger `stageWrapRef` box, once Fullscreen
++ auto-hidden chrome both hold, is a genuine, testable style change.
+
+**Not yet built — needs the user's input before proceeding, not guessed at:**
+- **TOF/branding campaigns slide.** Investigating Organic's real Sub_Source data
+  surfaced clear candidates — `Branding_Unipoles_DU_Nov2024`, several
+  `Newspaper-TOI-*`/`Newspaper-NBT-*` entries, `RJ_Abhinav` (radio), `ThinkSchool_
+  July2024` — all real campaign names sitting under Organic with ~0 QLs (expected for
+  reach/awareness plays, not lead-gen). These look like exactly what the user means by
+  "TOF campaigns for branding," but guessing a fixed regex to auto-identify them risks
+  silently missing or including the wrong ones on a CEO-facing slide. Asked the user
+  directly (not yet answered as of this entry) whether to treat this exact found set as
+  the slide's content, whether a real field/tag identifies them instead, or whether
+  they'll supply the exact campaign list.
+- **Funnel slide's planned "Total Revenue" graph** (Est. SR Revenue, computed, vs. AC
+  Actual Revenue, manual) — needs to know whether "AC Actual Revenue" is a brand-new
+  manual ₹ entry (separate from the existing "AC Sales" count already on the headline
+  slide, which is a unit count, not a revenue figure) or something derived from AC Sales
+  × an assumed deal value. Not built pending that answer.
+- **"Research the market for more animation/transition/scene ideas"** — not yet acted
+  on; this is a genuinely open-ended ask that deserves a short set of concrete proposals
+  before any more building, given the shipped bar-shimmer was already built once and
+  rejected — better to propose, confirm, then build, not repeat that pattern.
+
+Live-verified everything else end-to-end (real browser session): Organic's real 415 QL
+now visible on slide 4 (correctly outranking Remarketing's 53), "Other" correctly
+dropped 427→12 once Organic's real volume left it; slide 8's Organic table shows only
+Leads/QL/Apps plus the real sub-source bars; slide 4's channel drill-down and slide 5's
+QL-split drill-down both confirmed with real numbers reconciling to their parent rows;
+write mode's ink confirmed via direct DOM inspection. Zero real console errors (only
+the pre-existing benign extension "message channel closed" noise this file already
+documents elsewhere). `npm run build` clean throughout.
+
 **Not yet done**: item 10 (an open recommendation on "what else should be shown," not a
 build task) — answered directly in chat, not implemented as code. Print/PDF export's
 actual multi-page output was not visually re-verified this session (no PDF preview
