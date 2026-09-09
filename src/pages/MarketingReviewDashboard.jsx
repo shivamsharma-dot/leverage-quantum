@@ -5,6 +5,11 @@ import Button from '../components/Button'
 import { C, FONT, BRAND_RAMP } from '../ui/dashboardKit'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_RX } from '../../shared/brandLogo.mjs'
 import { fetchOverallBqAggRows, fetchOverallBqSyncedAt } from '../lib/overallBqCache.js'
+// Same canonical Source -> channel mapping already used by Ask AI's own
+// contribution-analysis tool (Facebook -> Meta Ads, Google -> Google Ads,
+// Content+Brand -> Organic, else -> Other) -- reused here rather than
+// inventing a second classification that could silently drift from it.
+import { mapChannel as reviewMapChannel, CHANNELS as REVIEW_CHANNELS } from '../lib/overallFunnelCache.js'
 import styles from './MarketingReviewDashboard.module.css'
 
 // A dedicated, presentation-first review surface for the monthly Marketing
@@ -98,6 +103,44 @@ function aggregateReviewMonth(rows, key) {
   for (const r of rows) {
     if (r.month !== key) continue
     const src = r.Source || 'Unknown'
+    const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0, queued: 0 }
+    e.leads += reviewNum(r['Total Leads Generated'])
+    e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+    e.apps += reviewNum(r['Total Apps'])
+    e.spend += reviewNum(r['Total_Spends'])
+    // Total Queued (funnel slide only) -- same 4 fields Overall's own
+    // "Queued" KPI card sums: directly-to-floor plus all 3 Futwork/Superbot
+    // queues. Additive-only field; doesn't touch anything slide 3 reads.
+    e.queued += reviewNum(r['floor_queued']) + reviewNum(r['Queued on Futwork Human']) + reviewNum(r['Queued on Futwork AI']) + reviewNum(r['Queued on Superbot'])
+    bySource.set(src, e)
+  }
+  let leads = 0, ql = 0, apps = 0, spend = 0, queued = 0, paidLeads = 0, paidQl = 0, paidApps = 0
+  for (const e of bySource.values()) {
+    leads += e.leads; ql += e.ql; apps += e.apps; spend += e.spend; queued += e.queued
+    if (e.spend > 0) { paidLeads += e.leads; paidQl += e.ql; paidApps += e.apps }
+  }
+  return {
+    hasData: bySource.size > 0, leads, ql, apps, spend, queued,
+    cpl: paidLeads > 0 ? spend / paidLeads : null,
+    cpql: paidQl > 0 ? spend / paidQl : null,
+    cpa: paidApps > 0 ? spend / paidApps : null,
+  }
+}
+
+// Same source rows, rolled up by CHANNEL (Meta Ads/Google Ads/Remarketing/
+// Affiliate/Organic/Other) instead of the whole business -- feeds the
+// "Where the QLs came from" slide (every channel) and the 3 per-channel
+// spotlight slides (Google Ads/Meta Ads/Organic only). Because the 3
+// spotlighted channels each map 1:1 from a single Source (Facebook/Google/
+// Content+Brand), judging "paid" per channel-total here gives the identical
+// answer as judging it per-Source the way aggregateReviewMonth does -- only
+// the "Other" bucket (several merged, mostly-unpaid Sources) could in
+// principle differ, and that bucket is never shown on its own slide.
+function aggregateReviewMonthByChannel(rows, key) {
+  const bySource = new Map()
+  for (const r of rows) {
+    if (r.month !== key) continue
+    const src = r.Source || 'Unknown'
     const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0 }
     e.leads += reviewNum(r['Total Leads Generated'])
     e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
@@ -105,17 +148,47 @@ function aggregateReviewMonth(rows, key) {
     e.spend += reviewNum(r['Total_Spends'])
     bySource.set(src, e)
   }
-  let leads = 0, ql = 0, apps = 0, spend = 0, paidLeads = 0, paidQl = 0, paidApps = 0
-  for (const e of bySource.values()) {
-    leads += e.leads; ql += e.ql; apps += e.apps; spend += e.spend
-    if (e.spend > 0) { paidLeads += e.leads; paidQl += e.ql; paidApps += e.apps }
+  const byChannel = new Map()
+  for (const [src, e] of bySource) {
+    const ch = reviewMapChannel(src)
+    const c = byChannel.get(ch) || { leads: 0, ql: 0, apps: 0, spend: 0 }
+    c.leads += e.leads; c.ql += e.ql; c.apps += e.apps; c.spend += e.spend
+    byChannel.set(ch, c)
   }
-  return {
-    hasData: bySource.size > 0, leads, ql, apps, spend,
-    cpl: paidLeads > 0 ? spend / paidLeads : null,
-    cpql: paidQl > 0 ? spend / paidQl : null,
-    cpa: paidApps > 0 ? spend / paidApps : null,
+  for (const c of byChannel.values()) {
+    c.hasData = true
+    c.cpl = c.spend > 0 && c.leads > 0 ? c.spend / c.leads : null
+    c.cpql = c.spend > 0 && c.ql > 0 ? c.spend / c.ql : null
+    c.cpa = c.spend > 0 && c.apps > 0 ? c.spend / c.apps : null
   }
+  return byChannel
+}
+
+// Same 3-months + 2-deltas shape as buildHeadlineRows, scoped to one
+// channel -- AC Sales/CPS are dropped since neither has a real per-channel
+// figure (AC Sales is a whole-business manual entry).
+function buildChannelRows(months, byChannelByMonth, channel) {
+  const emptyAgg = { hasData: false, leads: null, ql: null, apps: null, spend: null, cpl: null, cpql: null, cpa: null }
+  const at = m => byChannelByMonth[m].get(channel) || emptyAgg
+  const metric = (label, key, invert, money, getter) => {
+    const v2 = getter(at('twoBack')), v1 = getter(at('prior'))
+    const v0 = getter(at('current')), vLY = getter(at('lastYear'))
+    return {
+      key, label, invert, money,
+      values: [v2, v1, v0],
+      deltaVsPrior: reviewPctDelta(v0, v1), priorForDeltaVsPrior: v1,
+      deltaVsLastYear: reviewPctDelta(v0, vLY), priorForDeltaVsLastYear: vLY,
+    }
+  }
+  return [
+    metric('Spend', 'spend', true, true, a => a.hasData ? a.spend : null),
+    metric('Leads', 'leads', false, false, a => a.hasData ? a.leads : null),
+    metric('QL', 'ql', false, false, a => a.hasData ? a.ql : null),
+    metric('Apps', 'apps', false, false, a => a.hasData ? a.apps : null),
+    metric('CPL', 'cpl', true, true, a => a.cpl),
+    metric('CPQL', 'cpql', true, true, a => a.cpql),
+    metric('CPA', 'cpa', true, true, a => a.cpa),
+  ]
 }
 
 // null when either side is missing (nothing to compare); the sentinel
@@ -328,16 +401,36 @@ function MarketingReviewDataProvider({ children }) {
     }
   }, [rows, months])
 
+  // Same 4 months, rolled up by channel instead -- feeds the channel-
+  // breakdown slide and the 3 per-channel spotlight slides.
+  const byChannelByMonth = useMemo(() => {
+    if (!rows) return null
+    return {
+      twoBack: aggregateReviewMonthByChannel(rows, monthKeyStr(months.twoBack)),
+      prior: aggregateReviewMonthByChannel(rows, monthKeyStr(months.prior)),
+      current: aggregateReviewMonthByChannel(rows, monthKeyStr(months.current)),
+      lastYear: aggregateReviewMonthByChannel(rows, monthKeyStr(months.lastYear)),
+    }
+  }, [rows, months])
+
   const headlineRows = useMemo(() => {
     if (!aggByMonth || !acSalesLoaded) return null
     return buildHeadlineRows(months, aggByMonth, acSales)
   }, [aggByMonth, acSalesLoaded, acSales, months])
 
+  const channelRowsByChannel = useMemo(() => {
+    if (!byChannelByMonth) return null
+    const out = {}
+    for (const ch of REVIEW_CHANNELS) out[ch] = buildChannelRows(months, byChannelByMonth, ch)
+    return out
+  }, [byChannelByMonth, months])
+
   const value = useMemo(() => ({
     months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, syncedAt,
+    aggByMonth, byChannelByMonth, channelRowsByChannel,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt])
+  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel])
 
   return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
@@ -558,13 +651,6 @@ function HeadlineSlide({ active, period }) {
   )
 }
 
-const CHANNELS = [
-  { name: 'Facebook', value: 6120 },
-  { name: 'Google', value: 4380 },
-  { name: 'Content+Brand', value: 2140 },
-  { name: 'Referral', value: 1890 },
-  { name: 'Affiliate', value: 1340 },
-]
 function ChannelBar({ ch, max, active, delay }) {
   const pct = active ? (ch.value / max) * 100 : 0
   return (
@@ -580,38 +666,92 @@ function ChannelBar({ ch, max, active, delay }) {
     </div>
   )
 }
-function ChannelPerformanceSlide({ active, period }) {
-  const withHue = useMemo(() => CHANNELS.map((c, i) => ({ ...c, hue: BRAND_RAMP[i % 4] })), [])
-  const max = Math.max(...CHANNELS.map(c => c.value))
+
+// Shared loading/error/content scaffold for every slide reading live Overall
+// data -- headline (slide 3) has its own copy for its extra AC-Sales-edit
+// affordance; every slide added after it (channel breakdown, funnel, the 3
+// channel spotlights) shares this one instead of five near-duplicates.
+function LiveDataFrame({ ctx, label, title, period, active, children }) {
+  const { loading, error, retry } = ctx
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
-      <PeriodBadge period={period} />
-      <SectionKicker label="Channel Performance" title="Where the QLs came from" />
-      <div style={{ marginTop: 12 }}>
-        {withHue.map((c, i) => <ChannelBar key={c.name} ch={c} max={max} active={active} delay={0.1 * i} />)}
-      </div>
+      <PeriodBadge period={period} live />
+      <SectionKicker label={label} title={title} />
+      {loading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
+          <span className={styles.mrSpinner} />Loading live figures from Overall…
+        </div>
+      )}
+      {!loading && error && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, padding: '14px 18px', marginTop: 10 }}>
+          <span style={{ fontSize: 13.5, color: '#7A5C00', fontWeight: 600, flex: 1 }}>Couldn't load live figures: {error}</span>
+          {active && (
+            <button type="button" onClick={retry} className={styles.noPrint}
+              style={{ border: 'none', background: NAVY, color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+      {!loading && !error && children}
     </div>
   )
 }
 
-const FUNNEL_STAGES = [
-  { label: 'Leads', value: 214300 },
-  { label: 'Queued', value: 168900 },
-  { label: 'Total QLs', value: 15870 },
-  { label: 'Applications', value: 3120 },
-  { label: 'Deposits', value: 640 },
-]
-function FunnelSlide({ active, period }) {
-  const max = FUNNEL_STAGES[0].value
+function ChannelPerformanceSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const byChannelByMonth = ctx && ctx.byChannelByMonth
+  const channelRows = useMemo(() => {
+    if (!byChannelByMonth) return []
+    const cur = byChannelByMonth.current
+    return REVIEW_CHANNELS
+      .map((name, i) => ({ name, hue: BRAND_RAMP[i % 4], ...(cur.get(name) || { ql: 0, leads: 0, spend: 0 }) }))
+      .filter(c => (c.ql || 0) > 0)
+      .sort((a, b) => b.ql - a.ql)
+  }, [byChannelByMonth])
+  if (!ctx) return null
+  const { months, syncedAt } = ctx
+  const max = Math.max(1, ...channelRows.map(c => c.ql))
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
-      <PeriodBadge period={period} />
-      <SectionKicker label="Funnel & Conversion" title="How leads moved through the pipeline" />
+    <LiveDataFrame ctx={ctx} label="Channel Performance" title="Where the QLs came from" period={period} active={active}>
+      {channelRows.length === 0 ? (
+        <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No QLs recorded for {months ? monthShort(months.current) : 'this month'} yet.</div>
+      ) : (
+        <div style={{ marginTop: 12 }}>
+          {channelRows.map((c, i) => <ChannelBar key={c.name} ch={{ name: c.name, value: c.ql, hue: c.hue }} max={max} active={active} delay={0.1 * i} />)}
+        </div>
+      )}
+      <div style={{ marginTop: 18, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
+        {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
+        QL volume by channel, {months ? monthShort(months.current) : ''} · Source: Overall (BigQuery cache).
+      </div>
+    </LiveDataFrame>
+  )
+}
+
+function FunnelSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const aggByMonth = ctx && ctx.aggByMonth
+  const stages = useMemo(() => {
+    if (!aggByMonth) return []
+    const a = aggByMonth.current
+    return [
+      { label: 'Leads', value: a.leads },
+      { label: 'Total Queued', value: a.queued },
+      { label: 'Total QL', value: a.ql },
+      { label: 'Applications', value: a.apps },
+    ]
+  }, [aggByMonth])
+  if (!ctx) return null
+  const { months, syncedAt } = ctx
+  const max = stages.length ? Math.max(1, stages[0].value) : 1
+  return (
+    <LiveDataFrame ctx={ctx} label="Funnel & Conversion" title="How leads moved through the pipeline" period={period} active={active}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-        {FUNNEL_STAGES.map((s, i) => {
-          const widthPct = active ? 100 - i * 14 : 0
-          const prev = FUNNEL_STAGES[i - 1]
-          const convPct = prev ? ((s.value / prev.value) * 100).toFixed(1) + '% of prior stage' : null
+        {stages.map((s, i) => {
+          const widthPct = active ? Math.max(6, (s.value / max) * 100) : 0
+          const prev = stages[i - 1]
+          const convPct = prev && prev.value > 0 ? ((s.value / prev.value) * 100).toFixed(1) + '% of prior stage' : null
           return (
             <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{
@@ -627,9 +767,66 @@ function FunnelSlide({ active, period }) {
           )
         })}
       </div>
-    </div>
+      <div style={{ marginTop: 18, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
+        {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
+        {months ? monthShort(months.current) : ''} · Source: Overall (BigQuery cache).
+      </div>
+    </LiveDataFrame>
   )
 }
+
+// Per-channel spotlight -- one shared body, 3 named wrapper slides below
+// (Google Ads / Meta Ads / Organic) rather than threading a `channel` prop
+// through SLIDES' fixed {active, period} Body signature. Same 3-months +
+// 2-deltas table shape as the headline slide, scoped to one channel; AC
+// Sales/CPS are dropped since neither has a real per-channel figure.
+function ChannelSpotlightBody({ active, period, channel }) {
+  const ctx = useMarketingReviewData()
+  if (!ctx) return null
+  const { months, channelRowsByChannel, syncedAt } = ctx
+  const displayMonths = months ? [months.twoBack, months.prior, months.current] : []
+  const rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
+  return (
+    <LiveDataFrame ctx={ctx} label="Channel Spotlight" title={channel} period={period} active={active}>
+      {rows && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, borderBottom: '2px solid #0F1B33', paddingBottom: 9, marginBottom: 2 }}>
+            <div />
+            {displayMonths.map((m, i) => (
+              <div key={i} style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{monthShort(m)}</div>
+            ))}
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.prior)}</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.lastYear)}</div>
+          </div>
+          {rows.map((row, i) => (
+            <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
+              display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, alignItems: 'center',
+              padding: '10px 0', borderBottom: '1px solid #F1F5F9',
+              animationDelay: active ? (0.035 * i) + 's' : undefined,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{row.label}</div>
+              {row.values.map((v, ci) => (
+                <div key={ci} title={exactHeadlineTitle(v, row.money)}
+                  style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtHeadlineCell(v, row.money)}
+                </div>
+              ))}
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} showPrior={false} /></div>
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
+            </div>
+          ))}
+          <div style={{ marginTop: 14, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
+            {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
+            Source: Overall (BigQuery cache) · CPL/CPQL/CPA reflect this channel's own spend only.
+          </div>
+        </>
+      )}
+    </LiveDataFrame>
+  )
+}
+function GoogleAdsChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Google Ads" /> }
+function MetaAdsChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Meta Ads" /> }
+function OrganicChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Organic" /> }
 
 function CalloutIcon({ kind }) {
   if (kind === 'win') return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -730,6 +927,9 @@ const SLIDES = [
   { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide },
   { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide },
   { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide },
+  { id: 'channel-google', section: 'Channel Spotlight', title: 'Google Ads', Body: GoogleAdsChannelSlide },
+  { id: 'channel-meta', section: 'Channel Spotlight', title: 'Meta Ads', Body: MetaAdsChannelSlide },
+  { id: 'channel-organic', section: 'Channel Spotlight', title: 'Organic', Body: OrganicChannelSlide },
   { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide },
   { id: 'risks', section: 'Risks & Watch-outs', title: 'What needs attention', Body: RisksSlide },
   { id: 'next', section: "Next Month's Priorities", title: "What we're doing next", Body: NextStepsSlide },
