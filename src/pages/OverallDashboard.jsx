@@ -2495,12 +2495,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // fix as the main bqRows effect, 2026-09-08) so switching off the Month tab -- or a
   // date/source change recomputing summaryMonthBqSpan -- genuinely cancels a
   // still-in-flight fetch instead of letting it run to completion for nothing.
+  //
+  // Real bug found live testing the wide-range fix above: this originally called
+  // fetchOverallBqRows (the full per-campaign table). Live SQL confirmed each month
+  // holds 20-50k+ campaign-level rows, so a January-to-current-month range was
+  // ~150-300k rows -- the server-side endpoint's own 60s time budget couldn't finish
+  // it, handing off to fetchTailDirect's client-side keyset pagination, which then
+  // took several MINUTES to page through directly against Supabase. The Month tab's
+  // own aggregation (byMonth) only ever sums up to month-level, never campaign-level,
+  // so it never needed campaign detail in the first place -- switched to
+  // fetchOverallBqAggRows (the pre-aggregated day+Source companion table, "not
+  // expected to ever hit the server's time budget in practice" per its own comment),
+  // which resolves in seconds regardless of range width. Trade-off, accepted and
+  // disclosed rather than silently swallowed: agg rows carry no campaign_name, so
+  // campaign-name cost-exclusion patterns can't apply within this one table's Spend
+  // figures, and Corridor/campaign-search filtering is skipped entirely for the Month
+  // tab (see summaryMonthRows below) rather than silently misclassifying every row
+  // into one bucket.
   useEffect(() => {
     if (!bqActive || grpBy !== 'month' || !summaryMonthBqSince || !summaryMonthBqUntil) return
     let dead = false
     const controller = new AbortController()
     setSummaryMonthBqBusy(true)
-    retryFetch(() => fetchOverallBqRows({ since: summaryMonthBqSince, until: summaryMonthBqUntil, sources: [], signal: controller.signal }))
+    retryFetch(() => fetchOverallBqAggRows({ since: summaryMonthBqSince, until: summaryMonthBqUntil, sources: [], signal: controller.signal }))
       .then(raw => { if (!dead) setSummaryMonthBqRows(raw.map(mapRow)) })
       .catch(e => { /* an AbortError here is expected and harmless; any other failure
                         just leaves the table on whatever it last had, same as the
@@ -2740,16 +2757,26 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // wider, independently-fetched dataset that actually covers January of the
   // current year onward -- same "apply the same filters against a different
   // dataset" principle as monthTrendRows uses for the trend chart.
+  // bqActive rows come from summaryMonthBqRows (the pre-aggregated day+Source table,
+  // switched to above for speed on 2026-09-08) -- mapRow gives every one of those rows
+  // an empty '' campaign, so Corridor/campaign-search/Advanced-filter conditions that
+  // key off r.campaign can't be applied here without silently zeroing the whole Month
+  // tab out (an active Corridor filter would classify every '' campaign the same way
+  // and either match everything or nothing, neither of which is the real answer) or
+  // misclassifying every row into one bucket. Only Source -- a real field on the agg
+  // table -- is honored in BQ mode; the other three are skipped outright rather than
+  // silently misapplied, and the table's own subtitle says so (see monthScopeNote
+  // below) so this is a disclosed limitation, not a quiet bug.
   const summaryMonthRows = useMemo(() => {
     if (!bqActive) return nonDateRows
     let rs = [...summaryMonthBqRows, ...buildSyntheticAffiliateRows(affiliateManual)]
     if (!sourceIsAll) rs = rs.filter(matchesSource)
-    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
-    const q = campaignQueryDebounced.trim().toLowerCase()
-    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
-    if (advActiveConditions.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [bqActive, summaryMonthBqRows, affiliateManual, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced, advActiveConditions, matchesAdvancedFilters])
+  }, [bqActive, summaryMonthBqRows, affiliateManual, nonDateRows, sourceIsAll, selectedSources])
+  // Whether the Month tab is silently ignoring a Corridor/campaign-search/Advanced
+  // filter the user has active elsewhere on the page -- surfaced in the table's own
+  // subtitle rather than left implicit.
+  const monthTabFiltersSkipped = bqActive && (corridorFilter !== 'All' || !!campaignQueryDebounced.trim() || advActiveConditions.length > 0)
   const byMonth = useMemo(() => {
     const m = new Map()
     summaryMonthRows.forEach(r => {
@@ -4571,7 +4598,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             >
               {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), grpBy === 'month'
                 ? (bqActive
-                    ? 'January ' + new Date().getFullYear() + ' onward, not scoped to the date filter above' + (summaryMonthBqBusy ? ' — fetching the full year, this can take a moment' : ' — search, sort, and customize the columns below')
+                    ? 'January ' + new Date().getFullYear() + ' onward, not scoped to the date filter above'
+                      + (summaryMonthBqBusy ? ' — fetching the full year, this can take a moment' : ' — search, sort, and customize the columns below')
+                      + (monthTabFiltersSkipped ? ' (Corridor / campaign search / Advanced filter are not applied to this tab)' : '')
                     : 'every month present in the data, not scoped to the date filter above — search, sort, and customize the columns below')
                 : 'full-funnel totals and stage conversion rates — search, sort, and customize the columns below')}
 
