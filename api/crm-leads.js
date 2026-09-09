@@ -699,6 +699,33 @@ async function runActivityAdvancedSearch(creds, code, advancedSearchStr, include
   return { recordCount: (data && data.RecordCount) || 0, rows: (data && data.List) || [] }
 }
 
+// Same endpoint as runActivityAdvancedSearch above, but loops every page via the file's own
+// fetchAllPages helper instead of only ever asking for PageIndex 1. A single day's QL volume
+// (150-350/channel) always fit in one page of 1000, so that was never a real bug -- but a
+// wide window like "Last Month" (confirmed live: 5,083 Human + 3,566 AI QLs) silently capped
+// at exactly 1000+1000=2000 rows while the RecordCount-based "of X unfiltered" KPI sub-labels
+// kept reporting the true, uncapped totals -- Total QLs read 2,000 instead of the real 8,649,
+// and the Records table/filtering/distribution/export were all quietly limited to the same
+// capped 2,000. LIVE_QL_MAX_PAGES=20 (20,000 rows/channel) is comfortably above any real
+// monthly volume seen so far; `truncated` is still returned honestly if that cap is ever hit.
+const LIVE_QL_MAX_PAGES = 20
+async function runActivityAdvancedSearchAll(creds, code, advancedSearchStr, includeCsv, maxPages) {
+  let recordCount = 0
+  const fetchPage = async (pageIndex, pageSize) => {
+    const data = await leadsquaredPost('/v2/ProspectActivity.svc/Activity/Retrieve/BySearchParameter', creds, {
+      ActivityEvent: code,
+      AdvancedSearch: advancedSearchStr,
+      Paging: { PageIndex: pageIndex, PageSize: pageSize },
+      Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+      ...(includeCsv ? { Columns: { Include_CSV: includeCsv } } : {}),
+    })
+    recordCount = (data && data.RecordCount) || recordCount
+    return (data && data.List) || []
+  }
+  const { rows } = await fetchAllPages(fetchPage, maxPages)
+  return { recordCount, rows }
+}
+
 async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   const ch = LIVE_QL_CHANNELS[channelKey]
   if (!ch) throw new Error('Unknown channel: ' + channelKey)
@@ -706,7 +733,9 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   const queuedSearch = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
   const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ...Object.values(ch.fields)].join(',')
   const [qlResult, queuedResult] = await Promise.all([
-    runActivityAdvancedSearch(creds, ch.code, qlSearch, includeCsv, 1000),
+    runActivityAdvancedSearchAll(creds, ch.code, qlSearch, includeCsv, LIVE_QL_MAX_PAGES),
+    // Queued is count-only (PageSize 1, we only ever read RecordCount) -- unaffected by the
+    // pagination bug above, since fetchLiveQlMetrics never reads its `rows`.
     runActivityAdvancedSearch(creds, ch.code, queuedSearch, null, 1),
   ])
   const rows = qlResult.rows.map(r => {
@@ -714,9 +743,8 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
     Object.keys(ch.fields).forEach(k => { mapped[k] = r[ch.fields[k]] || null })
     return mapped
   })
-  // truncated: true would mean the QL count for this channel/day exceeded 1000 -- has never
-  // been observed (real days run 150-350) but surfaced honestly rather than silently
-  // dropped, since a future exceptionally busy day could hit it.
+  // truncated: true means the QL count for this channel/window exceeded LIVE_QL_MAX_PAGES*1000
+  // rows -- not expected at real volumes but surfaced honestly rather than silently dropped.
   return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
 }
 

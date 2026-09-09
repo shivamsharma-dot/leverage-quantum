@@ -473,6 +473,19 @@ export default function LiveQLsDashboard() {
             <div style={{ padding: 28, color: '#B91C1C', fontSize: 13 }}>{error}</div>
           ) : (
             <>
+              {data && (data.human.truncated || data.ai.truncated) && (
+                <div style={{
+                  margin: '20px 28px 0', padding: '10px 16px', borderRadius: 10,
+                  background: C.navyBg, border: '0.5px solid ' + C.navy, color: C.navy,
+                  fontSize: 12, fontWeight: 600, fontFamily: FONT,
+                }}>
+                  This window has more QLs than this page can currently fetch in full
+                  ({data.human.truncated ? `Human capped at ${fmtN(data.human.rows.length)} of ${fmtN(data.human.qlCount)}` : ''}
+                  {data.human.truncated && data.ai.truncated ? ' -- ' : ''}
+                  {data.ai.truncated ? `AI capped at ${fmtN(data.ai.rows.length)} of ${fmtN(data.ai.qlCount)}` : ''}).
+                  Totals and the Records table below reflect only the fetched rows -- narrow the date range for a complete view.
+                </div>
+              )}
               <div className="lq-kpi-grid" style={{ ...KPI_CARD_ROW, marginTop: 20 }}>
                 <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
                 <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.agent} />
