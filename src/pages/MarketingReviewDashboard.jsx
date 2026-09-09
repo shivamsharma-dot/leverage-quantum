@@ -103,24 +103,34 @@ function aggregateReviewMonth(rows, key) {
   for (const r of rows) {
     if (r.month !== key) continue
     const src = r.Source || 'Unknown'
-    const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0, queued: 0 }
+    const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0, queued: 0, floorQueued: 0 }
     e.leads += reviewNum(r['Total Leads Generated'])
     e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
     e.apps += reviewNum(r['Total Apps'])
     e.spend += reviewNum(r['Total_Spends'])
-    // Total Queued (funnel slide only) -- same 4 fields Overall's own
-    // "Queued" KPI card sums: directly-to-floor plus all 3 Futwork/Superbot
-    // queues. Additive-only field; doesn't touch anything slide 3 reads.
-    e.queued += reviewNum(r['floor_queued']) + reviewNum(r['Queued on Futwork Human']) + reviewNum(r['Queued on Futwork AI']) + reviewNum(r['Queued on Superbot'])
+    // Total Queued (funnel slide only) -- matches OverallDashboard.jsx's own
+    // `const totalQueued = kpis.futworkHumanQ + kpis.futworkAiQ + kpis.superbotQ`
+    // EXACTLY (verified live against production Supabase, Aug'26: 86,532).
+    // Floor Queued is Overall's own SEPARATE, parallel funnel branch --
+    // "Directly Distributed to Floor" bypasses the Futwork/Superbot queuing
+    // process entirely, so it is NOT part of Total Queued there and must not
+    // be folded in here either. An earlier version of this function summed
+    // all 4 fields together (floor + 3 queues), which inflated Total Queued
+    // past Leads itself (1,27,327 vs 1,11,941 for Aug'26) -- a real bug, not
+    // a data characteristic; caught live when the user pointed out the
+    // number looked wrong. Floor is tracked separately below instead of
+    // being silently dropped.
+    e.queued += reviewNum(r['Queued on Futwork Human']) + reviewNum(r['Queued on Futwork AI']) + reviewNum(r['Queued on Superbot'])
+    e.floorQueued += reviewNum(r['floor_queued'])
     bySource.set(src, e)
   }
-  let leads = 0, ql = 0, apps = 0, spend = 0, queued = 0, paidLeads = 0, paidQl = 0, paidApps = 0
+  let leads = 0, ql = 0, apps = 0, spend = 0, queued = 0, floorQueued = 0, paidLeads = 0, paidQl = 0, paidApps = 0
   for (const e of bySource.values()) {
-    leads += e.leads; ql += e.ql; apps += e.apps; spend += e.spend; queued += e.queued
+    leads += e.leads; ql += e.ql; apps += e.apps; spend += e.spend; queued += e.queued; floorQueued += e.floorQueued
     if (e.spend > 0) { paidLeads += e.leads; paidQl += e.ql; paidApps += e.apps }
   }
   return {
-    hasData: bySource.size > 0, leads, ql, apps, spend, queued,
+    hasData: bySource.size > 0, leads, ql, apps, spend, queued, floorQueued,
     cpl: paidLeads > 0 ? spend / paidLeads : null,
     cpql: paidQl > 0 ? spend / paidQl : null,
     cpa: paidApps > 0 ? spend / paidApps : null,
@@ -301,12 +311,7 @@ function PeriodBadge({ period, live }) {
         fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: NAVY, background: C.navyBg,
         borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
       }}>{period}</span>
-      {live ? (
-        <span style={{
-          fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', color: GREEN, background: C.greenBg,
-          borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
-        }}>Live data · Overall (BigQuery)</span>
-      ) : (
+      {!live && (
         <span style={{
           fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', color: '#8A6A00', background: '#FFF6DA',
           border: '1px solid #F2E2A8', borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
@@ -537,7 +542,7 @@ function HeadlineSlide({ active, period }) {
   const [draft, setDraft] = useState({})
 
   if (!ctx) return null
-  const { months, loading, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt, retry } = ctx
+  const { months, loading, error, headlineRows, acSales, acSaving, saveAcSales, retry } = ctx
   const displayMonths = [months.twoBack, months.prior, months.current]
 
   const openEdit = () => {
@@ -618,10 +623,6 @@ function HeadlineSlide({ active, period }) {
             </div>
           ))}
 
-          <div style={{ marginTop: 14, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
-            {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
-            Source: Overall (BigQuery cache) · CPL/CPQL/CPA/CPS divide by paid-source volume only, matching Overall's own figures.
-          </div>
         </>
       )}
 
@@ -656,13 +657,16 @@ function ChannelBar({ ch, max, active, delay }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
       <div style={{ width: 128, fontSize: 13.5, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{ch.name}</div>
-      <div style={{ flex: 1, height: 22, borderRadius: 6, background: '#F1F5F9', overflow: 'hidden' }}>
+      <div className={styles.mrBarShimmerWrap} style={{ flex: 1, height: 22, borderRadius: 6, background: '#F1F5F9' }}>
         <div style={{
           height: '100%', borderRadius: 6, width: pct + '%', transition: `width 1s cubic-bezier(.22,1,.36,1) ${delay}s`,
           background: `linear-gradient(90deg, ${ch.hue}, ${ch.hue}CC)`,
         }} />
+        {active && pct > 0 && <span className={styles.mrBarShimmer} style={{ animationDelay: (delay + 0.85) + 's' }} />}
       </div>
-      <div style={{ width: 70, textAlign: 'right', fontSize: 13.5, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{fmtN(ch.value)}</div>
+      <div style={{ width: 70, textAlign: 'right', fontSize: 13.5, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+        <span className={active ? styles.mrValuePop : undefined} style={{ animationDelay: active ? delay + 's' : undefined }}>{fmtN(ch.value)}</span>
+      </div>
     </div>
   )
 }
@@ -706,11 +710,10 @@ function ChannelPerformanceSlide({ active, period }) {
     const cur = byChannelByMonth.current
     return REVIEW_CHANNELS
       .map((name, i) => ({ name, hue: BRAND_RAMP[i % 4], ...(cur.get(name) || { ql: 0, leads: 0, spend: 0 }) }))
-      .filter(c => (c.ql || 0) > 0)
       .sort((a, b) => b.ql - a.ql)
   }, [byChannelByMonth])
   if (!ctx) return null
-  const { months, syncedAt } = ctx
+  const { months } = ctx
   const max = Math.max(1, ...channelRows.map(c => c.ql))
   return (
     <LiveDataFrame ctx={ctx} label="Channel Performance" title="Where the QLs came from" period={period} active={active}>
@@ -721,10 +724,6 @@ function ChannelPerformanceSlide({ active, period }) {
           {channelRows.map((c, i) => <ChannelBar key={c.name} ch={{ name: c.name, value: c.ql, hue: c.hue }} max={max} active={active} delay={0.1 * i} />)}
         </div>
       )}
-      <div style={{ marginTop: 18, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
-        {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
-        QL volume by channel, {months ? monthShort(months.current) : ''} · Source: Overall (BigQuery cache).
-      </div>
     </LiveDataFrame>
   )
 }
@@ -743,7 +742,6 @@ function FunnelSlide({ active, period }) {
     ]
   }, [aggByMonth])
   if (!ctx) return null
-  const { months, syncedAt } = ctx
   // The true max across every stage, NOT stages[0] (Leads) -- Total Queued
   // is a same-CALENDAR-MONTH sum of its own queuing timestamp, independent
   // of when the underlying lead was generated, so it can genuinely exceed
@@ -769,22 +767,19 @@ function FunnelSlide({ active, period }) {
                 <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{s.label}</span>
                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
                   {convPct && <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap' }}>{convPct}</span>}
-                  <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{fmtN(s.value)}</span>
+                  <span className={active ? styles.mrValuePop : undefined} style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums', animationDelay: active ? (0.12 * i) + 's' : undefined }}>{fmtN(s.value)}</span>
                 </span>
               </div>
-              <div style={{ height: 14, borderRadius: 7, background: '#F1F5F9', overflow: 'hidden' }}>
+              <div className={styles.mrBarShimmerWrap} style={{ height: 14, borderRadius: 7, background: '#F1F5F9' }}>
                 <div style={{
                   height: '100%', borderRadius: 7, width: widthPct + '%', transition: `width .9s cubic-bezier(.22,1,.36,1) ${0.12 * i}s`,
                   background: `linear-gradient(90deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[i % 4]}CC)`,
                 }} />
+                {active && <span className={styles.mrBarShimmer} style={{ animationDelay: (0.12 * i + 0.75) + 's' }} />}
               </div>
             </div>
           )
         })}
-      </div>
-      <div style={{ marginTop: 18, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
-        {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
-        {months ? monthShort(months.current) : ''} · Source: Overall (BigQuery cache).
       </div>
     </LiveDataFrame>
   )
@@ -798,7 +793,7 @@ function FunnelSlide({ active, period }) {
 function ChannelSpotlightBody({ active, period, channel }) {
   const ctx = useMarketingReviewData()
   if (!ctx) return null
-  const { months, channelRowsByChannel, syncedAt } = ctx
+  const { months, channelRowsByChannel } = ctx
   const displayMonths = months ? [months.twoBack, months.prior, months.current] : []
   const rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
   return (
@@ -830,10 +825,6 @@ function ChannelSpotlightBody({ active, period, channel }) {
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
             </div>
           ))}
-          <div style={{ marginTop: 14, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
-            {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
-            Source: Overall (BigQuery cache) · CPL/CPQL/CPA reflect this channel's own spend only.
-          </div>
         </>
       )}
     </LiveDataFrame>
@@ -994,6 +985,14 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
   const [showKeyHint, setShowKeyHint] = useState(true)
   const [elapsed, setElapsed] = useState(0)
   const startedAt = useRef(Date.now())
+  const dirRef = useRef('next')
+  const [chromeVisible, setChromeVisible] = useState(true)
+  const hideTimerRef = useRef(null)
+  const [blackout, setBlackout] = useState(false)
+  const [laserOn, setLaserOn] = useState(false)
+  const [laserPos, setLaserPos] = useState(null)
+  const digitBufferRef = useRef('')
+  const digitTimerRef = useRef(null)
 
   // Exports the ACTUAL current slide node (full 1280x720, unaffected by the
   // presentational scale-down applied to its parent below) rather than
@@ -1013,9 +1012,48 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
 
   const scale = size.w && size.h ? Math.min(size.w / SLIDE_W, size.h / SLIDE_H) * 0.94 : 0.5
 
-  const goTo = useCallback((i) => setIndex(Math.max(0, Math.min(SLIDES.length - 1, i))), [setIndex])
+  const goTo = useCallback((i) => {
+    const clamped = Math.max(0, Math.min(SLIDES.length - 1, i))
+    dirRef.current = clamped >= index ? 'next' : 'prev'
+    setIndex(clamped)
+  }, [setIndex, index])
   const next = useCallback(() => goTo(index + 1), [goTo, index])
   const prev = useCallback(() => goTo(index - 1), [goTo, index])
+
+  const commitDigitBuffer = useCallback(() => {
+    const n = Number(digitBufferRef.current)
+    digitBufferRef.current = ''
+    if (digitTimerRef.current) { clearTimeout(digitTimerRef.current); digitTimerRef.current = null }
+    if (Number.isFinite(n) && n >= 1 && n <= SLIDES.length) goTo(n - 1)
+  }, [goTo])
+
+  useEffect(() => () => { if (digitTimerRef.current) clearTimeout(digitTimerRef.current) }, [])
+
+  // Fullscreen chrome auto-hide -- progress rail / label row / bottom bar fade
+  // out after 3s of no mouse/key activity, matching the auto-hide convention
+  // every video/presentation surface uses (YouTube, Keynote Play). Only while
+  // genuinely fullscreen (a non-fullscreen viewer still needs the visible Exit
+  // affordance) and never while the presenter panel is deliberately open.
+  useEffect(() => {
+    if (!fullscreen || presenterOpen) {
+      setChromeVisible(true)
+      if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
+      return
+    }
+    const resetTimer = () => {
+      setChromeVisible(true)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setChromeVisible(false), 3000)
+    }
+    resetTimer()
+    document.addEventListener('mousemove', resetTimer)
+    document.addEventListener('keydown', resetTimer)
+    return () => {
+      document.removeEventListener('mousemove', resetTimer)
+      document.removeEventListener('keydown', resetTimer)
+      if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null }
+    }
+  }, [fullscreen, presenterOpen])
 
   useEffect(() => {
     const onFsChange = () => setFullscreen(!!document.fullscreenElement)
@@ -1037,11 +1075,22 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
         if (document.fullscreenElement) document.exitFullscreen()
         else deckRootRef.current && deckRootRef.current.requestFullscreen && deckRootRef.current.requestFullscreen()
       } else if (e.key === 'p' || e.key === 'P') { setPresenterOpen(v => !v) }
-      else if (/^[1-9]$/.test(e.key)) { const i = Number(e.key) - 1; if (i < SLIDES.length) goTo(i) }
+      else if (e.key === 'b' || e.key === 'B') { setBlackout(v => !v) }
+      else if (e.key === 'l' || e.key === 'L') { setLaserOn(v => !v) }
+      else if (/^[0-9]$/.test(e.key)) {
+        // Multi-digit go-to-slide: digits accumulate (capped at 2, since the
+        // deck never exceeds 99 slides) and auto-commit after a short pause,
+        // or immediately on Enter -- replaces the old single-digit-only jump,
+        // which couldn't reach slides 10+ once the deck grew past 9.
+        e.preventDefault()
+        digitBufferRef.current = (digitBufferRef.current + e.key).slice(-2)
+        if (digitTimerRef.current) clearTimeout(digitTimerRef.current)
+        digitTimerRef.current = setTimeout(commitDigitBuffer, 900)
+      } else if (e.key === 'Enter' && digitBufferRef.current) { e.preventDefault(); commitDigitBuffer() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [next, prev, goTo, onExit])
+  }, [next, prev, goTo, onExit, commitDigitBuffer])
 
   useEffect(() => {
     const t = setTimeout(() => setShowKeyHint(false), 3200)
@@ -1063,19 +1112,30 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
   const pct = ((index + 1) / SLIDES.length) * 100
   const slide = SLIDES[index]
 
+  const hideCursor = laserOn || (fullscreen && !chromeVisible)
+  const chromeClass = fullscreen && !chromeVisible ? styles.mrChromeHidden : styles.mrChromeVisible
+
   return (
     <div ref={deckRootRef} role="dialog" aria-modal="true" aria-label={`Presenting: ${slide.title}`}
+      className={hideCursor ? styles.mrCursorNone : undefined}
+      onMouseMove={laserOn ? (e => setLaserPos({ x: e.clientX, y: e.clientY })) : undefined}
       style={{ position: 'fixed', inset: 0, zIndex: 9995, fontFamily: FONT, background: '#0B1330' }}>
       <div style={{
         position: 'absolute', inset: 0,
         background: 'radial-gradient(120% 90% at 50% 8%, rgba(28,159,212,0.14), transparent 55%), linear-gradient(180deg, rgba(6,10,22,0.94) 0%, rgba(8,12,26,0.98) 100%)',
       }} />
+      {laserOn && laserPos && <div className={styles.mrLaserDot} style={{ left: laserPos.x, top: laserPos.y }} />}
+      {blackout && (
+        <div className={styles.mrBlackout} onClick={() => setBlackout(false)}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Press B or click to resume</span>
+        </div>
+      )}
       {/* progress rail */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.08)', zIndex: 20 }}>
+      <div className={chromeClass} style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.08)', zIndex: 20 }}>
         <div style={{ height: '100%', width: pct + '%', transition: 'width .3s cubic-bezier(.22,1,.36,1)', background: `linear-gradient(90deg, ${NAVY}, ${BLUE}, ${CYAN})`, animation: 'mrBarGlow 2.2s ease-in-out infinite' }} />
       </div>
       {/* label + controls row */}
-      <div style={{ position: 'fixed', top: 20, left: 32, right: 32, zIndex: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div className={chromeClass} style={{ position: 'fixed', top: 20, left: 32, right: 32, zIndex: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{ maxWidth: '50vw' }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 3 }}>
             {slide.section} &middot; slide {index + 1} of {SLIDES.length}
@@ -1110,7 +1170,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
         borderRadius: 999, padding: '7px 14px',
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>
-          &larr; &rarr; navigate &middot; 1-9 jump &middot; Home/End &middot; F fullscreen &middot; P presenter &middot; Esc exit
+          &larr; &rarr; navigate &middot; digits+Enter jump &middot; Home/End &middot; F fullscreen &middot; P presenter &middot; B blackout &middot; L laser &middot; Esc exit
         </span>
       </div>
       {/* main stage */}
@@ -1118,7 +1178,8 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
         position: 'absolute', top: 88, bottom: 128, left: presenterOpen ? 32 : '6vw', right: presenterOpen ? 360 : '6vw',
         display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'right .25s ease, left .25s ease',
       }}>
-        <div key={index} style={{ transform: `scale(${scale})`, animation: 'mrSlideIn .42s cubic-bezier(.22,1,.36,1) both', position: 'relative' }}>
+        <div key={index} className={dirRef.current === 'prev' ? styles.mrPushPrev : styles.mrPushNext}
+          style={{ '--mr-scale': scale, position: 'relative' }}>
           <SlideCanvas Body={slide.Body} active period={period} innerRef={currentCanvasRef} />
           <div style={{
             position: 'absolute', inset: 0, borderRadius: 18, overflow: 'hidden', pointerEvents: 'none',
@@ -1150,7 +1211,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
         </div>
       )}
       {/* bottom bar: prev / thumbnail rail / next */}
-      <div style={{ position: 'fixed', bottom: 24, left: 0, right: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '0 32px' }}>
+      <div className={chromeClass} style={{ position: 'fixed', bottom: 24, left: 0, right: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '0 32px' }}>
         <DeckToolbarButton onClick={prev} title="Previous (←)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg></DeckToolbarButton>
         <div ref={thumbRailRef} className={styles.hideScroll} style={{
           display: 'flex', gap: 8, maxWidth: '60vw', overflowX: 'auto', padding: '8px 4px',
@@ -1238,9 +1299,9 @@ export default function MarketingReviewDashboard() {
 
   return (
     <MarketingReviewDataProvider>
-    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#EEF1F6' }}>
+    <div className={`lq-page-shell ${styles.shellRoot}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#EEF1F6' }}>
       <div className={styles.noPrint}><Sidebar /></div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className={styles.contentCol} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div className={styles.noPrint} style={{
           padding: '16px 28px', background: '#fff', borderBottom: '0.5px solid #E5E7EB',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
@@ -1270,8 +1331,7 @@ export default function MarketingReviewDashboard() {
               <div style={{ position: 'absolute', inset: 0, opacity: 0.5 }}><AmbientBackground variant="landing" /></div>
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', marginBottom: 8 }}>{SLIDES.length} slides &middot; {period}</div>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.4px', marginBottom: 8 }}>Ready to present</div>
-                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.65)', maxWidth: 520 }}>Full keyboard control, a slide navigator, presenter view, PDF export and a print-friendly read view — everything a live review needs.</div>
+                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.4px' }}>Ready to present</div>
               </div>
               <button type="button" onClick={() => startDeck(0)} className={styles.mrLaunchBtn} style={{
                 position: 'relative', zIndex: 1, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '13px 24px',
