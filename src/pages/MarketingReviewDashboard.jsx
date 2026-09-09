@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import { C, FONT, BRAND_RAMP } from '../ui/dashboardKit'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_RX } from '../../shared/brandLogo.mjs'
+import { fetchOverallBqAggRows, fetchOverallBqSyncedAt } from '../lib/overallBqCache.js'
 import styles from './MarketingReviewDashboard.module.css'
 
 // A dedicated, presentation-first review surface for the monthly Marketing
@@ -27,38 +28,135 @@ const SLIDE_W = 1280
 const SLIDE_H = 720
 const NAVY = C.navy, BLUE = C.blue, CYAN = C.cyan, GREEN = C.green
 
-// Defaults to the most recently COMPLETED calendar month -- a monthly review
-// covers the month that just finished, not the in-progress one.
-function defaultReviewPeriod() {
+// Most recently COMPLETED calendar month -- a monthly review covers the
+// month that just finished, not the in-progress one. Shared by the plain
+// display string below AND the headline-table month math (computeReviewMonths),
+// so the two can never disagree about which month "this review" means.
+function mostRecentCompletedMonth() {
   const d = new Date()
   d.setDate(1)
   d.setMonth(d.getMonth() - 1)
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return d
+}
+function defaultReviewPeriod() {
+  return mostRecentCompletedMonth().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
 function fmtINR(n) { return '₹' + Math.round(n).toLocaleString('en-IN') }
 function fmtN(n) { return Math.round(n).toLocaleString('en-IN') }
+// Cr/L shorthand -- same convention as OverallDashboard.jsx's own fmtINRShort:
+// primary display on the headline table's money cells, exact fmtINR figure
+// in a hover tooltip.
+function fmtINRShort(n) {
+  n = parseFloat(n) || 0
+  if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr'
+  if (n >= 1e5) return '₹' + (n / 1e5).toFixed(1) + 'L'
+  return '₹' + Math.round(n).toLocaleString('en-IN')
+}
+function monthShort(d) { return d.toLocaleDateString('en-US', { month: 'short' }) + "'" + String(d.getFullYear()).slice(-2) }
 
-// Animates 0 -> target with an ease-out cubic whenever `active` flips true --
-// keyed by the caller to `index` so landing on a slide always replays it
-// fresh, the same way PresentationTool.jsx's own enter animation replays on
-// every visit rather than only once.
-function useCountUp(target, active, duration = 1100) {
-  const [val, setVal] = useState(0)
-  useEffect(() => {
-    if (!active) { setVal(0); return undefined }
-    let raf, start
-    const step = (t) => {
-      if (!start) start = t
-      const p = Math.min(1, (t - start) / duration)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setVal(target * eased)
-      if (p < 1) raf = requestAnimationFrame(step)
+/* ---------- headline-slide month math + live-data aggregation ----------
+   The BigQuery-backed agg table (overall_bq_daily_agg, read via the same
+   overallBqCache.js module the live /dashboard/overall-bigquery page reads)
+   is a small, fast, pre-aggregated day+Source table -- no campaign_name, so
+   it cannot replicate a per-CAMPAIGN cost exclusion. cost_excluded_campaign_
+   patterns is currently EMPTY in app_preferences (checked live, 2026-09-09),
+   so Overall's own costSpend === spend today and this aggregate matches
+   Overall's CPL/CPQL/CPA formula exactly as it currently stands. If that list
+   is ever populated, re-check this slide's numbers against the live Overall
+   dashboard for the same month before trusting them again. */
+
+const REVIEW_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+function monthKeyStr(d) { return REVIEW_MONTH_NAMES[d.getMonth()] + "'" + d.getFullYear() }
+function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
+function monthStartOf(d) { return new Date(d.getFullYear(), d.getMonth(), 1) }
+function monthEndOf(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0) }
+function ymOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') }
+
+// The 3 trailing months shown as table columns, plus the same month last
+// year -- used only for the "vs last year" delta, never shown as its own
+// column.
+function computeReviewMonths() {
+  const current = mostRecentCompletedMonth()
+  const prior = new Date(current.getFullYear(), current.getMonth() - 1, 1)
+  const twoBack = new Date(current.getFullYear(), current.getMonth() - 2, 1)
+  const lastYear = new Date(current.getFullYear() - 1, current.getMonth(), 1)
+  return { current, prior, twoBack, lastYear }
+}
+
+function reviewNum(v) { return Number(v) || 0 }
+
+// Sums the agg table's rows down to one month, replicating
+// OverallDashboard.jsx's own kpis/paidKpis/cpl/cpql/cpa formulas: Spend,
+// Leads, QL (Human+AI+Superbot combined) and Apps are plain totals across
+// every row; CPL/CPQL/CPA divide by the PAID-ONLY subset -- leads/QL/apps
+// from Sources that had ANY spend that month. Overall found the
+// unrestricted denominator understated CPL by ~26% on real data. "Paid" is
+// judged per Source (not per row), matching Overall's own classification.
+function aggregateReviewMonth(rows, key) {
+  const bySource = new Map()
+  for (const r of rows) {
+    if (r.month !== key) continue
+    const src = r.Source || 'Unknown'
+    const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0 }
+    e.leads += reviewNum(r['Total Leads Generated'])
+    e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+    e.apps += reviewNum(r['Total Apps'])
+    e.spend += reviewNum(r['Total_Spends'])
+    bySource.set(src, e)
+  }
+  let leads = 0, ql = 0, apps = 0, spend = 0, paidLeads = 0, paidQl = 0, paidApps = 0
+  for (const e of bySource.values()) {
+    leads += e.leads; ql += e.ql; apps += e.apps; spend += e.spend
+    if (e.spend > 0) { paidLeads += e.leads; paidQl += e.ql; paidApps += e.apps }
+  }
+  return {
+    hasData: bySource.size > 0, leads, ql, apps, spend,
+    cpl: paidLeads > 0 ? spend / paidLeads : null,
+    cpql: paidQl > 0 ? spend / paidQl : null,
+    cpa: paidApps > 0 ? spend / paidApps : null,
+  }
+}
+
+// null when either side is missing (nothing to compare); the sentinel
+// string 'new' when the prior period was genuinely zero and this one isn't
+// -- a percentage off a zero base is noise, not signal.
+function reviewPctDelta(cur, prev) {
+  if (cur == null || prev == null) return null
+  if (prev === 0) return cur === 0 ? null : 'new'
+  return ((cur - prev) / prev) * 100
+}
+
+// One row per metric on the headline table. `invert` matches PremKPI's own
+// convention (dashboardKit.jsx) -- true for cost/spend metrics, where a
+// DECREASE is the good direction; false for volume/outcome metrics.
+function buildHeadlineRows(months, aggByMonth, acSales) {
+  const ac2 = acSales[ymOf(months.twoBack)], ac1 = acSales[ymOf(months.prior)]
+  const ac0 = acSales[ymOf(months.current)], acLY = acSales[ymOf(months.lastYear)]
+  const cpsOf = (agg, ac) => (ac != null && ac > 0 && agg.hasData) ? agg.spend / ac : null
+
+  const metric = (label, key, invert, money, getter) => {
+    const v2 = getter(aggByMonth.twoBack, ac2), v1 = getter(aggByMonth.prior, ac1)
+    const v0 = getter(aggByMonth.current, ac0), vLY = getter(aggByMonth.lastYear, acLY)
+    return {
+      key, label, invert, money,
+      values: [v2, v1, v0],
+      deltaVsPrior: reviewPctDelta(v0, v1), priorForDeltaVsPrior: v1,
+      deltaVsLastYear: reviewPctDelta(v0, vLY), priorForDeltaVsLastYear: vLY,
     }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [active, target, duration])
-  return val
+  }
+
+  return [
+    metric('Spend', 'spend', true, true, a => a.hasData ? a.spend : null),
+    metric('Leads', 'leads', false, false, a => a.hasData ? a.leads : null),
+    metric('QL', 'ql', false, false, a => a.hasData ? a.ql : null),
+    metric('Apps', 'apps', false, false, a => a.hasData ? a.apps : null),
+    metric('AC Sales', 'acSales', false, false, (a, ac) => (ac != null ? ac : null)),
+    metric('CPL', 'cpl', true, true, a => a.cpl),
+    metric('CPQL', 'cpql', true, true, a => a.cpql),
+    metric('CPA', 'cpa', true, true, a => a.cpa),
+    metric('CPS', 'cps', true, true, (a, ac) => cpsOf(a, ac)),
+  ]
 }
 
 function useElementSize(ref) {
@@ -123,17 +221,24 @@ function AmbientBackground({ variant = 'cover' }) {
   )
 }
 
-function PeriodBadge({ period }) {
+function PeriodBadge({ period, live }) {
   return (
     <div style={{ position: 'absolute', top: 28, right: 40, display: 'flex', alignItems: 'center', gap: 8, zIndex: 2 }}>
       <span style={{
         fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', color: NAVY, background: C.navyBg,
         borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
       }}>{period}</span>
-      <span style={{
-        fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', color: '#8A6A00', background: '#FFF6DA',
-        border: '1px solid #F2E2A8', borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
-      }}>Sample data — pending real figures</span>
+      {live ? (
+        <span style={{
+          fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', color: GREEN, background: C.greenBg,
+          borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
+        }}>Live data · Overall (BigQuery)</span>
+      ) : (
+        <span style={{
+          fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', color: '#8A6A00', background: '#FFF6DA',
+          border: '1px solid #F2E2A8', borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
+        }}>Sample data — pending real figures</span>
+      )}
     </div>
   )
 }
@@ -145,6 +250,96 @@ function SectionKicker({ label, title }) {
       <div style={{ fontSize: 34, fontWeight: 800, color: '#0F1B33', letterSpacing: '-0.5px' }}>{title}</div>
     </div>
   )
+}
+
+/* ---------- live data for the headline slide (fetched once, shared by every
+   render of it -- the deck's main stage, its own thumbnail, the landing
+   gallery card, and read view all mount this same Body component
+   independently, potentially several at once) ---------- */
+
+const MarketingReviewDataContext = React.createContext(null)
+function useMarketingReviewData() { return React.useContext(MarketingReviewDataContext) }
+
+function MarketingReviewDataProvider({ children }) {
+  const months = useMemo(computeReviewMonths, [])
+  const [rows, setRows] = useState(null)
+  const [error, setError] = useState(null)
+  const [retryToken, setRetryToken] = useState(0)
+  const [acSales, setAcSales] = useState({})
+  const [acSalesLoaded, setAcSalesLoaded] = useState(false)
+  const [acSaving, setAcSaving] = useState(false)
+  const [syncedAt, setSyncedAt] = useState(null)
+
+  useEffect(() => {
+    let dead = false
+    setRows(null); setError(null)
+    const sinceA = isoDate(monthStartOf(months.twoBack)), untilA = isoDate(monthEndOf(months.current))
+    const sinceB = isoDate(monthStartOf(months.lastYear)), untilB = isoDate(monthEndOf(months.lastYear))
+    Promise.all([
+      fetchOverallBqAggRows({ since: sinceA, until: untilA }),
+      fetchOverallBqAggRows({ since: sinceB, until: untilB }),
+    ]).then(([a, b]) => { if (!dead) setRows(a.concat(b)) })
+      .catch(e => { if (!dead) setError(e.message || 'Failed to load figures') })
+    return () => { dead = true }
+  }, [months, retryToken])
+
+  useEffect(() => {
+    let dead = false
+    fetchOverallBqSyncedAt().then(d => { if (!dead) setSyncedAt(d) }).catch(() => {})
+    return () => { dead = true }
+  }, [])
+
+  useEffect(() => {
+    let dead = false
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(d => { if (!dead) { setAcSales((d.prefs && d.prefs.ac_sales_manual) || {}); setAcSalesLoaded(true) } })
+      .catch(() => { if (!dead) setAcSalesLoaded(true) })
+    return () => { dead = true }
+  }, [])
+
+  // Optimistic write, revert-on-failure -- same pattern as Settings' own
+  // saveAffiliateSpend, otherwise a failed save looks saved until reload.
+  const saveAcSales = useCallback(async (next) => {
+    const prev = acSales
+    setAcSales(next); setAcSaving(true)
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'ac_sales_manual', value: next }),
+      })
+      if (!r.ok) throw new Error('Save failed')
+      return true
+    } catch (e) {
+      setAcSales(prev)
+      return false
+    } finally {
+      setAcSaving(false)
+    }
+  }, [acSales])
+
+  const aggByMonth = useMemo(() => {
+    if (!rows) return null
+    return {
+      twoBack: aggregateReviewMonth(rows, monthKeyStr(months.twoBack)),
+      prior: aggregateReviewMonth(rows, monthKeyStr(months.prior)),
+      current: aggregateReviewMonth(rows, monthKeyStr(months.current)),
+      lastYear: aggregateReviewMonth(rows, monthKeyStr(months.lastYear)),
+    }
+  }, [rows, months])
+
+  const headlineRows = useMemo(() => {
+    if (!aggByMonth || !acSalesLoaded) return null
+    return buildHeadlineRows(months, aggByMonth, acSales)
+  }, [aggByMonth, acSalesLoaded, acSales, months])
+
+  const value = useMemo(() => ({
+    months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
+    acSales, acSaving, saveAcSales, syncedAt,
+    retry: () => setRetryToken(t => t + 1),
+  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt])
+
+  return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
 
 /* ---------- slide bodies ---------- */
@@ -206,41 +401,159 @@ function AgendaSlide({ active }) {
   )
 }
 
-const KPI_TILES = [
-  { label: 'Total Spend', target: 5480000, fmt: fmtINR },
-  { label: 'Total Leads', target: 214300, fmt: fmtN },
-  { label: 'Total QLs', target: 15870, fmt: fmtN },
-  { label: 'CPQL', target: 345, fmt: fmtINR },
-  { label: 'QL Rate', target: 7.4, fmt: n => n.toFixed(1) + '%' },
-]
-function KpiTile({ label, target, fmt, active, delay }) {
-  const v = useCountUp(target, active)
+function fmtHeadlineCell(v, money) {
+  if (v == null) return '—'
+  return money ? fmtINRShort(v) : fmtN(v)
+}
+function exactHeadlineTitle(v, money) {
+  if (v == null) return undefined
+  return money ? fmtINR(v) : fmtN(v)
+}
+function fmtDeltaPrior(v, money) { return money ? fmtINRShort(v || 0) : fmtN(v || 0) }
+
+function DeltaCell({ delta, prior, money, invert }) {
+  if (delta == null) return <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>—</span>
+  const isNew = delta === 'new'
+  const up = !isNew && delta >= 0
+  const good = isNew ? true : (invert ? !up : up)
+  const color = good ? GREEN : NAVY
+  const arrow = isNew || up ? '▲' : '▼'
+  const pctText = isNew ? 'New' : (Math.abs(delta).toFixed(1) + '%')
   return (
-    <div className={active ? styles.staggerItem : undefined}
-      style={{
-        flex: 1, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 14, padding: '20px 18px',
-        animationDelay: active ? delay + 's' : undefined,
-      }}>
-      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 10 }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums' }}>{fmt(v)}</div>
-    </div>
+    <span style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
+      <span style={{ color, fontWeight: 800 }}>{arrow} {pctText}</span>
+      <span style={{ color: '#94A3B8', fontWeight: 600 }}> (was {fmtDeltaPrior(prior, money)})</span>
+    </span>
   )
 }
-function ExecutiveSummarySlide({ active, period }) {
+
+function EditIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+}
+
+const HEADLINE_GRID_COLS = '200px repeat(3, 130px) 185px 185px'
+
+// The 9-metric monthly headline table -- Spend/Leads/QL/Apps/AC Sales/CPL/
+// CPQL/CPA/CPS across the trailing 3 months, each with a delta vs the prior
+// month and vs the same month last year. Reads live figures from Overall's
+// own BigQuery cache via MarketingReviewDataProvider above (one fetch shared
+// by every mount of this component, however many render at once).
+function HeadlineSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const [editOpen, setEditOpen] = useState(false)
+  const [draft, setDraft] = useState({})
+
+  if (!ctx) return null
+  const { months, loading, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt, retry } = ctx
+  const displayMonths = [months.twoBack, months.prior, months.current]
+
+  const openEdit = () => {
+    const d = {}
+    displayMonths.forEach(m => { const ym = ymOf(m); d[ym] = acSales[ym] != null ? String(acSales[ym]) : '' })
+    setDraft(d)
+    setEditOpen(true)
+  }
+  const saveDraft = async () => {
+    const next = { ...acSales }
+    for (const [ym, val] of Object.entries(draft)) {
+      const trimmed = String(val).trim()
+      if (trimmed === '') { delete next[ym]; continue }
+      const n = Number(trimmed)
+      if (!Number.isFinite(n) || n < 0) return
+      next[ym] = n
+    }
+    if (await saveAcSales(next)) setEditOpen(false)
+  }
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
-      <PeriodBadge period={period} />
+      <PeriodBadge period={period} live />
       <SectionKicker label="Executive Summary" title="The headline numbers" />
-      <div style={{ display: 'flex', gap: 16, marginBottom: 34 }}>
-        {KPI_TILES.map((k, i) => <KpiTile key={k.label} {...k} active={active} delay={0.06 * i} />)}
-      </div>
-      <div className={active ? styles.staggerItem : undefined} style={{ animationDelay: active ? '0.4s' : undefined }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 10 }}>Narrative</div>
-        <div style={{ fontSize: 16.5, color: '#334155', lineHeight: 1.7, maxWidth: 900 }}>
-          One or two sentences summarizing the month once real numbers are in — e.g. which channel drove the move in QL Rate,
-          and whether spend efficiency improved or worsened against last month.
+
+      {loading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
+          <span className={styles.mrSpinner} />Loading live figures from Overall…
         </div>
-      </div>
+      )}
+
+      {!loading && error && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, padding: '14px 18px', marginTop: 10 }}>
+          <span style={{ fontSize: 13.5, color: '#7A5C00', fontWeight: 600, flex: 1 }}>Couldn't load live figures: {error}</span>
+          {active && (
+            <button type="button" onClick={retry} className={styles.noPrint}
+              style={{ border: 'none', background: NAVY, color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
+      {!loading && !error && headlineRows && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, borderBottom: '2px solid #0F1B33', paddingBottom: 9, marginBottom: 2 }}>
+            <div />
+            {displayMonths.map((m, i) => (
+              <div key={i} style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{monthShort(m)}</div>
+            ))}
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.prior)}</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.lastYear)}</div>
+          </div>
+
+          {headlineRows.map((row, i) => (
+            <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
+              display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, alignItems: 'center',
+              padding: '10px 0', borderBottom: '1px solid #F1F5F9',
+              animationDelay: active ? (0.035 * i) + 's' : undefined,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {row.label}
+                {row.key === 'acSales' && active && (
+                  <button type="button" onClick={openEdit} className={styles.noPrint} title="Enter AC Sales"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BLUE, padding: 2, display: 'inline-flex' }}>
+                    <EditIcon />
+                  </button>
+                )}
+              </div>
+              {row.values.map((v, ci) => (
+                <div key={ci} title={exactHeadlineTitle(v, row.money)}
+                  style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtHeadlineCell(v, row.money)}
+                </div>
+              ))}
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} /></div>
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
+            </div>
+          ))}
+
+          <div style={{ marginTop: 14, fontSize: 11, color: '#94A3B8', fontWeight: 600, lineHeight: 1.5 }}>
+            {syncedAt ? `Synced ${syncedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}
+            Source: Overall (BigQuery cache) · CPL/CPQL/CPA/CPS divide by paid-source volume only, matching Overall's own figures.
+          </div>
+        </>
+      )}
+
+      {editOpen && (
+        <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 360, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Sales</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — entered here by month. CPS (Spend ÷ AC Sales) is computed automatically.</div>
+            {displayMonths.map(m => {
+              const ym = ymOf(m)
+              return (
+                <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 70, fontSize: 12.5, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{monthShort(m)}</div>
+                  <input type="number" min="0" value={draft[ym] || ''} onChange={e => setDraft(d => ({ ...d, [ym]: e.target.value }))}
+                    placeholder="0" style={{ flex: 1, border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: FONT, boxSizing: 'border-box' }} />
+                </div>
+              )
+            })}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+              <Button size="sm" variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={saveDraft} disabled={acSaving}>{acSaving ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -414,7 +727,7 @@ function ClosingSlide({ active, period }) {
 const SLIDES = [
   { id: 'cover', section: 'Cover', title: 'Monthly Marketing Review', Body: CoverSlide, dark: true },
   { id: 'agenda', section: 'Agenda', title: "What we'll cover", Body: AgendaSlide },
-  { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: ExecutiveSummarySlide },
+  { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide },
   { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide },
   { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide },
   { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide },
@@ -709,6 +1022,7 @@ export default function MarketingReviewDashboard() {
   }, [])
 
   return (
+    <MarketingReviewDataProvider>
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#EEF1F6' }}>
       <div className={styles.noPrint}><Sidebar /></div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -781,5 +1095,6 @@ export default function MarketingReviewDashboard() {
         />
       )}
     </div>
+    </MarketingReviewDataProvider>
   )
 }

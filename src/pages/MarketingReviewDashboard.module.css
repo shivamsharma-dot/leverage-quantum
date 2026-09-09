@@ -57,6 +57,9 @@
   100% { transform: scale(1.08) translate(-1%, -1%); }
 }
 
+@keyframes mrSpin { to { transform: rotate(360deg); } }
+.mrSpinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #E2E8F0; border-top-color: #1C9FD4; animation: mrSpin .8s linear infinite; flex-shrink: 0; }
+
 .hideScroll { -ms-overflow-style: none; scrollbar-width: none; }
 .hideScroll::-webkit-scrollbar { display: none; }
 
