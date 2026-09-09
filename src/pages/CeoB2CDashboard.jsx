@@ -25,7 +25,12 @@ import { useAuth } from '../hooks/useAuth'
 // was, as two separate lines rather than one combined row. 'offRev' (their
 // sum, derived server-side) still exists on each row for anything that wants
 // the combined total (Slack reports etc.) -- just no longer rendered as its
-// own table row here.
+// own table row here. A third new line, 'Upskilling Revenue' (2026-09, P&L
+// only), is deliberately kept OUT of this array too -- it isn't part of the
+// Online/Offline split, and REV is sliced positionally (REV.slice(0,3) /
+// REV.slice(3)) for those two subgroups, so appending it here would silently
+// fold it into "Offline". It's handled as its own explicit field instead --
+// see totals()/day's own comments below -- and rendered as its own row.
 const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'], ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'Leverage One Offline']]
 // Verbatim off the Daily Cash Flow - Ramesh tab, C2:F2 -- shown exactly as
 // Finance titled them, not shortened like the P&L page's Online/Offline split.
@@ -33,7 +38,11 @@ const REV_CASHFLOW = [
   ['sr', 'Actuals SR Revenue (Online + Offline)'], ['ac', 'Actuals AC Online Revenue'],
   ['vas', 'Actuals Leverage One Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + Leverage One)'],
 ]
-const COST = [['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, Leverage One)'], ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads']]
+// 'Corp. Salary' -- a new cost line Finance added alongside 'Corp. Overheads'
+// (2026-09, api/crm-leads.js's B2C_PNL_COLS has the full story), P&L only --
+// Cash Flow rows carry no such field, so it resolves to null there and never
+// shows on that statement's own separate table (COST_CASHFLOW below, unchanged).
+const COST = [['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, Leverage One)'], ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads'], ['corpSalary', 'Corp. Salary']]
 // Verbatim off the same tab, H2:L2 -- Cash Flow's own wording, which differs
 // slightly from the P&L labels above (e.g. "Actuals PM Cost" vs "Performance
 // Marketing (Total)"), so it needs its own array rather than sharing COST.
@@ -182,6 +191,20 @@ function totals(rs, revDefs) {
   // per row (api/crm-leads.js), so just sum that field directly rather than
   // deriving it from whichever line items happen to be in revDefs.
   o.sr = col(rs, 'sr')
+  // Same idea for 'offRev' (combined AC + Leverage One Offline, also
+  // precomputed per row). REV_PNL lists the two raw halves separately for the
+  // page's own Online/Offline split, so this key was never in revDefs and
+  // stayed undefined on every P&L ctx.rev.off -- meaning the "Offline"
+  // revenue line on the Performance Brief / phone report / full ledger (the
+  // three Slack versions that read a single combined Offline figure rather
+  // than the page's own split rows) always showed a dash. Fixed here rather
+  // than adding 'offRev' into REV_PNL itself, which would incorrectly fold
+  // it into the last-3 slice the JSX below uses for the "Offline" subgroup.
+  o.offRev = col(rs, 'offRev')
+  // 'Upskilling Revenue' -- a brand-new revenue line Finance added to the
+  // sheet (2026-09), not part of the Online/Offline split, so it lives
+  // outside revDefs entirely too, same as 'sr'/'offRev' above.
+  o.upskilling = col(rs, 'upskilling')
   return o
 }
 function chg(now, was) {
@@ -353,7 +376,10 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
 
   const day = useMemo(function () {
     if (!last) return null
-    const o = { date: last.date, sr: last.sr }
+    // offRev/upskilling: same reasoning as totals() above -- explicit, outside
+    // the REV.concat(COST) loop, so they're never folded into a slice(0,3)/
+    // slice(3) subgroup.
+    const o = { date: last.date, sr: last.sr, offRev: last.offRev, upskilling: last.upskilling }
     REV.concat(COST).forEach(function (d) { o[d[0]] = last[d[0]] })
     o.rev = last.totalRev != null ? last.totalRev : roll(o, REV)
     o.cost = last.totalCost != null ? last.totalCost : roll(o, COST)
@@ -587,8 +613,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     return {
       monthLabel: activeWindow ? windowLabel : String(month || '').replace('-', ' '),
       through: d1,
-      rev: { sr: mtd.sr, ac: mtd.ac, vas: mtd.vas, off: mtd.offRev, total: mtd.rev },
-      cost: { pm: mtd.pm, op: mtd.op, off: mtd.offCost, corp: mtd.corp, people: mtd.people, total: mtd.cost },
+      rev: { sr: mtd.sr, ac: mtd.ac, vas: mtd.vas, off: mtd.offRev, upskilling: mtd.upskilling, total: mtd.rev },
+      cost: { pm: mtd.pm, op: mtd.op, off: mtd.offCost, corp: mtd.corp, people: mtd.people, corpSalary: mtd.corpSalary, total: mtd.cost },
       net: mtd.net,
       margin: margin,
       // The last completed day now carries its line items too, so the Slack ledger
@@ -596,8 +622,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       // Additive: the existing B2C builder only ever reads date, rev, cost and net.
       day: day ? {
         date: day.date,
-        sr: day.sr, ac: day.ac, vas: day.vas, offRev: day.offRev,
-        pm: day.pm, op: day.op, offCost: day.offCost, corp: day.corp, people: day.people,
+        sr: day.sr, ac: day.ac, vas: day.vas, offRev: day.offRev, upskilling: day.upskilling,
+        pm: day.pm, op: day.op, offCost: day.offCost, corp: day.corp, people: day.people, corpSalary: day.corpSalary,
         rev: day.rev, cost: day.cost, net: day.net,
       } : null,
       // Full day/mtd/fy objects, untouched -- P&L-only, they already carry the
@@ -617,8 +643,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         // a 30 day one is a calendar artefact, and a builder cannot see that
         // without the count, so it travels with the comparison.
         days: prevRows.length,
-        rev: { sr: prev.sr, ac: prev.ac, vas: prev.vas, off: prev.offRev, total: prev.rev },
-        cost: { pm: prev.pm, op: prev.op, off: prev.offCost, corp: prev.corp, people: prev.people, total: prev.cost },
+        rev: { sr: prev.sr, ac: prev.ac, vas: prev.vas, off: prev.offRev, upskilling: prev.upskilling, total: prev.rev },
+        cost: { pm: prev.pm, op: prev.op, off: prev.offCost, corp: prev.corp, people: prev.people, corpSalary: prev.corpSalary, total: prev.cost },
         net: prev.net
       } : null,
       days: dayStats.days,
@@ -675,7 +701,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     const shot = node ? await captureNodePng(node, { ratios: [3, 2, 1.5, 1] }) : null
     const cols = ['Line item', day ? day.date : 'Latest day', periodLabel]
     if (hasPrev) cols.push(prevLab)
-    const spec = REV.concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost]])
+    const spec = REV.concat(isCashFlow ? [] : [['upskilling', 'Upskilling']]).concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost]])
       .concat(isCashFlow ? [] : [['ebitdaBeforeCorp', 'EBITDA Before Corp. Overheads']])
       .concat([['net', L.net]])
     const body = spec.map(function (d) {
@@ -913,6 +939,11 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       {REV.slice(0, 3).map(revRow)}
                       <tr><td className={styles.subgroup} colSpan={hasPrev ? 6 : 4}>Offline</td></tr>
                       {REV.slice(3).map(revRow)}
+                      {/* A new revenue line Finance added to the sheet (2026-09) --
+                          not part of the Online/Offline split, so it sits outside REV
+                          entirely (see the 'day'/'totals' comments above) and gets its
+                          own row here rather than being folded into either subgroup. */}
+                      {revRow(['upskilling', 'Upskilling'])}
                     </>
                   )}
                   <tr className={styles.total}>

@@ -37,14 +37,16 @@ const LINES = [
   ['SR (Online + Offline)', 'SR', 'sr'],
   ['AC Online', 'AC Online', 'ac'],
   ['Leverage One Online', 'Leverage One Online', 'vas'],
-  ['Offline (AC + Leverage One)', 'Offline', 'off']
+  ['Offline (AC + Leverage One)', 'Offline', 'off'],
+  ['Upskilling', 'Upskilling', 'upskilling'],
 ]
 const HEADS = [
   ['Perf. Marketing', 'Marketing', 'pm'],
   ['Operating', 'Operating', 'op'],
   ['Offline (rent + staff)', 'Offline', 'off'],
   ['Corp. Overheads', 'Overheads', 'corp'],
-  ['People', 'People', 'people']
+  ['People', 'People', 'people'],
+  ['Corp. Salary', 'Salary', 'corpSalary'],
 ]
 
 // With the rupee sign. Prose only.
@@ -289,13 +291,17 @@ const cellPlain = function (c) {
   const el = c.elements && c.elements[0] && c.elements[0].elements && c.elements[0].elements[0]
   return el ? el.text : ''
 }
+// 'upskilling' and 'corpSalary' -- two columns Finance added to the Daily P&L
+// tab in 2026-09 (api/crm-leads.js's B2C_PNL_COLS has the full story).
 const FULL_LINES = [
   ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'],
   ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'Leverage One Offline'],
+  ['upskilling', 'Upskilling'],
 ]
 const FULL_HEADS = [
   ['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, Leverage One)'],
   ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads'],
+  ['corpSalary', 'Corp. Salary'],
 ]
 function buildB2CFullTable(ctx) {
   const c = ctx || {}

@@ -4241,8 +4241,19 @@ const B2C_PNL_COLS = {
   ac: 'ac online revenue', vas: 'vas online revenue',
   acOffline: 'ac offline revenue', vasOffline: 'vas offline revenue',
   offRev: 'calculated offline revenue', totalRev: 'total revenue',
+  // Two new columns Finance added to this tab (2026-09), confirmed against
+  // the live sheet -- 'Upskilling Revenue' reads 0 on every day so far but is
+  // a real, separate revenue category (not part of the Online/Offline
+  // split); 'Corp. Salary' sits alongside the pre-existing 'Corp. Overheads'
+  // column and has carried a real, non-zero daily figure since 1 Sep 2026
+  // (~2.48L/day). Both are P&L-only -- the Daily Cash Flow tab has neither
+  // column at all. Both already flow into the sheet's own Total
+  // Revenue/Total Cost/EBITDA columns (which this app always reads directly,
+  // never re-derives), so no headline figure was ever wrong -- only the
+  // per-line breakdowns (dashboard table + Slack reports) were missing them.
+  upskilling: 'upskilling revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
-  offCost: 'offline cost', corp: 'corp. overheads',
+  offCost: 'offline cost', corp: 'corp. overheads', corpSalary: 'corp. salary',
   totalCost: 'total cost',
   // 'Net Inflow' was renamed to 'EBITDA' in an earlier pass, then split into
   // two real columns (2026-08, confirmed against the live sheet): 'EBITDA
@@ -4275,7 +4286,8 @@ const B2C_CASHFLOW_COLS = {
 // ebitdaBeforeCorp only ever resolves on P&L (Cash Flow's cols has no such
 // key, so at.ebitdaBeforeCorp is undefined there and this stays null on every
 // Cash Flow row -- harmless, just never read by anything on that statement).
-const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'totalCost', 'net', 'ebitdaBeforeCorp'];
+// upskilling/corpSalary are the same story: P&L-only, undefined on Cash Flow.
+const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'corpSalary', 'totalCost', 'net', 'ebitdaBeforeCorp', 'upskilling'];
 
 function b2cParseDays(csv, cols) {
   const parsed = b2cRows(csv, cols);
@@ -4377,6 +4389,7 @@ export async function fetchB2CData() {
 const B2C_PNL_LINES = [
   ['SR Online', 'srOnline'], ['AC Online', 'ac'], ['Leverage One Online', 'vas'],
   ['SR Offline', 'srOffline'], ['AC Offline', 'acOffline'], ['Leverage One Offline', 'vasOffline'],
+  ['Upskilling', 'upskilling'],
 ]
 const B2C_CASHFLOW_INFLOW_LINES = [
   ['SR, Online and Offline', 'sr'], ['Actuals AC Online Revenue', 'ac'],
@@ -4384,7 +4397,7 @@ const B2C_CASHFLOW_INFLOW_LINES = [
 ]
 const B2C_COST_LINES = [
   ['People', 'people'], ['Performance Marketing', 'pm'], ['Product Operating Cost', 'op'],
-  ['Offline Cost', 'offCost'], ['Corp. Overheads', 'corp'],
+  ['Offline Cost', 'offCost'], ['Corp. Overheads', 'corp'], ['Corp. Salary', 'corpSalary'],
 ]
 const B2C_CASHFLOW_OUTFLOW_LINES = [
   ['Actuals People Cost, Incl. Corporate', 'people'], ['Actuals PM Cost', 'pm'],

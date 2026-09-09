@@ -125,30 +125,34 @@ const cellMoneyVs = (o, p, k, invert) => {
 // Normalised once here so last day, month to date and year to date are read by
 // exactly the same code below.
 
+// 'upskilling' and 'corpSalary' -- two columns Finance added to the Daily P&L
+// tab in 2026-09 (api/crm-leads.js's B2C_PNL_COLS has the full story).
 const HEADS = [
   ['SR (Online + Offline)', 'Revenue', 'sr', 'SR'],
   ['AC Online', 'Revenue', 'ac', 'AC'],
   ['Leverage One Online', 'Revenue', 'vas', 'Leverage One'],
   ['Offline (AC + Leverage One)', 'Revenue', 'offRev', 'Offline rev'],
+  ['Upskilling', 'Revenue', 'upskilling', 'Upskilling'],
   ['Perf. Marketing', 'Cost', 'pm', 'Marketing'],
   ['Operating (AC + Leverage One)', 'Cost', 'op', 'Operating'],
   ['Offline (rent, staff, upkeep)', 'Cost', 'offCost', 'Offline cost'],
   ['Corp. Overheads', 'Cost', 'corp', 'Overheads'],
   ['People', 'Cost', 'people', 'People'],
+  ['Corp. Salary', 'Cost', 'corpSalary', 'Salary'],
 ]
 
 function fromCtx(rev, cost, net) {
   return {
-    sr: rev.sr, ac: rev.ac, vas: rev.vas, offRev: rev.off,
-    pm: cost.pm, op: cost.op, offCost: cost.off, corp: cost.corp, people: cost.people,
+    sr: rev.sr, ac: rev.ac, vas: rev.vas, offRev: rev.off, upskilling: rev.upskilling,
+    pm: cost.pm, op: cost.op, offCost: cost.off, corp: cost.corp, people: cost.people, corpSalary: cost.corpSalary,
     rev: rev.total, cost: cost.total, net: net,
   }
 }
 function fromSheet(o) {
   if (!o) return null
   return {
-    sr: o.sr, ac: o.ac, vas: o.vas, offRev: o.offRev,
-    pm: o.pm, op: o.op, offCost: o.offCost, corp: o.corp, people: o.people,
+    sr: o.sr, ac: o.ac, vas: o.vas, offRev: o.offRev, upskilling: o.upskilling,
+    pm: o.pm, op: o.op, offCost: o.offCost, corp: o.corp, people: o.people, corpSalary: o.corpSalary,
     rev: o.rev, cost: o.cost, net: o.net,
   }
 }

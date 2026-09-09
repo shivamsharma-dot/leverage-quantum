@@ -26,12 +26,15 @@ const LAKH = 1e5
 
 // Row order, in the CEO's own names for these lines. A 'band' is a heading row
 // drawn inside the table: first cell only, bold, the rest of the row blank.
+// 'upskilling' and 'corpSalary' -- two columns Finance added to the Daily P&L
+// tab in 2026-09 (api/crm-leads.js's B2C_PNL_COLS has the full story).
 const PLAN = [
   ['band', 'REVENUE'],
   ['sr', 'SR (Online + Offline)'],
   ['ac', 'AC Online'],
   ['vas', 'Leverage One Online'],
   ['offRev', 'Offline (AC + Leverage One)'],
+  ['upskilling', 'Upskilling'],
   ['rev', 'Total revenue'],
   ['band', 'COST'],
   ['people', 'People'],
@@ -39,6 +42,7 @@ const PLAN = [
   ['pm', 'Performance Marketing'],
   ['offCost', 'Offline (rent, staff, maintenance)'],
   ['corp', 'Corporate Overheads'],
+  ['corpSalary', 'Corporate Salary'],
   ['cost', 'Total cost'],
   ['band', 'NET'],
   ['net', 'Net inflow']
@@ -46,9 +50,9 @@ const PLAN = [
 // The three rows that are sums of the rows above them, plus net inflow. Bold in
 // the table, because a total nobody can find is a total nobody trusts.
 const TOTALS = { rev: 1, cost: 1, net: 1 }
-const KEYS = ['sr', 'ac', 'vas', 'offRev', 'rev', 'people', 'op', 'pm', 'offCost', 'corp', 'cost', 'net']
-const REVK = ['sr', 'ac', 'vas', 'offRev']
-const COSTK = ['people', 'op', 'pm', 'offCost', 'corp']
+const KEYS = ['sr', 'ac', 'vas', 'offRev', 'upskilling', 'rev', 'people', 'op', 'pm', 'offCost', 'corp', 'corpSalary', 'cost', 'net']
+const REVK = ['sr', 'ac', 'vas', 'offRev', 'upskilling']
+const COSTK = ['people', 'op', 'pm', 'offCost', 'corp', 'corpSalary']
 const NAME = {}
 PLAN.forEach(function (p) { if (p[0] !== 'band') NAME[p[0]] = p[1] })
 
@@ -88,8 +92,8 @@ function folded(c, net) {
   const r = (c && c.rev) || {}
   const k = (c && c.cost) || {}
   return {
-    sr: r.sr, ac: r.ac, vas: r.vas, offRev: r.off, rev: r.total,
-    people: k.people, op: k.op, pm: k.pm, offCost: k.off, corp: k.corp, cost: k.total,
+    sr: r.sr, ac: r.ac, vas: r.vas, offRev: r.off, upskilling: r.upskilling, rev: r.total,
+    people: k.people, op: k.op, pm: k.pm, offCost: k.off, corp: k.corp, corpSalary: k.corpSalary, cost: k.total,
     net: net
   }
 }
