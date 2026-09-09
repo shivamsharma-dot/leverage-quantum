@@ -343,7 +343,7 @@ export default function MarketingPerformanceReport() {
                   <div style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.muted, margin: '10px 0 6px' }}>Data coverage</div>
                   <ul style={{ margin: 0, paddingLeft: 16 }}>
                     <li>Source: the "Overall PM" Google Sheet, pre-aggregated hourly into Supabase's overall_funnel_daily table (one row per campaign/day/source).</li>
-                    <li>Channel mapping: Facebook&rarr;Meta Ads, Google&rarr;Google Ads, Remarketing/Affiliate unchanged, Content+Brand&rarr;Organic, everything else&rarr;Other.</li>
+                    <li>Channel mapping: Facebook&rarr;Meta Ads, Google&rarr;Google Ads, Remarketing/Affiliate unchanged, Organic unchanged, everything else&rarr;Other.</li>
                   </ul>
                   <div style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.muted, margin: '10px 0 6px' }}>Material limitations</div>
                   <ul style={{ margin: 0, paddingLeft: 16 }}>
