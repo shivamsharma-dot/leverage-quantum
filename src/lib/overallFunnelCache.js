@@ -16,12 +16,24 @@
 const SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 
+// NOTE (2026-09-10): the sheet's own 'source' label for organic traffic was renamed
+// from 'Content+Brand' to 'Organic' at some point before 2026-08-01 (confirmed live:
+// 'Content+Brand' rows exist for every date from 2026-01-01 through 2026-07-29 and
+// NONE after; 'Organic' rows exist from 2026-01-01 onward). This was NOT a clean
+// chronological handoff -- a live query confirmed every (campaign, date) that has a
+// 'Content+Brand' row ALSO has a same-leads 'Organic' row for the identical date
+// (the sheet's historical rows were re-labeled and re-synced wholesale, and the old
+// 'Content+Brand' rows were never pruned since this sync has no stale-row deletion
+// step). Mapping BOTH labels to 'Organic' would therefore double-count every lead in
+// that Jan-Jul'26 window. Only 'Organic' is mapped going forward; the old
+// 'Content+Brand' rows fall through to 'Other' (harmless duplication, not double
+// counted as Organic) rather than being aliased.
 const CHANNEL_LABELS = {
   Facebook: 'Meta Ads',
   Google: 'Google Ads',
   Remarketing: 'Remarketing',
   Affiliate: 'Affiliate',
-  'Content+Brand': 'Organic',
+  Organic: 'Organic',
 }
 export function mapChannel(source) { return CHANNEL_LABELS[(source || '').trim()] || 'Other' }
 export const CHANNELS = ['Meta Ads', 'Google Ads', 'Remarketing', 'Affiliate', 'Organic', 'Other']
