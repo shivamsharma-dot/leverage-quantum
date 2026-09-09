@@ -678,3 +678,81 @@ discussion rather than being inferred from this feedback. `floorQueued` is still
 surfaced anywhere on the funnel slide. Print/PDF export's actual multi-page output has
 still not been visually re-verified in a real exported PDF (same limitation as before —
 no PDF preview available via this environment's browser tooling).
+
+## 2026-09-10 (later) — TOF/branding slide + funnel Total Revenue drill-down, both built and live-verified (commit `677a628`)
+
+Direct follow-through on the two items the previous entry left pending explicit user
+clarification — both answered via `AskUserQuestion`, both now built and verified.
+
+**TOF/branding slide — user picked "use exactly what I found."** Built as a real
+pattern rule, not a hardcoded one-off list: `TOF_SUB_SOURCE_PATTERN =
+/^(branding_|newspaper-|rj_|thinkschool_)/i`, matched against `Sub_Source` on the SAME
+`organicSubRows` the Organic spotlight slide already fetches (zero new data fetch).
+This pattern was deliberately inferred FROM the exact real campaigns the investigation
+surfaced (`Branding_Unipoles_DU_Nov2024`, several `Newspaper-TOI-*`/`Newspaper-NBT-*`,
+`RJ_Abhinav`, `ThinkSchool_July2024`) rather than hardcoding that literal list --
+hardcoding this month's exact campaign names would go stale the moment a real new
+offline insertion runs next month under a new one-off name; the pattern, applied fresh
+each month, reproduces the same real result for August while staying a genuine engine
+rather than one-off content (the same philosophy this whole page already follows). New
+slide 9, `TofCampaignsSlide` — one bar per matching Sub_Source, ranked by Leads
+(the reach proxy, since these campaigns have no meaningful QL/CPQL), with an explicit
+framing line ("near-zero QLs is expected here — reach, not lead-gen") so a viewer
+doesn't mistake 0-QL rows for a problem. Deck grows 12 → 13 slides.
+
+**Funnel-slide Total Revenue — user picked "new manual ₹ entry," not derived from AC
+Sales.** `aggregateReviewMonth` gained an additive `deposits` field (Total Deposits,
+already a real column on both the agg and per-campaign tables, previously unused by
+this function). Estimated SR Revenue reuses Overall's own CURRENT, live formula — read
+directly via `readSrFee()`/`readRauPct()` against the same shared `lq_sr_fee`/
+`lq_rau_conversion_pct` localStorage keys OverallDashboard.jsx itself reads (Settings >
+Data > SR Revenue Assumptions) — `Estimated RAU = Deposits × rauPct%`, `Est. SR Revenue
+= Estimated RAU × SR Fee`. **Caught a stale-memory risk before building, not after**:
+an earlier version of this same formula (documented in an older CLAUDE.md entry, and
+in this session's own initial recollection) was `Applications × 0.9 × SR Fee` — that
+formula has SINCE been superseded in `OverallDashboard.jsx` itself by a later,
+undocumented-here rework to the Deposits-based version above. Verified the CURRENT
+formula by reading `OverallDashboard.jsx` live rather than trusting memory, avoiding a
+real drift bug (the Marketing Review slide would otherwise have silently used a
+formula Overall itself no longer uses).
+
+AC Actual Revenue is a genuinely new, separate manual field — `saveAcRevenue`/
+`acRevenue` in the Provider, a new `app_preferences` key (`ac_actual_revenue_manual`,
+same `{'YYYY-MM': amount}` shape as the existing `ac_sales_manual`), same optimistic-
+write/revert-on-failure pattern. Total Revenue is deliberately NOT one of the
+proportional funnel bars (a rupee figure and a lead count don't share a meaningful
+scale) — it's its own click-to-expand summary row below the funnel, revealing Est. SR
+Revenue vs. AC Actual Revenue (which DO share a scale, both being money) on click, same
+interaction convention as the Total QL row's Human/AI/Superbot breakdown.
+
+**Live-verified the full save/persist/clear round-trip against real production
+Supabase**, not just that the UI renders correctly: opened the edit modal (pencil icon,
+appears only when the slide is the active one), entered a real test value (₹25,00,000)
+via `form_input` on the input's own ref rather than a coordinate click (a coordinate
+click at screenshot-pixel coordinates landed on the wrong element the first attempt --
+this environment's screenshot pixel space and the real page's viewport are NOT 1:1,
+confirmed via `document.elementFromPoint` returning an unrelated ancestor div; ref-
+based `form_input` sidesteps the scale mismatch entirely and was used for every
+following interaction). Total Revenue live-updated ₹1.84 Cr → ₹2.09 Cr the instant
+"Save" was clicked, matching ₹1.84 Cr Est. SR Revenue + ₹25.0L AC Actual exactly;
+reloaded the edit modal, confirmed the SAVED value (2500000) was genuinely still there
+(proving it round-tripped through real Supabase, not just local component state) before
+clearing it back to empty and re-saving — final state confirmed back to "(not entered
+yet)" / ₹0 / ₹1.84 Cr, so no fake test number was left sitting in a CEO-facing feature.
+
+Slide 9 confirmed showing the real, exact campaign set from the investigation
+(RJ_Abhinav 19 leads, Newspaper-TOI-West 13 leads, Newspaper-TOI-North 13 leads,
+Newspaper-TOI-East 8, Branding_Unipoles_DU_Nov2024 3, ThinkSchool_July2024 3,
+Newspaper-NBT 1, Newspaper-TOI-South 1 — all correctly 0 QL). Landing-page hero
+correctly reads "13 SLIDES · AUGUST 2026". Confirmed via the live deployed chunk that
+both new feature strings ("Top-of-Funnel", "AC Actual Revenue") are genuinely present
+before trusting any of the above. Zero console errors (only the pre-existing benign
+extension "message channel closed" noise this file already documents). `npm run build`
+clean throughout.
+
+**Still not built, not yet asked about**: "research the market for more analytics
+animation/transition/scene ideas" — the one remaining item from the original 6-part
+feedback message this whole thread has been working through. Deliberately held back
+rather than guessed at, given the shipped bar-shimmer was already built once this
+session and explicitly rejected — a short set of concrete, confirmable proposals should
+come before any more building here, not another built-first-asked-never round.

@@ -1281,6 +1281,36 @@ session -- including confirming the ink-stroke render/fade via direct DOM
 inspection, since the visual fade window (2.6s) is shorter than a
 screenshot round-trip in this environment. `npm run build` clean.
 
+## 2026-09-10 (later) -- Marketing Review: TOF/branding slide + funnel Total Revenue drill-down, live-verified end to end (commit `677a628`)
+
+Direct follow-through on the two items left pending clarification in the entry above,
+both now answered and built. (1) TOF/branding slide: user confirmed "use exactly what I
+found" -- built as a real naming-pattern rule (`/^(branding_|newspaper-|rj_|thinkschool_)/i`
+against Sub_Source) inferred FROM the exact real campaigns surfaced during the Organic
+investigation, not a hardcoded one-off list, so it keeps working as new offline
+insertions run in future months. New slide 9 "Awareness & offline campaigns", reusing
+the same `organicSubRows` fetch the Organic spotlight slide already has -- no new data
+fetch. Deck grows 12 -> 13 slides. (2) AC Actual Revenue: user picked "new manual ₹
+entry" (not derived from the existing AC Sales unit count). Funnel slide gained a Total
+Revenue row (click-to-expand, same interaction pattern as Total QL) showing Estimated
+SR Revenue (computed -- reuses Overall's own live, shared Deposits x rauPct% x SR Fee
+formula, same Settings-configurable keys, so it can never silently drift from what
+Overall would show) vs. AC Actual Revenue (new manual field, `ac_actual_revenue_manual`
+in `app_preferences`, same optimistic-write/revert-on-failure pattern as the existing AC
+Sales field).
+
+**Live-verified the full save/persist/clear round-trip on production**, not just that
+the UI renders: opened the edit modal, entered ₹25,00,000 real test value -- Total
+Revenue live-updated ₹1.84 Cr -> ₹2.09 Cr immediately, "Saving…" then closed clean;
+confirmed the value was genuinely written (real Supabase persistence, not just local
+state) before clearing it back to empty and re-confirming it reverted to "(not entered
+yet)" / ₹0 / ₹1.84 Cr -- left the field genuinely empty afterward rather than leaving a
+fake test number sitting in a CEO-facing feature. Slide 9 confirmed showing the exact
+real campaigns from the investigation (RJ_Abhinav 19 leads, Newspaper-TOI-West 13
+leads, Branding_Unipoles_DU_Nov2024 3 leads, ThinkSchool_July2024 3 leads, etc.), all
+correctly at 0 QL. `npm run build` clean; zero console errors. Full detail in
+`docs/marketing-review/CONTEXT.md`.
+
 ## 2026-09-09 (later still) -- Overall Sheet vs BigQuery: confirmed same query, two real (non-code) sources of numeric drift found and documented
 
 User pasted the live "Overall" BigQuery saved query and asked to deep-dive why Sheet-mode
