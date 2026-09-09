@@ -1175,6 +1175,26 @@ User: slide 4 ("Where the QLs came from") and slide 5 ("How leads moved through 
 
 **Real, non-bug finding surfaced directly to the user rather than glossed over**: slide 8 (Organic) shows every cell as "--" across all 4 months -- `Content+Brand`, the literal Source label mapped to "Organic," has had zero measurable QL activity in the whole trailing window. Correct rendering of real data, not a bug -- but since the user called Organic "most important," this needs a real conversation: either Organic traffic is tracked under a different Source label in this business (the 427-QL "Other" bucket on slide 4 is the likely candidate, and the classification would need widening), or Organic genuinely has no measurable contribution right now and that itself is the finding.
 
+## 2026-09-09 (later still) -- Marketing Review: live-review feedback pass -- Total Queued bug fixed, all channels shown, noisy UI copy removed, print/fullscreen/animation built out (commit `35b789d`)
+
+User live-reviewed the deck and sent 10 feedback items in one message. Headline fix:
+`aggregateReviewMonth`'s Total Queued was double-counting Floor Queued into the total
+(a self-invented formula from an earlier session that was never actually checked
+against `OverallDashboard.jsx`'s real definition, which treats Floor as a separate,
+parallel branch) -- overstated Aug'26 by ~47% (1,27,327 vs. the real 86,532), confirmed
+via a live Supabase query before and after the fix. Also: `ChannelPerformanceSlide`
+was silently filtering out zero-QL channels, which is why Organic never showed --
+removed the filter so all 6 channels always render. Removed three pieces of noisy UI
+copy per direct feedback (the "Synced.../Source: Overall (BigQuery cache)" footer, the
+green "Live data" pill, the landing page's "Full keyboard control..." subtitle). Wired
+the already-scaffolded print-fix CSS classes into the actual JSX (fixes PDF export
+dropping pages past the first). Built fullscreen chrome auto-hide (3s inactivity),
+directional push transitions, a laser pointer (L), a blackout toggle (B), multi-digit
+go-to-slide (replacing the old 1-9-only jump), and bar-fill shimmer/value pop-in
+animations. Full detail, verification, and what's still open in
+`docs/marketing-review/CONTEXT.md`. Live-verified end-to-end in a real authenticated
+browser session; `npm run build` clean; deployed straight to `main`.
+
 ## 2026-09-09 (later still) -- Overall Sheet vs BigQuery: confirmed same query, two real (non-code) sources of numeric drift found and documented
 
 User pasted the live "Overall" BigQuery saved query and asked to deep-dive why Sheet-mode

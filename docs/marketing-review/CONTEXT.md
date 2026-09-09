@@ -355,3 +355,115 @@ widening, or Organic genuinely has no measurable contribution right now and that
 is the finding. Flagged to the user directly rather than left to be discovered later.
 
 Commits: `10a15de` (feature), `9da84e4` (funnel-slide bug fixes).
+
+## 2026-09-09 (later still) — live-review feedback pass: Total Queued bug, all channels shown, noisy UI copy removed, print/fullscreen/animation built out (commit `35b789d`)
+
+User live-reviewed the deck (screenshots of the funnel slide and the fullscreen cover
+view) and sent a single feedback message with 10 items. All are now shipped except
+item 10 (an open-ended "what else should be shown" question, answered as a
+recommendation in chat, not built).
+
+**1. Total Queued was wrong — real bug, root-caused against `OverallDashboard.jsx`.**
+`aggregateReviewMonth`'s `queued` field summed `floor_queued` + all 3 Futwork/Superbot
+queues (4 fields) based on a comment I'd written earlier without actually checking
+Overall's real definition. Overall's own `totalQueued = futworkHumanQ + futworkAiQ +
+superbotQ` — Floor Queued is a separate, PARALLEL branch ("Directly Distributed to
+Floor"), never folded into Total Queued there. Verified the bug's real magnitude via a
+standalone Supabase query script before fixing: Aug'26 showed 1,27,327 (wrong,
+floor-inclusive) vs. 86,532 (correct) — a ~47% overstatement. Fixed by excluding Floor
+from `queued` and tracking it separately as a new `floorQueued` field (not yet surfaced
+on the funnel slide as its own stat — future follow-up if wanted). Live-verified: the
+funnel slide's Total Queued bar now reads 86,532, matching the corrected figure exactly,
+and is correctly narrower than Leads (was wider before the fix).
+
+**2. "Where is Organic?"** `ChannelPerformanceSlide` was filtering out any channel with
+0 QLs this month — which is exactly why Organic (0 QLs for Aug'26, a real finding
+documented above) never appeared, making it look like a bug rather than the honest
+answer. Removed the filter; all 6 canonical channels always render now, zero-value ones
+included. Live-verified: Organic now shows as its own row with a 0 value.
+
+**3-5. Three pieces of UI copy removed, all per direct "not this" feedback:** the
+"Synced ... Source: Overall (BigQuery cache)" footer note (4 call sites: Headline,
+Channel Performance, Funnel, and the 3 channel-spotlight slides via `ChannelSpotlightBody`);
+the green "Live data · Overall (BigQuery)" pill on `PeriodBadge` (simplified to just
+`{!live && <amber pill>}` — the amber "Sample data" pill for placeholder slides is
+untouched, only the green one was ever complained about); and the landing page's "Full
+keyboard control, a slide navigator..." subtitle line (deleted outright, not replaced).
+
+**6. Print/Export PDF wasn't including all 12 pages.** Root cause (found last session,
+fixed this one): the outer app shell div (`className="lq-page-shell"`, inline
+`height:100vh; overflow:hidden`) and its flex content-column child are BOTH ancestors of
+`ReadView`'s own `.printRoot` element, but the existing `@media print` CSS only reset
+`.printRoot` itself — those two outer ancestors kept clipping every page past the first
+during print. CSS half (`.shellRoot`/`.contentCol` reset classes) was already in the
+module from last session; this session wired the actual `className`s onto those two
+divs in `MarketingReviewDashboard`'s return JSX. Not yet re-verified with a real
+print/PDF-export click-through (no PDF preview possible via this environment's browser
+tooling) — worth confirming next time a real session prints this deck.
+
+**7. Fullscreen chrome auto-hide.** New `chromeVisible` state + a `mousemove`/`keydown`
+listener effect: while genuinely fullscreen (and the presenter panel isn't open), the
+progress rail, label+controls row, and bottom bar fade out after 3s of inactivity
+(`.mrChromeHidden`/`.mrChromeVisible`, CSS already existed) and reappear instantly on
+any mouse/key activity. Never hides outside real Fullscreen, and never while Presenter
+view is open (a deliberately-open panel shouldn't vanish out from under the presenter).
+
+**8. Bar animation.** Added a one-time shimmer sweep (`.mrBarShimmer`, timed via
+`animationDelay` to fire right as each bar finishes growing in) and a value pop-in
+(`.mrValuePop`) to both `ChannelBar` (slide 4 + the 3 channel spotlights) and
+`FunnelSlide`'s stage bars — purely additive to the existing width-transition, only
+rendered when `active` (so thumbnails/gallery/print, which render with `active=false`,
+are unaffected).
+
+**9. Scene effects / transitions / more presentation tools ("deep-dive on it").**
+Shipped four things, all previously CSS-only scaffolding, now wired into `DeckView`'s
+actual logic:
+   - **Directional push transitions** — `goTo` now records `next`/`prev` in a
+     `dirRef`, and the main-stage slide wrapper's `animation` (previously a fixed
+     `mrSlideIn` for every navigation) switched to `className={styles.mrPushNext |
+     mrPushPrev}` + a `--mr-scale` CSS custom property carrying the scale value the
+     keyframe itself composes with.
+   - **Laser pointer (L)** — `laserOn` state + `onMouseMove` on the deck root tracks
+     cursor position into `laserPos`; a `.mrLaserDot` (cyan glow, on-brand — this app
+     never uses red) renders at that position while toggled on; the real OS cursor is
+     hidden via `.mrCursorNone` while the laser is active (or while chrome is
+     auto-hidden in fullscreen).
+   - **Blackout (B)** — `blackout` state renders a full `.mrBlackout` overlay with a
+     "Press B or click to resume" hint; click-to-dismiss also wired.
+   - **Multi-digit go-to-slide** — replaced the old `/^[1-9]$/`-only jump (couldn't
+     reach slides 10-12 once the deck grew past 9) with a digit buffer
+     (`digitBufferRef`, capped at 2 chars) that auto-commits after 900ms of no further
+     digit, or immediately on Enter. The keyboard-hint toast text was updated to
+     describe all the new shortcuts (B blackout, L laser, digits+Enter jump).
+
+Live-verified all of item 9 in a real authenticated browser session: typed "3" then
+Enter — jumped straight to slide 3 (proving multi-digit-then-Enter jump works, not just
+the old single-digit path); pressed B — full-screen black overlay appeared with the
+resume hint, B again correctly resumed; pressed L and hovered the slide — a cyan glowing
+dot tracked the cursor exactly as designed, L again turned it off cleanly. Chrome
+auto-hide and the push-transition animation were code-reviewed and the built JS chunk
+was confirmed (via direct fetch of the live deployed chunk) to contain the
+`mrPushNext`/`mrPushPrev`/`mrChromeHidden`/`mrLaserDot`/`mrBarShimmer`/`mrValuePop`
+class names, but not separately screenshotted mid-transition/mid-fade in this pass —
+worth a closer look next time if the push-transition direction or the fade timing ever
+look off in a real presentation.
+
+**Verification overall**: `npm run build` clean. Deployed via direct push to `main`
+(commit `35b789d`). Confirmed the live deployment was actually serving the new code by
+fetching the real deployed `MarketingReviewDashboard-*.js` chunk (found via the live
+`index.html` → entry chunk → its own import of this page's chunk — NOT by comparing
+local vs. live hashes, which this repo's CLAUDE.md already documents as invalid across
+build environments) and grepping it for both the new class names (present) and the
+removed strings ("Live data", "Full keyboard control", "Source: Overall (BigQuery
+cache)" — all absent, confirmed zero matches). Then did a full live click-through:
+landing page (no subtitle, confirmed), slide 4 (all 6 channels including Organic=0),
+slide 3 (headline table, no footer/pill), slide 5 (Total Queued = 86,532, corrected),
+digit-jump, blackout, laser pointer — all matched expectations. Zero console errors.
+
+**Not yet done**: item 10 (an open recommendation on "what else should be shown," not a
+build task) — answered directly in chat, not implemented as code. Print/PDF export's
+actual multi-page output was not visually re-verified this session (no PDF preview
+available via the browser tooling used) — the CSS+JSX fix is logically sound (both
+ancestor divs now correctly reset under `@media print`) but hasn't been seen as a real
+printed/exported PDF. `floorQueued`, tracked separately since the Total Queued fix, is
+still not surfaced anywhere on the funnel slide as its own stat.
