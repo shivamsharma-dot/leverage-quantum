@@ -744,25 +744,40 @@ function FunnelSlide({ active, period }) {
   }, [aggByMonth])
   if (!ctx) return null
   const { months, syncedAt } = ctx
-  const max = stages.length ? Math.max(1, stages[0].value) : 1
+  // The true max across every stage, NOT stages[0] (Leads) -- Total Queued
+  // is a same-CALENDAR-MONTH sum of its own queuing timestamp, independent
+  // of when the underlying lead was generated, so it can genuinely exceed
+  // that month's Leads figure (queuing work carried over from an earlier
+  // month's leads). A real, honest characteristic of the data, not a bug --
+  // assuming Leads is always the largest stage would have silently produced
+  // a >100%-wide bar for Queued whenever this happens.
+  const max = stages.length ? Math.max(1, ...stages.map(s => s.value)) : 1
   return (
     <LiveDataFrame ctx={ctx} label="Funnel & Conversion" title="How leads moved through the pipeline" period={period} active={active}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 16 }}>
         {stages.map((s, i) => {
-          const widthPct = active ? Math.max(6, (s.value / max) * 100) : 0
+          // Label/value sit ABOVE the bar, never inside it -- Leads-to-
+          // Applications typically spans 2+ orders of magnitude, so a stage
+          // near the bottom can be a sliver only a few px wide; text placed
+          // inside that sliver would overlap illegibly.
+          const widthPct = active ? Math.max(3, Math.min(100, (s.value / max) * 100)) : 0
           const prev = stages[i - 1]
           const convPct = prev && prev.value > 0 ? ((s.value / prev.value) * 100).toFixed(1) + '% of prior stage' : null
           return (
-            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{
-                height: 46, borderRadius: 10, width: widthPct + '%', transition: `width .9s cubic-bezier(.22,1,.36,1) ${0.12 * i}s`,
-                background: `linear-gradient(90deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[i % 4]}AA)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', boxSizing: 'border-box',
-              }}>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: '#fff' }}>{s.label}</span>
-                <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtN(s.value)}</span>
+            <div key={s.label}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{s.label}</span>
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                  {convPct && <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap' }}>{convPct}</span>}
+                  <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{fmtN(s.value)}</span>
+                </span>
               </div>
-              {convPct && <div style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap' }}>{convPct}</div>}
+              <div style={{ height: 14, borderRadius: 7, background: '#F1F5F9', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 7, width: widthPct + '%', transition: `width .9s cubic-bezier(.22,1,.36,1) ${0.12 * i}s`,
+                  background: `linear-gradient(90deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[i % 4]}CC)`,
+                }} />
+              </div>
             </div>
           )
         })}
