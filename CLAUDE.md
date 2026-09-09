@@ -1174,3 +1174,57 @@ User: slide 4 ("Where the QLs came from") and slide 5 ("How leads moved through 
 **Live-verified end-to-end** (real authenticated browser session): landing page "12 SLIDES · AUGUST 2026" with all 12 real thumbnails in order. Slide 4: Meta Ads 5,444 / Google Ads 1,444 / Affiliate 1,265 / Other 427 / Remarketing 53 -- sums to 8,633, exactly matching slide 3's Aug'26 QL total. Slide 5 post-fix: all 4 bars render correctly, Total Queued genuinely the widest, Total QL/Applications both legible slivers with no text collision. Slide 6 (Google Ads) QL Aug'26 = 1,444 and slide 7 (Meta Ads) QL Aug'26 = 5,444 both exactly match their slide-4 bars. Zero real console errors.
 
 **Real, non-bug finding surfaced directly to the user rather than glossed over**: slide 8 (Organic) shows every cell as "--" across all 4 months -- `Content+Brand`, the literal Source label mapped to "Organic," has had zero measurable QL activity in the whole trailing window. Correct rendering of real data, not a bug -- but since the user called Organic "most important," this needs a real conversation: either Organic traffic is tracked under a different Source label in this business (the 427-QL "Other" bucket on slide 4 is the likely candidate, and the classification would need widening), or Organic genuinely has no measurable contribution right now and that itself is the finding.
+
+## 2026-09-09 (later still) -- Overall Sheet vs BigQuery: confirmed same query, two real (non-code) sources of numeric drift found and documented
+
+User pasted the live "Overall" BigQuery saved query and asked to deep-dive why Sheet-mode
+(`/dashboard/overall`) and BigQuery-mode (`/dashboard/overall-bigquery`) show different
+Queued/Floor Queued numbers, and whether the Sheet page is even running the same query.
+
+**Confirmed: yes, same query.** `mapRow()` in `OverallDashboard.jsx` is the one function
+that maps BOTH the Sheet's CSV rows and the BigQuery rows -- it reads `r['Total Leads
+Generated']`, `r.floor_queued`, `r['Queued on Futwork Human']`, `r['Queued on Futwork
+AI']`, `r['Total_Spends']`, exactly matching the pasted query's column aliases. The
+repo's own comment already documents the "Queued on Futwork Human/AI" split being
+applied "both in the sheet and the BigQuery saved query" on the same date. Not a
+mapping mismatch.
+
+**Finding 1 -- a real, confirmed, currently-undecided drift in the WHERE clause, left
+AS-IS per explicit instruction.** The live query the user pasted (feeding the Sheet)
+reads `WHERE DATE(date_of_transaction) > '2026-01-31'`. Both hardcoded copies of this
+exact query in this repo -- `.github/workflows/overall-bq-sync.yml` and
+`api/crm-leads.js`'s `OVERALL_BQ_SQL` (feeding `overall_bq_daily`, i.e. the BigQuery
+page) -- still read `> '2024-12-31'`. Both files' own comments explicitly warn "if the
+saved query is ever edited again in the Console, edit this too... it cannot see a
+changed WHERE" -- this is exactly that warning coming true. Confirmed the real,
+material size of the drift directly against production Supabase: `overall_bq_daily`
+has 390,302 total rows, and **152,099 of them (39%) have `lead_date_iso < 2026-02-01`**
+-- real data that exists ONLY on the BigQuery page; the Sheet has zero rows there.
+**User's explicit call: do not narrow the BigQuery cache to match** -- keep its wider
+history (useful for long-range trend views), accept that the two pages will never
+agree on "All time"/lifetime totals or a pre-Feb-2026 month, and this paragraph is
+that documentation. No code changed for this finding.
+
+**Finding 2 -- the ACTUAL Queued/Floor Queued difference the user was looking at, isn't
+the WHERE clause at all.** Live-pulled real numbers for the identical window (Sep'26,
+Source: All) from both pages simultaneously: Total Leads matched EXACTLY (36,465 =
+36,465), Human Queued matched EXACTLY (13,235 = 13,235), Spend was within 0.1% (₹88.6L
+vs ₹88.7L) -- but Floor Queued differed (8,748 Sheet vs 8,658 BigQuery, -90) and AI
+Queued differed more (17,468 Sheet vs 18,231 BigQuery, +763), Total QLs barely (3,078
+vs 3,080). Since the query/columns are proven identical and some fields matched to the
+digit, this rules out a code/mapping bug. Conclusion: **refresh-timing skew on a still
+in-progress month**. `Total Leads Generated` (a lead either exists or it doesn't --
+settles instantly on creation) and Human Queued had already converged between the two
+independent snapshots; Floor Queued / Futwork AI Queued (routing decisions that finish
+some time after a lead first lands) hadn't yet, because the BigQuery cache (synced
+2026-09-09 22:02 IST, confirmed via a direct Supabase query) and the Google Sheet's own
+Connected-Sheet refresh (schedule outside this repo's visibility/control) are two
+independently-scheduled point-in-time snapshots of the same still-updating month --
+exactly the same class of "two independently-refreshed pipelines don't reconcile to the
+penny for an in-progress period" divergence already documented elsewhere in this file
+(Overall's Apps drill-down vs the standalone Apps page). Not a bug; expected to shrink
+or vanish once both sides refresh closer together, and expected to recur any time this
+comparison is made mid-month.
+
+**No code was changed in this session -- purely investigative**, per the user's explicit
+choice to leave the WHERE-clause drift undocumented-in-code and just recorded here.
