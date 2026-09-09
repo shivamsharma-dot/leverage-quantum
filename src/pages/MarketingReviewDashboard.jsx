@@ -411,7 +411,7 @@ function exactHeadlineTitle(v, money) {
 }
 function fmtDeltaPrior(v, money) { return money ? fmtINRShort(v || 0) : fmtN(v || 0) }
 
-function DeltaCell({ delta, prior, money, invert }) {
+function DeltaCell({ delta, prior, money, invert, showPrior = true }) {
   if (delta == null) return <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>—</span>
   const isNew = delta === 'new'
   const up = !isNew && delta >= 0
@@ -422,7 +422,7 @@ function DeltaCell({ delta, prior, money, invert }) {
   return (
     <span style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
       <span style={{ color, fontWeight: 800 }}>{arrow} {pctText}</span>
-      <span style={{ color: '#94A3B8', fontWeight: 600 }}> (was {fmtDeltaPrior(prior, money)})</span>
+      {showPrior && <span style={{ color: '#94A3B8', fontWeight: 600 }}> (was {fmtDeltaPrior(prior, money)})</span>}
     </span>
   )
 }
@@ -520,7 +520,7 @@ function HeadlineSlide({ active, period }) {
                   {fmtHeadlineCell(v, row.money)}
                 </div>
               ))}
-              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} /></div>
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} showPrior={false} /></div>
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
             </div>
           ))}
