@@ -467,3 +467,89 @@ available via the browser tooling used) — the CSS+JSX fix is logically sound (
 ancestor divs now correctly reset under `@media print`) but hasn't been seen as a real
 printed/exported PDF. `floorQueued`, tracked separately since the Total Queued fix, is
 still not surfaced anywhere on the funnel slide as its own stat.
+
+## 2026-09-09 (later still) — shimmer removed, real count-up numbers, Wins/Risks became a genuine number-driven engine (commit `c5f78ea`)
+
+Direct follow-up. Two pieces of feedback: "shimmer is not looking good" (the just-shipped
+bar-fill shimmer sweep on the channel/funnel bars), and a clarification that the earlier
+"more animation" ask (item 8 of the prior feedback pass) was really about **number**
+effects — "the number final shown in execute headline when you first made it fresh...
+i want to explain this presentation to CEO like a movie literally." Also a direct,
+concrete ask: build real "what worked / what needs attention" content — "pure number
+based analysis for August" — for slides 9/10, which were still 100% placeholder text
+despite slides 3–5 having gone real weeks earlier.
+
+**Shimmer removed.** `ChannelBar` and `FunnelSlide`'s stage bars both dropped
+`.mrBarShimmerWrap`/`.mrBarShimmer` (the sweeping highlight) entirely — the width-grow
+transition on the bar fill itself is untouched, only the extra sweep-on-top is gone.
+The corresponding CSS (keyframe + both classes) was deleted from the module too, since
+nothing references them anymore.
+
+**Count-up numbers, done properly this time.** The ORIGINAL bug (documented earlier in
+this file, "2026-09-09 (later still) — the Executive Summary slide is now real data"):
+the engine's pre-existing `useCountUp` hook returned `0` whenever `active===false`,
+which is exactly the state every thumbnail/gallery/print/read-view mount of a slide is
+always in — so re-adopting it naively would have shown fake zeros everywhere except
+the live main-stage view. Fixed this time by building a new, correctly-scoped
+`useCountUp(target, active, {duration, delay})`: when `active` is false it returns the
+real final value **immediately**, no animation ever plays; when `active` is true it
+animates `0 → target` via `requestAnimationFrame` with an ease-out cubic curve, after
+an optional per-item `delay`. A thin `<AnimatedNumber value money active delay />`
+wrapper applies this with the exact same money/plain formatting (`fmtINRShort`/`fmtN`)
+every static cell already used, so an animating cell and a static one look identical
+except for motion. Applied to: every value cell in the headline table (slide 3, staggered
+by row — `delay={0.035*i}`, matching the row's own fade-in stagger so the whole table
+reads as one cascading reveal), the channel bars (slide 4 + the 3 spotlight tables'
+value cells), and the funnel stage values (slide 5). Because the deck's main-stage slide
+wrapper remounts by `key={index}` on every navigation (an existing, unrelated engine
+detail), the count-up naturally replays fresh every time you land on or revisit a slide
+— no manual "trigger" state needed anywhere.
+
+**Wins & Highlights / Risks & Watch-outs are now real, computed from actual numbers —
+`buildInsights(headlineRows, byChannelByMonth, months)`.** Deliberately NOT a hardcoded
+"August" blurb — it reads the exact same headline-metric deltas (Spend/Leads/QL/Apps/
+CPL/CPQL/CPA, both vs-prior-month and vs-same-month-last-year) and channel-QL rollup
+already fetched for slides 3–5, so it stays correct automatically as the deck rolls
+forward to a new month; no new data fetch, no new Supabase/BigQuery call.
+- **Headline-metric signals**: any metric whose `deltaVsPrior` or `deltaVsLastYear`
+  crosses ±8% (`INSIGHT_THRESHOLD_PCT`) becomes a candidate, sorted by magnitude.
+  "Good" vs "bad" is read directly off each row's own `invert` flag — the *same* rule
+  `DeltaCell` already uses to color/arrow deltas (a cost metric falling is good, a volume
+  metric falling is bad) — never re-derived or guessed separately, so the two can't
+  silently disagree. AC Sales and CPS are skipped (manual-entry-dependent, often
+  incomplete/null). Top 2 wins and top 2 risks by magnitude are kept from this pool.
+- **Channel-mix signals**: the single largest QL-driving channel this month becomes a
+  win ("X is the top QL driver... N QLs, Y% of the total"); any named channel
+  (excluding the generic "Other" catch-all) sitting at exactly zero QLs becomes a risk
+  ("X at zero QLs... confirm tracking is correct, or reconsider spend/effort there") —
+  literally surfacing the same Organic-at-zero finding from an earlier session as a
+  real slide instead of only a chat callout. These two are unshifted to the front
+  (unconditional priority over the magnitude-ranked headline signals) and each list is
+  capped at 3 total.
+- `WinsSlide`/`RisksSlide` were rewritten to use `LiveDataFrame` (the same
+  loading/error/retry scaffold slides 4/5/6-8 already share) instead of a bare static
+  div, since they're now genuinely live-data slides, not placeholders — `PeriodBadge`'s
+  green vs. amber pill distinction (from the previous feedback-pass fix) applies to them
+  automatically for free. An explicit empty-state message renders if literally nothing
+  crosses the threshold in a given month, rather than silently showing blank cards.
+
+**Live-verified end-to-end** on quantum.leverageedu.com, both the landing-page gallery
+thumbnails and the real deck (arrowed through slides 3→10): slide 9 ("What worked")
+shows "Meta Ads is the top QL driver" (5,444 QLs, 63% of total — matching slide 4's own
+bars exactly), "QL ▲51.7% vs Aug'25", "Spend ▼13.7% vs Jul'26"; slide 10 ("What needs
+attention") shows "Organic at zero QLs", "CPA ▲143.6% vs Aug'25", "Spend ▲99.4% vs
+Aug'25" — note Spend genuinely appearing as BOTH a win (fell vs last month) and a risk
+(rose sharply vs last year) in the same month, which is correct, not a bug: two
+different real comparisons, not a contradiction. Confirmed via the live deployed chunk
+that the shimmer classes are gone (zero matches) and the new insight strings are
+present. Zero console errors, `npm run build` clean.
+
+**Not yet built / still open**: the "explain like a movie" framing was answered with
+concrete, buildable pieces (count-up reveals, a real number-driven narrative on slides
+9/10) rather than a literal cinematic mode (voiceover, scene-cut video, a scripted
+auto-advance sequence) — if the user wants something more literally "movie-like" (e.g.
+an auto-playing narrated sequence), that would need a fresh, explicit ask/scope
+discussion rather than being inferred from this feedback. `floorQueued` is still not
+surfaced anywhere on the funnel slide. Print/PDF export's actual multi-page output has
+still not been visually re-verified in a real exported PDF (same limitation as before —
+no PDF preview available via this environment's browser tooling).

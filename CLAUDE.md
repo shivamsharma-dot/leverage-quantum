@@ -1195,6 +1195,50 @@ animations. Full detail, verification, and what's still open in
 `docs/marketing-review/CONTEXT.md`. Live-verified end-to-end in a real authenticated
 browser session; `npm run build` clean; deployed straight to `main`.
 
+## 2026-09-09 (later still) -- Marketing Review: dropped the bar shimmer, real count-up numbers, and Wins/Risks became a genuine number-driven analysis (commit `c5f78ea`)
+
+Direct follow-up to the feedback pass above. User: "shimmer is not looking good" (the
+bar-fill shimmer sweep from that pass) -- removed outright, keeping only the width-grow
+bar animation itself. Separately clarified the earlier "more animation" ask was really
+about NUMBER effects -- "the number final shown in execute headline when you first made
+it fresh" (a count-up reveal the headline slide had in its very first KPI-tile version,
+then dropped when it went from placeholder tiles to a real data table, since the old
+`useCountUp` hook returned 0 whenever `active===false` -- exactly wrong for a component
+that mounts simultaneously in thumbnails/gallery/print, all of which pass `active=false`
+and would have shown fake zeros). Rebuilt it correctly this time (`useCountUp`/
+`AnimatedNumber`): when inactive, returns the real final value immediately, no
+animation, no zero, ever; when active, animates 0 -> value via `requestAnimationFrame`
+with an ease-out curve, optionally delayed per-row for a cascading reveal. Applied to
+every number on the headline table, the channel bars (slide 4 + 3 spotlights), and the
+funnel stages (slide 5) -- since the deck's stage wrapper remounts by `key={index}` on
+every navigation, the count-up naturally replays on every visit with no extra state.
+
+Also directly answered "what worked / what needs attention... pure number based
+analysis for August": Wins & Highlights (slide 9) and Risks & Watch-outs (slide 10)
+were still 100% hardcoded placeholder copy despite slides 3-5 having gone real weeks
+earlier. Built `buildInsights()` -- reads the exact same headline-metric deltas
+(Spend/Leads/QL/Apps/CPL/CPQL/CPA, both vs-prior-month and vs-same-month-last-year) and
+channel-QL breakdown already fetched for those earlier slides, no new data source.
+Any metric whose delta crosses +/-8% becomes a win or risk per its own `invert`
+convention (the same good/bad rule `DeltaCell` already uses -- a cost metric falling is
+good, a volume metric falling is bad), sorted by magnitude; plus two channel-mix
+signals: the single largest QL-driving channel (a win) and any named channel sitting at
+zero QLs this month (a risk) -- literally the same Organic finding from the earlier
+session, now surfaced as an actual slide instead of something only visible in a chat
+message. Deliberately computed fresh from whatever month is live rather than
+hardcoded to August, so it stays correct automatically as the deck rolls forward to
+September and beyond -- "engine, not content," the same philosophy the rest of this
+page follows.
+
+**Live-verified end-to-end** on quantum.leverageedu.com: slide 9 real output --
+"Meta Ads is the top QL driver" (5,444 QLs, 63% of total), "QL ▲51.7% vs Aug'25", "Spend
+▼13.7% vs Jul'26"; slide 10 -- "Organic at zero QLs", "CPA ▲143.6% vs Aug'25", "Spend
+▲99.4% vs Aug'25" (the same Spend figure correctly surfacing as BOTH a win, vs last
+month, and a risk, vs last year -- two different real comparisons, not a contradiction).
+Confirmed the deployed chunk contains zero remaining references to the removed shimmer
+classes and does contain the new insight strings, before trusting any of the above.
+Zero console errors. `npm run build` clean.
+
 ## 2026-09-09 (later still) -- Overall Sheet vs BigQuery: confirmed same query, two real (non-code) sources of numeric drift found and documented
 
 User pasted the live "Overall" BigQuery saved query and asked to deep-dive why Sheet-mode
