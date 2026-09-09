@@ -499,15 +499,50 @@ function AgendaSlide({ active }) {
   )
 }
 
-function fmtHeadlineCell(v, money) {
-  if (v == null) return '—'
-  return money ? fmtINRShort(v) : fmtN(v)
-}
 function exactHeadlineTitle(v, money) {
   if (v == null) return undefined
   return money ? fmtINR(v) : fmtN(v)
 }
 function fmtDeltaPrior(v, money) { return money ? fmtINRShort(v || 0) : fmtN(v || 0) }
+
+// Counts a number up from 0 to its real value whenever the slide holding it
+// becomes the active one -- the "number reveal" effect the deck had on its
+// very first KPI-tile version, reintroduced properly this time: `active`
+// gates it, so a thumbnail/gallery/print render of the same component (which
+// always passes active=false) shows the real final number immediately,
+// never a stuck 0. Because the deck's main-stage wrapper remounts by
+// `key={index}` on every navigation, this naturally replays on every visit
+// with no extra "trigger" state needed.
+function useCountUp(target, active, { duration = 900, delay = 0 } = {}) {
+  const [display, setDisplay] = useState(() => (active && typeof target === 'number') ? 0 : target)
+  useEffect(() => {
+    if (!active || typeof target !== 'number') { setDisplay(target); return undefined }
+    let raf = null, cancelled = false
+    const startTimer = setTimeout(() => {
+      const t0 = performance.now()
+      const tick = (now) => {
+        if (cancelled) return
+        const t = Math.min(1, (now - t0) / duration)
+        const eased = 1 - Math.pow(1 - t, 3)
+        setDisplay(target * eased)
+        if (t < 1) raf = requestAnimationFrame(tick)
+        else setDisplay(target)
+      }
+      raf = requestAnimationFrame(tick)
+    }, delay)
+    return () => { cancelled = true; clearTimeout(startTimer); if (raf) cancelAnimationFrame(raf) }
+  }, [target, active, duration, delay])
+  return display
+}
+// Thin wrapper applying useCountUp to a headline-table-style cell, keeping
+// the same money/plain (fmtINRShort/fmtN) formatting every cell already used
+// so an animating cell and a static one are visually identical except for motion.
+function AnimatedNumber({ value, money, active, delay = 0, duration = 900 }) {
+  const numeric = typeof value === 'number' ? value : null
+  const display = useCountUp(numeric, active, { duration, delay: delay * 1000 })
+  if (value == null) return <>—</>
+  return <>{money ? fmtINRShort(display) : fmtN(display)}</>
+}
 
 function DeltaCell({ delta, prior, money, invert, showPrior = true }) {
   if (delta == null) return <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>—</span>
@@ -615,14 +650,13 @@ function HeadlineSlide({ active, period }) {
               {row.values.map((v, ci) => (
                 <div key={ci} title={exactHeadlineTitle(v, row.money)}
                   style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtHeadlineCell(v, row.money)}
+                  <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />
                 </div>
               ))}
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} showPrior={false} /></div>
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
             </div>
           ))}
-
         </>
       )}
 
@@ -657,15 +691,14 @@ function ChannelBar({ ch, max, active, delay }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
       <div style={{ width: 128, fontSize: 13.5, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{ch.name}</div>
-      <div className={styles.mrBarShimmerWrap} style={{ flex: 1, height: 22, borderRadius: 6, background: '#F1F5F9' }}>
+      <div style={{ flex: 1, height: 22, borderRadius: 6, background: '#F1F5F9', overflow: 'hidden' }}>
         <div style={{
           height: '100%', borderRadius: 6, width: pct + '%', transition: `width 1s cubic-bezier(.22,1,.36,1) ${delay}s`,
           background: `linear-gradient(90deg, ${ch.hue}, ${ch.hue}CC)`,
         }} />
-        {active && pct > 0 && <span className={styles.mrBarShimmer} style={{ animationDelay: (delay + 0.85) + 's' }} />}
       </div>
       <div style={{ width: 70, textAlign: 'right', fontSize: 13.5, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-        <span className={active ? styles.mrValuePop : undefined} style={{ animationDelay: active ? delay + 's' : undefined }}>{fmtN(ch.value)}</span>
+        <AnimatedNumber value={ch.value} active={active} delay={delay} duration={1000} />
       </div>
     </div>
   )
@@ -767,15 +800,16 @@ function FunnelSlide({ active, period }) {
                 <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{s.label}</span>
                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
                   {convPct && <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap' }}>{convPct}</span>}
-                  <span className={active ? styles.mrValuePop : undefined} style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums', animationDelay: active ? (0.12 * i) + 's' : undefined }}>{fmtN(s.value)}</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                    <AnimatedNumber value={s.value} active={active} delay={0.12 * i} duration={1000} />
+                  </span>
                 </span>
               </div>
-              <div className={styles.mrBarShimmerWrap} style={{ height: 14, borderRadius: 7, background: '#F1F5F9' }}>
+              <div style={{ height: 14, borderRadius: 7, background: '#F1F5F9', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: 7, width: widthPct + '%', transition: `width .9s cubic-bezier(.22,1,.36,1) ${0.12 * i}s`,
                   background: `linear-gradient(90deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[i % 4]}CC)`,
                 }} />
-                {active && <span className={styles.mrBarShimmer} style={{ animationDelay: (0.12 * i + 0.75) + 's' }} />}
               </div>
             </div>
           )
@@ -818,7 +852,7 @@ function ChannelSpotlightBody({ active, period, channel }) {
               {row.values.map((v, ci) => (
                 <div key={ci} title={exactHeadlineTitle(v, row.money)}
                   style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtHeadlineCell(v, row.money)}
+                  <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />
                 </div>
               ))}
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} showPrior={false} /></div>
@@ -854,36 +888,116 @@ function CalloutCard({ title, detail, kind, active, delay }) {
     </div>
   )
 }
-const WINS = [
-  { title: 'Best-performing channel', detail: 'Name the channel/campaign that scaled cleanly this month once real numbers are in.' },
-  { title: 'Cost efficiency improved', detail: 'Call out wherever CPQL/CPL genuinely fell against last month.' },
-  { title: 'A qualitative win', detail: 'New creative, a new corridor, a process fix — anything not captured by the funnel numbers.' },
-]
+// Real, number-driven "what worked / what needs attention" -- no hardcoded
+// month-specific copy, so this stays correct automatically as the deck's
+// underlying headline/channel data rolls forward to a new month. Two kinds
+// of signal, both derived purely from figures already fetched for slides 3-5
+// (no new data source):
+//   1. Headline-metric deltas (Spend/Leads/QL/Apps/CPL/CPQL/CPA) crossing a
+//      real-magnitude threshold, vs prior month AND vs the same month last
+//      year -- using each metric's own `invert` convention (a cost metric
+//      going down is good; a volume metric going up is good) so "good" vs
+//      "bad" is never guessed, just read off the same rule DeltaCell uses.
+//   2. Channel-mix signals: the single largest QL contributor (a win), and
+//      any named channel with zero measurable QL this month (a risk) --
+//      exactly the kind of finding that surfaced Organic's zero contribution
+//      earlier this same review cycle.
+const INSIGHT_THRESHOLD_PCT = 8
+
+function directionIsGood(row, delta) {
+  if (delta == null || delta === 'new') return delta === 'new' ? true : null
+  const up = delta >= 0
+  return row.invert ? !up : up
+}
+
+function buildInsights(headlineRows, byChannelByMonth, months) {
+  const candidates = []
+  if (headlineRows) {
+    const comparisons = [
+      { key: 'deltaVsPrior', label: `vs ${monthShort(months.prior)}` },
+      { key: 'deltaVsLastYear', label: `vs ${monthShort(months.lastYear)}` },
+    ]
+    for (const row of headlineRows) {
+      if (row.key === 'acSales' || row.key === 'cps') continue // manual-entry-dependent, often incomplete
+      for (const cmp of comparisons) {
+        const delta = row[cmp.key]
+        if (delta == null || delta === 'new') continue
+        const abs = Math.abs(delta)
+        if (abs < INSIGHT_THRESHOLD_PCT) continue
+        const good = directionIsGood(row, delta)
+        const arrow = delta >= 0 ? '▲' : '▼'
+        const curVal = row.money ? fmtINRShort(row.values[2]) : fmtN(row.values[2])
+        candidates.push({
+          good, magnitude: abs,
+          title: `${row.label} ${arrow} ${abs.toFixed(1)}% ${cmp.label}`,
+          detail: `${row.label} landed at ${curVal} this month -- ${good ? 'a genuine improvement' : 'worth digging into'} ${cmp.label}.`,
+        })
+      }
+    }
+  }
+  candidates.sort((a, b) => b.magnitude - a.magnitude)
+  const wins = candidates.filter(c => c.good === true).slice(0, 2)
+  const risks = candidates.filter(c => c.good === false).slice(0, 2)
+
+  const cur = byChannelByMonth ? byChannelByMonth.current : null
+  if (cur) {
+    const chRows = REVIEW_CHANNELS.map(name => ({ name, ...(cur.get(name) || { ql: 0 }) }))
+    const totalQl = chRows.reduce((s, r) => s + (r.ql || 0), 0)
+    const top = [...chRows].sort((a, b) => (b.ql || 0) - (a.ql || 0))[0]
+    if (top && top.ql > 0 && totalQl > 0) {
+      const share = (top.ql / totalQl) * 100
+      wins.unshift({
+        magnitude: Infinity,
+        title: `${top.name} is the top QL driver`,
+        detail: `${top.name} produced ${fmtN(top.ql)} QLs this month -- ${share.toFixed(0)}% of the total, the single largest source.`,
+      })
+    }
+    const zeroChannels = chRows.filter(r => r.name !== 'Other' && (r.ql || 0) === 0).map(r => r.name)
+    if (zeroChannels.length) {
+      risks.unshift({
+        magnitude: Infinity,
+        title: `${zeroChannels.join(' & ')} at zero QLs`,
+        detail: `${zeroChannels.join(' and ')} produced no measurable qualified leads this month -- confirm tracking is correct, or reconsider spend/effort there.`,
+      })
+    }
+  }
+
+  return { wins: wins.slice(0, 3), risks: risks.slice(0, 3) }
+}
+
 function WinsSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const wins = useMemo(() => {
+    if (!ctx || !ctx.headlineRows) return null
+    return buildInsights(ctx.headlineRows, ctx.byChannelByMonth, ctx.months).wins
+  }, [ctx])
+  if (!ctx) return null
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
-      <PeriodBadge period={period} />
-      <SectionKicker label="Wins & Highlights" title="What worked" />
+    <LiveDataFrame ctx={ctx} label="Wins & Highlights" title="What worked" period={period} active={active}>
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
-        {WINS.map((w, i) => <CalloutCard key={w.title} {...w} kind="win" active={active} delay={0.1 * i} />)}
+        {wins && wins.length > 0
+          ? wins.map((w, i) => <CalloutCard key={w.title} {...w} kind="win" active={active} delay={0.1 * i} />)
+          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No metric crossed the win threshold this month.</div>}
       </div>
-    </div>
+    </LiveDataFrame>
   )
 }
-const RISKS = [
-  { title: 'Underperforming spend', detail: 'Flag whichever channel/corridor/campaign is over the CPQL benchmark this month.' },
-  { title: 'A funnel drop-off', detail: 'Whichever stage-to-stage rate weakened the most — queued→QL, QL→application, etc.' },
-  { title: 'Something to keep an eye on', detail: 'A trend that isn’t a crisis yet but is worth watching next month.' },
-]
+
 function RisksSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const risks = useMemo(() => {
+    if (!ctx || !ctx.headlineRows) return null
+    return buildInsights(ctx.headlineRows, ctx.byChannelByMonth, ctx.months).risks
+  }, [ctx])
+  if (!ctx) return null
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
-      <PeriodBadge period={period} />
-      <SectionKicker label="Risks & Watch-outs" title="What needs attention" />
+    <LiveDataFrame ctx={ctx} label="Risks & Watch-outs" title="What needs attention" period={period} active={active}>
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
-        {RISKS.map((r, i) => <CalloutCard key={r.title} {...r} kind="risk" active={active} delay={0.1 * i} />)}
+        {risks && risks.length > 0
+          ? risks.map((r, i) => <CalloutCard key={r.title} {...r} kind="risk" active={active} delay={0.1 * i} />)
+          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>Nothing crossed the risk threshold this month.</div>}
       </div>
-    </div>
+    </LiveDataFrame>
   )
 }
 

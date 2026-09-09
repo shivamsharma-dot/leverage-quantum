@@ -56,15 +56,6 @@
   0%   { transform: scale(1) translate(0,0); }
   100% { transform: scale(1.08) translate(-1%, -1%); }
 }
-@keyframes mrBarShimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(320%); }
-}
-@keyframes mrValuePop {
-  0%   { transform: scale(0.85); opacity: 0; }
-  60%  { transform: scale(1.06); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
 /* Directional push transition between slides -- 'next' pushes the incoming
    slide in from the right while the deck behind it holds still (the outgoing
    slide's own fade/scale-out is handled by it simply being replaced -- a true
@@ -105,18 +96,6 @@
 
 .mrGalleryCard { transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s ease, border-color .2s ease; }
 .mrGalleryCard:hover { transform: translateY(-5px); }
-
-/* Bar-fill shimmer -- a soft highlight sweeping once across a bar right after
-   it finishes growing in, and the value number popping in with a small
-   overshoot instead of appearing flat. Both purely additive to the existing
-   width-transition animation, not a replacement for it. */
-.mrBarShimmerWrap { position: relative; overflow: hidden; }
-.mrBarShimmer {
-  position: absolute; top: 0; bottom: 0; width: 46%;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent);
-  animation: mrBarShimmer 1.1s ease-out both;
-}
-.mrValuePop { display: inline-block; animation: mrValuePop .5s cubic-bezier(.22,1,.36,1) both; }
 
 .mrPushNext { animation: mrPushInNext .38s cubic-bezier(.22,1,.36,1) both; }
 .mrPushPrev { animation: mrPushInPrev .38s cubic-bezier(.22,1,.36,1) both; }
