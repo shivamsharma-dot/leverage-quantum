@@ -1278,6 +1278,47 @@ function buildSyntheticAffiliateRows(map) {
   return out
 }
 
+// Deliberate, explicit exception to "every KPI card renders through the shared
+// PremKPI/kpiVariants system" -- per direct instruction (2026-09-08), Total QLs/
+// Human QLs/AI QLs get a solid brand-green fill so they visually call themselves
+// out from the rest of the grid. The shared variant system has no per-card
+// "filled" mode (it's one global style selection applying to every KPI card on
+// the site at once, chosen in Settings > Appearance), so highlighting just three
+// specific cards structurally cannot be done by passing a prop to PremKPI -- this
+// is a small, page-local, one-off treatment for exactly these three, not a new
+// general-purpose component, and it is NOT meant to be reused elsewhere. The
+// delta pill deliberately never uses red/green-for-bad -- it already sits on a
+// green card, so only the arrow direction signals up/down, keeping the one
+// "bad" case from looking like an off-brand color clash on a brand-colored card.
+function HighlightKPI({ label, value, sub, delta, prevValue }) {
+  const [showPrev, setShowPrev] = useState(false)
+  const isNew = delta === 'new'
+  const up = !isNew && delta != null && delta >= 0
+  const deltaText = isNew ? 'New' : (delta != null ? (up ? '▲ ' : '▼ ') + Math.abs(delta).toFixed(1) + '%' : null)
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #4CAE6F, #3D9A5E)', borderRadius: 12,
+      padding: '16px 20px 14px', color: '#fff', display: 'flex', flexDirection: 'column', gap: 4,
+      boxShadow: '0 4px 14px -6px rgba(61,154,94,0.55)',
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.85)', fontFamily: FONT }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-1px', fontFamily: FONT }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.85)', fontFamily: FONT }}>{sub}</span>
+        {deltaText && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); if (prevValue != null) setShowPrev(v => !v) }}
+            style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.22)', border: 'none', borderRadius: 999, padding: '2px 8px', cursor: prevValue != null ? 'pointer' : 'default', fontFamily: FONT }}
+          >
+            {showPrev && prevValue != null ? 'was ' + prevValue : deltaText}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // dataSource: 'sheet' (the original CSV path, default -- /dashboard/overall) or
 // 'bigquery' (/dashboard/overall-bigquery, Shivam-only -- see App.jsx/Sidebar.jsx).
 // Fixed per route, not a runtime toggle -- see the CLAUDE.md entry for why the old
@@ -4441,7 +4482,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
+            <HighlightKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} />
             {/* Human/AI QLs — same drill-down as the funnel bars below (setQlDrillOpen),
                 since this is literally the same figure (kpis.humanQL / kpis.futworkAiQl).
                 Total QLs and Superbot QLs are deliberately NOT wired: Total QLs sums
@@ -4457,7 +4498,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying Human QL records"
               onClickCapture={() => setQlDrillOpen('human')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
-              <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+              <HighlightKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} />
             </div>
           </div>
 
@@ -4467,7 +4508,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
               onClickCapture={() => setQlDrillOpen('ai')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
-              <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+              <HighlightKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} />
             </div>
             <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
