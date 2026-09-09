@@ -4,13 +4,59 @@ import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import { C, FONT, BRAND_RAMP } from '../ui/dashboardKit'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_RX } from '../../shared/brandLogo.mjs'
-import { fetchOverallBqAggRows, fetchOverallBqSyncedAt } from '../lib/overallBqCache.js'
-// Same canonical Source -> channel mapping already used by Ask AI's own
-// contribution-analysis tool (Facebook -> Meta Ads, Google -> Google Ads,
-// Content+Brand -> Organic, else -> Other) -- reused here rather than
-// inventing a second classification that could silently drift from it.
-import { mapChannel as reviewMapChannel, CHANNELS as REVIEW_CHANNELS } from '../lib/overallFunnelCache.js'
+import { fetchOverallBqAggRows, fetchOverallBqSyncedAt, fetchOverallBqRows } from '../lib/overallBqCache.js'
 import styles from './MarketingReviewDashboard.module.css'
+
+// Own, LOCAL Source -> channel classification -- deliberately NOT the shared
+// mapChannel/CHANNELS in overallFunnelCache.js. That shared mapping still
+// keys off 'Content+Brand', a Source label that no longer exists in the real
+// BigQuery data (confirmed live, 2026-09-10): the actual Source value today
+// is literally 'Organic'. Since 'Organic' was never a key in that shared
+// map, every real Organic row was silently falling through to its 'Other'
+// bucket instead -- which is exactly why this deck's slide 4/8 showed
+// "Organic: 0" for months, when the real Aug'26 figure is 415 QLs. Fixed
+// locally here (this page's own copy) rather than editing the shared file,
+// since MarketingPerformanceReport.jsx also depends on it and fixing that
+// consumer too is out of scope for this page -- flagged separately via
+// spawn_task instead of touched here.
+const CHANNEL_LABELS = { Facebook: 'Meta Ads', Google: 'Google Ads', Remarketing: 'Remarketing', Affiliate: 'Affiliate', Organic: 'Organic' }
+function reviewMapChannel(source) { return CHANNEL_LABELS[(source || '').trim()] || 'Other' }
+const REVIEW_CHANNELS = ['Meta Ads', 'Google Ads', 'Remarketing', 'Affiliate', 'Organic', 'Other']
+// Reverse of CHANNEL_LABELS -- which raw Source value to query the per-
+// campaign table for, when a channel bar's top-5-campaigns drill-down is
+// clicked. 'Other' has no single raw Source (it's everything NOT in this
+// map), so its drill-down fetches the whole month unfiltered and excludes
+// these five client-side instead -- see fetchChannelCampaigns below.
+const RAW_SOURCE_BY_CHANNEL = { 'Meta Ads': 'Facebook', 'Google Ads': 'Google', Remarketing: 'Remarketing', Affiliate: 'Affiliate', Organic: 'Organic' }
+
+// Ranks a channel's campaigns for the "top 5" drill-down on the Channel
+// Performance slide. Paid channels: per the campaign-performance-heuristic
+// already established elsewhere in this app (high CPQL is a red flag
+// regardless of volume; a campaign only counts as a real winner once it's
+// BOTH decent volume and at-or-below-median cost) -- rank by QL among
+// campaigns at or below the channel's own median CPQL this month, falling
+// back to plain top-QL if too few campaigns clear that bar to fill 5 slots.
+// Non-paid (Organic): no cost dimension exists, so it's simply top QL.
+function rankTopCampaigns(rows, isPaid) {
+  const byCampaign = new Map()
+  for (const r of rows) {
+    const name = r.campaign_name || '(unnamed campaign)'
+    const e = byCampaign.get(name) || { name, ql: 0, leads: 0, spend: 0 }
+    e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+    e.leads += reviewNum(r['Total Leads Generated'])
+    e.spend += reviewNum(r['Total_Spends'])
+    byCampaign.set(name, e)
+  }
+  const campaigns = [...byCampaign.values()].map(c => ({ ...c, cpql: c.ql > 0 ? c.spend / c.ql : null }))
+  const byQlDesc = arr => [...arr].sort((a, b) => b.ql - a.ql).slice(0, 5)
+  if (!isPaid) return byQlDesc(campaigns.filter(c => c.ql > 0))
+  const withCpql = campaigns.filter(c => c.ql > 0 && c.cpql != null)
+  if (!withCpql.length) return byQlDesc(campaigns.filter(c => c.ql > 0))
+  const sorted = [...withCpql].map(c => c.cpql).sort((a, b) => a - b)
+  const median = sorted[Math.floor(sorted.length / 2)]
+  const efficient = withCpql.filter(c => c.cpql <= median)
+  return efficient.length >= 5 ? byQlDesc(efficient) : byQlDesc(campaigns.filter(c => c.ql > 0))
+}
 
 // A dedicated, presentation-first review surface for the monthly Marketing
 // review -- NOT a dashboard page with a "Present" button bolted on. It has
@@ -103,8 +149,11 @@ function aggregateReviewMonth(rows, key) {
   for (const r of rows) {
     if (r.month !== key) continue
     const src = r.Source || 'Unknown'
-    const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0, queued: 0, floorQueued: 0 }
+    const e = bySource.get(src) || { leads: 0, ql: 0, humanQl: 0, aiQl: 0, superbotQl: 0, apps: 0, spend: 0, queued: 0, floorQueued: 0 }
     e.leads += reviewNum(r['Total Leads Generated'])
+    e.humanQl += reviewNum(r['Futwork Human QL'])
+    e.aiQl += reviewNum(r['Futwork AI QL'])
+    e.superbotQl += reviewNum(r['Superbot AI QL'])
     e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
     e.apps += reviewNum(r['Total Apps'])
     e.spend += reviewNum(r['Total_Spends'])
@@ -124,13 +173,14 @@ function aggregateReviewMonth(rows, key) {
     e.floorQueued += reviewNum(r['floor_queued'])
     bySource.set(src, e)
   }
-  let leads = 0, ql = 0, apps = 0, spend = 0, queued = 0, floorQueued = 0, paidLeads = 0, paidQl = 0, paidApps = 0
+  let leads = 0, ql = 0, humanQl = 0, aiQl = 0, superbotQl = 0, apps = 0, spend = 0, queued = 0, floorQueued = 0, paidLeads = 0, paidQl = 0, paidApps = 0
   for (const e of bySource.values()) {
-    leads += e.leads; ql += e.ql; apps += e.apps; spend += e.spend; queued += e.queued; floorQueued += e.floorQueued
+    leads += e.leads; ql += e.ql; humanQl += e.humanQl; aiQl += e.aiQl; superbotQl += e.superbotQl
+    apps += e.apps; spend += e.spend; queued += e.queued; floorQueued += e.floorQueued
     if (e.spend > 0) { paidLeads += e.leads; paidQl += e.ql; paidApps += e.apps }
   }
   return {
-    hasData: bySource.size > 0, leads, ql, apps, spend, queued, floorQueued,
+    hasData: bySource.size > 0, leads, ql, humanQl, aiQl, superbotQl, apps, spend, queued, floorQueued,
     cpl: paidLeads > 0 ? spend / paidLeads : null,
     cpql: paidQl > 0 ? spend / paidQl : null,
     cpa: paidApps > 0 ? spend / paidApps : null,
@@ -190,15 +240,24 @@ function buildChannelRows(months, byChannelByMonth, channel) {
       deltaVsLastYear: reviewPctDelta(v0, vLY), priorForDeltaVsLastYear: vLY,
     }
   }
-  return [
-    metric('Spend', 'spend', true, true, a => a.hasData ? a.spend : null),
+  const rows = [
     metric('Leads', 'leads', false, false, a => a.hasData ? a.leads : null),
     metric('QL', 'ql', false, false, a => a.hasData ? a.ql : null),
     metric('Apps', 'apps', false, false, a => a.hasData ? a.apps : null),
-    metric('CPL', 'cpl', true, true, a => a.cpl),
-    metric('CPQL', 'cpql', true, true, a => a.cpql),
-    metric('CPA', 'cpa', true, true, a => a.cpa),
   ]
+  // Organic has no real spend -- Spend/CPL/CPQL/CPA would just render as a
+  // column of dashes, which on this CEO-facing slide reads as broken data
+  // rather than "this channel is unpaid by design." Every other channel
+  // keeps the full paid-metrics set.
+  if (channel !== 'Organic') {
+    rows.unshift(metric('Spend', 'spend', true, true, a => a.hasData ? a.spend : null))
+    rows.push(
+      metric('CPL', 'cpl', true, true, a => a.cpl),
+      metric('CPQL', 'cpql', true, true, a => a.cpql),
+      metric('CPA', 'cpa', true, true, a => a.cpa),
+    )
+  }
+  return rows
 }
 
 // null when either side is missing (nothing to compare); the sentinel
@@ -347,6 +406,7 @@ function MarketingReviewDataProvider({ children }) {
   const [acSalesLoaded, setAcSalesLoaded] = useState(false)
   const [acSaving, setAcSaving] = useState(false)
   const [syncedAt, setSyncedAt] = useState(null)
+  const [organicSubRows, setOrganicSubRows] = useState(null)
 
   useEffect(() => {
     let dead = false
@@ -360,6 +420,39 @@ function MarketingReviewDataProvider({ children }) {
       .catch(e => { if (!dead) setError(e.message || 'Failed to load figures') })
     return () => { dead = true }
   }, [months, retryToken])
+
+  // Organic's own slide needs a Sub_Source breakdown (Web/Inbound phone
+  // call/Blog/App/...) that the small pre-aggregated table above can't
+  // provide (it has no Sub_Source column) -- so this is the one extra,
+  // deliberately narrow fetch against the bigger per-campaign table:
+  // Source='Organic' only, current month only. Real Aug'26 size (~1,700
+  // rows) is small and fast; NOT the whole month across all sources, which
+  // this codebase has already learned the hard way runs 20,000-50,000+ rows
+  // (see CLAUDE.md's Overall-BigQuery Month-tab entry) and is too slow to
+  // prefetch unconditionally on every page load.
+  useEffect(() => {
+    let dead = false
+    const since = isoDate(monthStartOf(months.current)), until = isoDate(monthEndOf(months.current))
+    fetchOverallBqRows({ since, until, sources: ['Organic'] })
+      .then(r => { if (!dead) setOrganicSubRows(r) })
+      .catch(() => { if (!dead) setOrganicSubRows([]) })
+    return () => { dead = true }
+  }, [months])
+
+  // On-demand only, never prefetched -- the top-5-campaigns drill-down on
+  // the Channel Performance slide. Same reasoning as organicSubRows above:
+  // fetching every channel's campaign-level data up front "just in case" it
+  // gets clicked would mean fetching the whole month regardless, since
+  // 'Other' alone requires an unfiltered query. Scoped to the CURRENT month
+  // only (the slide only ever shows this month's channel mix).
+  const fetchChannelCampaigns = useCallback(async (channel) => {
+    const since = isoDate(monthStartOf(months.current)), until = isoDate(monthEndOf(months.current))
+    const raw = RAW_SOURCE_BY_CHANNEL[channel]
+    const rawRows = raw
+      ? await fetchOverallBqRows({ since, until, sources: [raw] })
+      : (await fetchOverallBqRows({ since, until })).filter(r => reviewMapChannel(r.Source) === 'Other')
+    return rankTopCampaigns(rawRows, channel !== 'Organic')
+  }, [months])
 
   useEffect(() => {
     let dead = false
@@ -430,12 +523,34 @@ function MarketingReviewDataProvider({ children }) {
     return out
   }, [byChannelByMonth, months])
 
+  // Every Sub_Source under Organic with real activity this month, ranked by
+  // QL then leads -- capped at 8 rows so a long tail of one-off offline
+  // campaigns (individual newspaper insertions, a single RJ mention) doesn't
+  // turn the slide into a scroll. `hasData` distinguishes "still loading"
+  // (organicSubRows === null) from "loaded, genuinely nothing this month".
+  const organicSubSourceBreakdown = useMemo(() => {
+    if (!organicSubRows) return null
+    const bySub = new Map()
+    for (const r of organicSubRows) {
+      const key = r.Sub_Source || 'Unlabeled'
+      const e = bySub.get(key) || { name: key, ql: 0, leads: 0 }
+      e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+      e.leads += reviewNum(r['Total Leads Generated'])
+      bySub.set(key, e)
+    }
+    return [...bySub.values()]
+      .filter(e => e.ql > 0 || e.leads > 0)
+      .sort((a, b) => (b.ql - a.ql) || (b.leads - a.leads))
+      .slice(0, 8)
+  }, [organicSubRows])
+
   const value = useMemo(() => ({
     months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, syncedAt,
     aggByMonth, byChannelByMonth, channelRowsByChannel,
+    organicSubSourceBreakdown, fetchChannelCampaigns,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel])
+  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubSourceBreakdown, fetchChannelCampaigns])
 
   return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
@@ -686,11 +801,14 @@ function HeadlineSlide({ active, period }) {
   )
 }
 
-function ChannelBar({ ch, max, active, delay }) {
+function ChannelBar({ ch, max, active, delay, labelWidth = 128 }) {
   const pct = active ? (ch.value / max) * 100 : 0
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-      <div style={{ width: 128, fontSize: 13.5, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{ch.name}</div>
+      <div title={ch.name} style={{
+        width: labelWidth, fontSize: 13.5, fontWeight: 700, color: '#334155', flexShrink: 0,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{ch.name}</div>
       <div style={{ flex: 1, height: 22, borderRadius: 6, background: '#F1F5F9', overflow: 'hidden' }}>
         <div style={{
           height: '100%', borderRadius: 6, width: pct + '%', transition: `width 1s cubic-bezier(.22,1,.36,1) ${delay}s`,
@@ -735,9 +853,37 @@ function LiveDataFrame({ ctx, label, title, period, active, children }) {
   )
 }
 
+// Ranked top-5-campaigns list revealed under a clicked channel bar. `isPaid`
+// controls whether CPQL is shown (Organic has no spend, so no cost column).
+function ChannelCampaignsList({ campaigns, isPaid, active }) {
+  if (!campaigns.length) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>No named campaigns with QLs this month.</div>
+  return (
+    <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {campaigns.map((c, i) => (
+        <div key={c.name + i} className={active ? styles.staggerItem : undefined}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, animationDelay: active ? (0.05 * i) + 's' : undefined }}>
+          <div style={{
+            width: 18, height: 18, borderRadius: 5, background: NAVY, color: '#fff', fontSize: 10.5, fontWeight: 800,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>{i + 1}</div>
+          <div title={c.name} style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmtN(c.ql)} QL</div>
+          {isPaid && <div style={{ fontSize: 11.5, fontWeight: 700, color: '#94A3B8', fontVariantNumeric: 'tabular-nums', flexShrink: 0, width: 78, textAlign: 'right' }}>
+            {c.cpql != null ? fmtINRShort(c.cpql) + ' CPQL' : '—'}
+          </div>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ChannelPerformanceSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const byChannelByMonth = ctx && ctx.byChannelByMonth
+  const fetchChannelCampaigns = ctx && ctx.fetchChannelCampaigns
+  const [openChannel, setOpenChannel] = useState(null)
+  const [campaignCache, setCampaignCache] = useState({})
+  const [campaignLoading, setCampaignLoading] = useState(null)
   const channelRows = useMemo(() => {
     if (!byChannelByMonth) return []
     const cur = byChannelByMonth.current
@@ -745,6 +891,23 @@ function ChannelPerformanceSlide({ active, period }) {
       .map((name, i) => ({ name, hue: BRAND_RAMP[i % 4], ...(cur.get(name) || { ql: 0, leads: 0, spend: 0 }) }))
       .sort((a, b) => b.ql - a.ql)
   }, [byChannelByMonth])
+
+  const toggleChannel = useCallback((name) => {
+    setOpenChannel(v => v === name ? null : name)
+    setCampaignCache(prev => {
+      if (prev[name] !== undefined) return prev
+      setCampaignLoading(name)
+      fetchChannelCampaigns(name).then(list => {
+        setCampaignCache(c => ({ ...c, [name]: list }))
+        setCampaignLoading(l => l === name ? null : l)
+      }).catch(() => {
+        setCampaignCache(c => ({ ...c, [name]: [] }))
+        setCampaignLoading(l => l === name ? null : l)
+      })
+      return prev
+    })
+  }, [fetchChannelCampaigns])
+
   if (!ctx) return null
   const { months } = ctx
   const max = Math.max(1, ...channelRows.map(c => c.ql))
@@ -754,24 +917,77 @@ function ChannelPerformanceSlide({ active, period }) {
         <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No QLs recorded for {months ? monthShort(months.current) : 'this month'} yet.</div>
       ) : (
         <div style={{ marginTop: 12 }}>
-          {channelRows.map((c, i) => <ChannelBar key={c.name} ch={{ name: c.name, value: c.ql, hue: c.hue }} max={max} active={active} delay={0.1 * i} />)}
+          {channelRows.map((c, i) => {
+            const isOpen = openChannel === c.name
+            return (
+              <div key={c.name}>
+                <div onClick={() => toggleChannel(c.name)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1 }}><ChannelBar ch={{ name: c.name, value: c.ql, hue: c.hue }} max={max} active={active} delay={0.1 * i} /></div>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease', flexShrink: 0, marginBottom: 16 }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </div>
+                {isOpen && (
+                  <div style={{ marginTop: -6, marginBottom: 16 }}>
+                    {campaignLoading === c.name ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94A3B8', fontSize: 12.5, paddingLeft: 22 }}>
+                        <span className={styles.mrSpinner} />Loading top campaigns…
+                      </div>
+                    ) : (
+                      <ChannelCampaignsList campaigns={campaignCache[c.name] || []} isPaid={c.name !== 'Organic'} active={active} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </LiveDataFrame>
   )
 }
 
+// Sub-rows revealed under a clicked, drillable stage -- same visual language
+// as the parent stage bars (label/value above, proportional bar below) but
+// smaller and indented, so a click reads as "expanding" the row it came from
+// rather than opening something disconnected.
+function FunnelSubRow({ label, value, max, hue, active, delay }) {
+  const widthPct = active ? Math.max(3, Math.min(100, (value / max) * 100)) : 0
+  return (
+    <div style={{ paddingLeft: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: '#475569' }}>{label}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+          <AnimatedNumber value={value} active={active} delay={delay} duration={700} />
+        </span>
+      </div>
+      <div style={{ height: 9, borderRadius: 5, background: '#F1F5F9', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 5, width: widthPct + '%', transition: 'width .7s cubic-bezier(.22,1,.36,1)', background: hue }} />
+      </div>
+    </div>
+  )
+}
+
 function FunnelSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const aggByMonth = ctx && ctx.aggByMonth
+  const [expanded, setExpanded] = useState(null)
   const stages = useMemo(() => {
     if (!aggByMonth) return []
     const a = aggByMonth.current
     return [
-      { label: 'Leads', value: a.leads },
-      { label: 'Total Queued', value: a.queued },
-      { label: 'Total QL', value: a.ql },
-      { label: 'Applications', value: a.apps },
+      { key: 'leads', label: 'Leads', value: a.leads },
+      { key: 'queued', label: 'Total Queued', value: a.queued },
+      {
+        key: 'ql', label: 'Total QL', value: a.ql, drillable: true,
+        sub: [
+          { label: 'Futwork Human QL', value: a.humanQl },
+          { label: 'Futwork AI QL', value: a.aiQl },
+          { label: 'Superbot QL', value: a.superbotQl },
+        ],
+      },
+      { key: 'apps', label: 'Applications', value: a.apps },
     ]
   }, [aggByMonth])
   if (!ctx) return null
@@ -794,10 +1010,25 @@ function FunnelSlide({ active, period }) {
           const widthPct = active ? Math.max(3, Math.min(100, (s.value / max) * 100)) : 0
           const prev = stages[i - 1]
           const convPct = prev && prev.value > 0 ? ((s.value / prev.value) * 100).toFixed(1) + '% of prior stage' : null
+          const isOpen = s.drillable && expanded === s.key
+          const subMax = s.sub ? Math.max(1, ...s.sub.map(x => x.value)) : 1
           return (
             <div key={s.label}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{s.label}</span>
+              <div
+                onClick={s.drillable ? () => setExpanded(v => v === s.key ? null : s.key) : undefined}
+                style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6,
+                  cursor: s.drillable ? 'pointer' : 'default',
+                }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {s.label}
+                  {s.drillable && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  )}
+                </span>
                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
                   {convPct && <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 700, whiteSpace: 'nowrap' }}>{convPct}</span>}
                   <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
@@ -811,6 +1042,14 @@ function FunnelSlide({ active, period }) {
                   background: `linear-gradient(90deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[i % 4]}CC)`,
                 }} />
               </div>
+              {isOpen && (
+                <div className={styles.staggerItem} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, paddingTop: 4 }}>
+                  {s.sub.map((x, si) => (
+                    <FunnelSubRow key={x.label} label={x.label} value={x.value} max={subMax}
+                      hue={[NAVY, BLUE, CYAN][si % 3]} active={active} delay={0.08 * si} />
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -860,6 +1099,28 @@ function ChannelSpotlightBody({ active, period, channel }) {
             </div>
           ))}
         </>
+      )}
+      {channel === 'Organic' && (
+        <div style={{ marginTop: 26 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+            QL by sub-source, {months ? monthShort(months.current) : 'this month'}
+          </div>
+          {ctx.organicSubSourceBreakdown == null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94A3B8', fontSize: 13 }}>
+              <span className={styles.mrSpinner} />Loading sub-source breakdown…
+            </div>
+          ) : ctx.organicSubSourceBreakdown.length === 0 ? (
+            <div style={{ color: '#94A3B8', fontSize: 13 }}>No sub-source activity recorded this month.</div>
+          ) : (
+            (() => {
+              const subMax = Math.max(1, ...ctx.organicSubSourceBreakdown.map(s => s.ql))
+              return ctx.organicSubSourceBreakdown.map((s, i) => (
+                <ChannelBar key={s.name} ch={{ name: s.name, value: s.ql, hue: BRAND_RAMP[i % 4] }}
+                  max={subMax} active={active} delay={0.08 * i} labelWidth={220} />
+              ))
+            })()
+          )}
+        </div>
       )}
     </LiveDataFrame>
   )
@@ -1105,8 +1366,34 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
   const [blackout, setBlackout] = useState(false)
   const [laserOn, setLaserOn] = useState(false)
   const [laserPos, setLaserPos] = useState(null)
+  const [writeMode, setWriteMode] = useState(false)
+  const [inkStrokes, setInkStrokes] = useState([])
+  const [liveInkPath, setLiveInkPath] = useState(null)
+  const inkDrawRef = useRef(null)
+  const inkIdRef = useRef(0)
   const digitBufferRef = useRef('')
   const digitTimerRef = useRef(null)
+
+  const handleInkDown = useCallback((e) => {
+    if (!writeMode) return
+    inkDrawRef.current = [[e.clientX, e.clientY]]
+  }, [writeMode])
+  const handleInkMove = useCallback((e) => {
+    if (!writeMode || !inkDrawRef.current) return
+    inkDrawRef.current.push([e.clientX, e.clientY])
+    setLiveInkPath('M ' + inkDrawRef.current.map(p => p[0] + ',' + p[1]).join(' L '))
+  }, [writeMode])
+  const handleInkUp = useCallback(() => {
+    if (!writeMode || !inkDrawRef.current) return
+    const pts = inkDrawRef.current
+    inkDrawRef.current = null
+    setLiveInkPath(null)
+    if (pts.length < 2) return
+    const id = ++inkIdRef.current
+    const d = 'M ' + pts.map(p => p[0] + ',' + p[1]).join(' L ')
+    setInkStrokes(s => [...s, { id, d }])
+    setTimeout(() => setInkStrokes(s => s.filter(x => x.id !== id)), 2600)
+  }, [writeMode])
 
   // Exports the ACTUAL current slide node (full 1280x720, unaffected by the
   // presentational scale-down applied to its parent below) rather than
@@ -1191,6 +1478,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
       } else if (e.key === 'p' || e.key === 'P') { setPresenterOpen(v => !v) }
       else if (e.key === 'b' || e.key === 'B') { setBlackout(v => !v) }
       else if (e.key === 'l' || e.key === 'L') { setLaserOn(v => !v) }
+      else if (e.key === 'w' || e.key === 'W') { setWriteMode(v => !v) }
       else if (/^[0-9]$/.test(e.key)) {
         // Multi-digit go-to-slide: digits accumulate (capped at 2, since the
         // deck never exceeds 99 slides) and auto-commit after a short pause,
@@ -1227,18 +1515,32 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
   const slide = SLIDES[index]
 
   const hideCursor = laserOn || (fullscreen && !chromeVisible)
+  const cursorClass = writeMode ? styles.mrCursorCrosshair : (hideCursor ? styles.mrCursorNone : undefined)
   const chromeClass = fullscreen && !chromeVisible ? styles.mrChromeHidden : styles.mrChromeVisible
+  // True once Fullscreen is genuinely engaged AND its chrome has auto-hidden
+  // -- the moment the stage should reclaim the screen space that chrome was
+  // reserving (see stageWrapRef below).
+  const fsWide = fullscreen && !chromeVisible && !presenterOpen
 
   return (
     <div ref={deckRootRef} role="dialog" aria-modal="true" aria-label={`Presenting: ${slide.title}`}
-      className={hideCursor ? styles.mrCursorNone : undefined}
-      onMouseMove={laserOn ? (e => setLaserPos({ x: e.clientX, y: e.clientY })) : undefined}
+      className={cursorClass}
+      onMouseMove={(laserOn || writeMode) ? (e => { if (laserOn) setLaserPos({ x: e.clientX, y: e.clientY }); handleInkMove(e) }) : undefined}
+      onMouseDown={writeMode ? handleInkDown : undefined}
+      onMouseUp={writeMode ? handleInkUp : undefined}
+      onMouseLeave={writeMode ? handleInkUp : undefined}
       style={{ position: 'fixed', inset: 0, zIndex: 9995, fontFamily: FONT, background: '#0B1330' }}>
       <div style={{
         position: 'absolute', inset: 0,
         background: 'radial-gradient(120% 90% at 50% 8%, rgba(28,159,212,0.14), transparent 55%), linear-gradient(180deg, rgba(6,10,22,0.94) 0%, rgba(8,12,26,0.98) 100%)',
       }} />
       {laserOn && laserPos && <div className={styles.mrLaserDot} style={{ left: laserPos.x, top: laserPos.y }} />}
+      {(writeMode || inkStrokes.length > 0) && (
+        <svg style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', zIndex: 9997, pointerEvents: 'none' }}>
+          {inkStrokes.map(s => <path key={s.id} d={s.d} className={styles.mrInkStroke} />)}
+          {liveInkPath && <path d={liveInkPath} className={styles.mrInkStroke} style={{ animation: 'none', opacity: 1 }} />}
+        </svg>
+      )}
       {blackout && (
         <div className={styles.mrBlackout} onClick={() => setBlackout(false)}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Press B or click to resume</span>
@@ -1284,13 +1586,23 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
         borderRadius: 999, padding: '7px 14px',
       }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>
-          &larr; &rarr; navigate &middot; digits+Enter jump &middot; Home/End &middot; F fullscreen &middot; P presenter &middot; B blackout &middot; L laser &middot; Esc exit
+          &larr; &rarr; navigate &middot; digits+Enter jump &middot; Home/End &middot; F fullscreen &middot; P presenter &middot; B blackout &middot; L laser &middot; W write &middot; Esc exit
         </span>
       </div>
       {/* main stage */}
       <div ref={stageWrapRef} style={{
-        position: 'absolute', top: 88, bottom: 128, left: presenterOpen ? 32 : '6vw', right: presenterOpen ? 360 : '6vw',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'right .25s ease, left .25s ease',
+        position: 'absolute',
+        // While genuinely fullscreen with the chrome auto-hidden (see the
+        // chromeVisible effect above), reclaim the space that was reserved
+        // for the progress rail/toolbar/bottom bar -- otherwise the slide
+        // keeps the same fixed 88px/128px/6vw margins regardless of
+        // Fullscreen, which is exactly why entering Fullscreen didn't visibly
+        // make the slide any wider before this fix. Never reclaimed while
+        // the presenter panel is open, since that's still-visible chrome.
+        top: (fsWide) ? 16 : 88, bottom: (fsWide) ? 16 : 128,
+        left: presenterOpen ? 32 : (fsWide ? '1.5vw' : '6vw'), right: presenterOpen ? 360 : (fsWide ? '1.5vw' : '6vw'),
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'right .3s ease, left .3s ease, top .3s ease, bottom .3s ease',
       }}>
         <div key={index} className={dirRef.current === 'prev' ? styles.mrPushPrev : styles.mrPushNext}
           style={{ '--mr-scale': scale, position: 'relative' }}>

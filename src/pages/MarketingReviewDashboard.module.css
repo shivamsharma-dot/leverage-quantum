@@ -127,6 +127,24 @@
   animation: mrFadeUp .25s ease-out both;
 }
 
+/* Write/annotate mode (W) -- freehand ink drawn over the current slide while
+   presenting, standing in for PowerPoint/Keynote's presenter-mode pen tool.
+   Each finished stroke fades out and is removed from the DOM ~2.6s later
+   (JS setTimeout, matched to this animation's own duration) rather than
+   sitting on screen permanently -- "show up for a few seconds and then go
+   away" was the explicit ask, not a persistent annotation layer. */
+@keyframes mrInkFade {
+  0%  { opacity: 1; }
+  65% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.mrInkStroke {
+  fill: none; stroke: #29B9C3; stroke-width: 4px; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 4px rgba(41,185,195,0.5));
+  animation: mrInkFade 2.6s ease-out both;
+}
+.mrCursorCrosshair { cursor: crosshair !important; }
+
 @media print {
   .noPrint { display: none !important; }
   /* The outer app shell (`height:100vh; overflow:hidden`, an inline style so
