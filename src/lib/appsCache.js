@@ -98,3 +98,18 @@ export async function fetchAppsCacheSyncedAt() {
     return j[0] && j[0].synced_at ? new Date(j[0].synced_at) : null
   } catch (_) { return null }
 }
+
+// A plain count of applications since a given 'YYYY-MM-DD' (first_app_submitted_at),
+// e.g. for Overall's own MTD Scorecard Slack report (2026-09-10) -- that report only
+// needs "how many applications this month," not the ~7,000+ full rows fetchAppsCacheRows
+// pulls and pages through. One Prefer:count=exact request with limit=1 gets the total
+// off the response's own Content-Range header without downloading a single row body.
+export async function fetchAppsCountSince(sinceIso) {
+  const p = new URLSearchParams({ select: 'row_key', first_app_submitted_at: 'gte.' + sinceIso, limit: '1' })
+  const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + p.toString(), { headers: headers({ Prefer: 'count=exact' }) })
+  if (!r.ok) throw new Error(TABLE + ' count failed (' + r.status + '): ' + await r.text())
+  const range = r.headers.get('content-range') || ''
+  const total = range.includes('/') ? parseInt(range.split('/')[1], 10) : NaN
+  if (!Number.isFinite(total)) throw new Error(TABLE + ' count: unexpected content-range "' + range + '"')
+  return total
+}

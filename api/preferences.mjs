@@ -108,7 +108,12 @@ export default async function handler(req, res) {
     // Recruitment buckets (see shared/futworkProject.mjs's countrySuggestionsFor).
     // Not secret -- just a list of country names -- and any signed-in user
     // viewing the Roster's Edit modal needs to read them.
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries'])
+    // ac_sales_manual -- the AC Sales count entered on Marketing Review (admin-only
+    // to WRITE, per the POST/PATCH branch below) -- made publicly READABLE so Overall's
+    // own MTD Scorecard Slack report (2026-09-10) shows a correct AC Sales figure for
+    // any signed-in user who clicks "Send to Slack" there, not just admins. Same
+    // precedent as affiliate_spend_manual just above it.
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))

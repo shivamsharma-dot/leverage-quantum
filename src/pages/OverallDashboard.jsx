@@ -34,6 +34,9 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 import {
   fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
 } from '../lib/overallBqCache'
+// Just the MTD application count for the "MTD Scorecard" Slack report (2026-09-10) --
+// see the mtdScorecard effect below.
+import { fetchAppsCountSince } from '../lib/appsCache'
 // Lazy -- these are the real Human/AI QL Detail pages (App.jsx already lazy-loads
 // them for their own routes; a dynamic import() to the same module path shares that
 // one chunk rather than duplicating ~50KB x2 into Overall's own bundle for every
@@ -3223,6 +3226,61 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [captureCols, setCaptureCols] = useState(null)
   const [slackPanelOpen, setSlackPanelOpen] = useState(false)
 
+  // Feeds the "MTD Scorecard" Slack report version (pmReportV8.js, 2026-09-10) --
+  // null until the panel has been opened once this session, then holds the fixed
+  // shape buildV8 reads. Deliberately independent of the page's own bqRows/date
+  // range/grouping state: this report is always "the current calendar month to
+  // date," never whatever the viewer happens to have selected, so it always reads
+  // the same regardless of what tab/filter is on screen when Send to Slack is clicked.
+  // Cleared on every real Refresh (bqNonce bump) so a reopened panel re-fetches
+  // rather than serving an increasingly stale snapshot for the rest of the session.
+  const [mtdScorecard, setMtdScorecard] = useState(null)
+  useEffect(() => { setMtdScorecard(null) }, [bqNonce])
+  useEffect(() => {
+    if (!slackPanelOpen || mtdScorecard) return
+    let dead = false
+    const now = new Date()
+    const monthStart = dayKey(new Date(now.getFullYear(), now.getMonth(), 1))
+    const today = dayKey(now)
+    const daysDone = now.getDate()
+    const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+    Promise.all([
+      retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until: today, sources: [] })),
+      fetchAppsCountSince(monthStart).catch(() => null),
+      fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
+    ]).then(([raw, appsCount, prefsResp]) => {
+      if (dead) return
+      const rows = raw.map(mapRow)
+      const emptyBucket = label => ({ label, spend: 0, leads: 0, totalQL: 0, humanQL: 0, futworkAiQl: 0, futworkHumanQ: 0, futworkAiQ: 0 })
+      const bucket = (label, filterFn) => rows.filter(filterFn).reduce((a, r) => ({
+        label,
+        spend: a.spend + r.spend, leads: a.leads + r.leads, totalQL: a.totalQL + r.totalQL,
+        humanQL: a.humanQL + r.humanQL, futworkAiQl: a.futworkAiQl + r.futworkAiQl,
+        futworkHumanQ: a.futworkHumanQ + r.futworkHumanQ, futworkAiQ: a.futworkAiQ + r.futworkAiQ,
+      }), emptyBucket(label))
+      const overallRow = bucket('Overall', () => true)
+      const paidRow = bucket('Paid', r => isPaidSource(r.source))
+      // 'Others' folded into Organic (confirmed 2026-09-10) -- so Overall reconciles
+      // exactly to Paid + Organic + Referral, with no unaccounted-for bucket.
+      const organicRow = bucket('Organic', r => !isPaidSource(r.source) && r.source !== 'Referral')
+      const referralRow = bucket('Referral', r => r.source === 'Referral')
+      const acSalesMap = (prefsResp.prefs && prefsResp.prefs.ac_sales_manual) || {}
+      const acSales = acSalesMap[ym] != null && acSalesMap[ym] !== '' ? Number(acSalesMap[ym]) : null
+      const totalApps = typeof appsCount === 'number' ? appsCount : null
+      const qlSalePct = overallRow.totalQL > 0 && totalApps != null && acSales != null
+        ? ((totalApps + acSales) / overallRow.totalQL) * 100 : null
+      const dailyRunRate = daysDone > 0 ? overallRow.totalQL / daysDone : null
+      setMtdScorecard({
+        ready: true,
+        monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+        asOfLabel: now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        rows: [overallRow, paidRow, organicRow, referralRow],
+        totalQL: overallRow.totalQL, totalApps, acSales, qlSalePct, dailyRunRate,
+      })
+    }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message }) })
+    return () => { dead = true }
+  }, [slackPanelOpen, mtdScorecard])
+
   // The columns a CEO actually reads, when they are on screen at all.
   const ceoCols = useMemo(() => displayCols.filter(c => CEO_IMAGE_KEYS.includes(c.key)), [displayCols])
   const shareCols = ceoCols.length ? ceoCols : displayCols
@@ -4128,10 +4186,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       hasPrev: prevKpis.leads > 0 || prevKpis.spend > 0,
       partialPeriod: activeFilter === 'month' ? isCurrentMonth : activeFilter === 'preset',
       prevIsCalendarShift: !!(prevWindow && prevWindow.calendarShift),
+      // The MTD Scorecard report (v8, pmReportV8.js) -- null/busy until the
+      // dedicated effect above resolves; buildV8 renders a "still building" message
+      // in that case rather than crashing on missing fields.
+      mtdScorecard,
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, prevWindow, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, prevWindow, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp, mtdScorecard])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every

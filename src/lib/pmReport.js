@@ -1069,8 +1069,24 @@ function buildV4(ctx) {
 import { buildV5 } from './pmReportV5'
 import { buildV6 } from './pmReportV6'
 import { buildV7 } from './pmReportV7'
+import { buildV8 } from './pmReportV8'
 
 export const REPORT_VERSIONS = [
+  {
+    id: 'v8',
+    code: 'V8',
+    msgKeys: ['scorecard', 'outcomes'],
+    name: 'MTD Scorecard ' + DASH + ' 2 messages',
+    tagline: 'Spend/Leads/Total QLs/CPL/CPQL/Lead-to-QL% by Overall/Paid/Organic/Referral, plus Total QL, Applications, AC Sales and the QL run-rate. Always this calendar month to date.',
+    recommended: false,
+    what: [
+      'Message 1 — Marketing Spend, Total Leads, Total QLs, CPL, CPQL and Lead to QL % as a native table, one row each for Overall, Paid, Organic (folds in the small "Others" bucket) and Referral. Lead to QL % is Quantum\'s own existing definition used everywhere else in the app — Futwork Human QL + Futwork AI QL over Total Queued on Futwork, excluding Superbot and Floor-routed leads.',
+      'Message 2 — Total QL this month, total Applications this month (unfiltered), AC Sales (entered manually on Marketing Review), and a combined QL → Outcome % ((Applications + AC Sales) ÷ Total QL), plus the QL daily run-rate.',
+      'Always the current calendar month to date, independent of whatever date range or grouping the page itself has selected — read fresh off the BigQuery cache the first time this panel is opened.',
+      'No image, no CSV attachment — this is a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
+    ],
+    build: buildV8,
+  },
   {
     id: 'v7',
     code: 'V7',
