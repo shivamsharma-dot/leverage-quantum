@@ -286,7 +286,7 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
   const subHeader = (cf && cf.subHeader && cf.subHeader.length) ? cf.subHeader : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
   const title = (cf && cf.title) || 'B2C Student Mobility'
   return (
-    <div ref={ref} style={{ position: 'fixed', left: -99999, top: 0, background: '#fff', width: 640, fontFamily: 'Arial, Helvetica, sans-serif', color: '#000' }}>
+    <div ref={ref} style={{ position: 'fixed', left: -99999, top: 0, background: '#fff', width: 700, fontFamily: 'Arial, Helvetica, sans-serif', color: '#000', whiteSpace: 'nowrap' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
         <tbody>
           <tr>
@@ -294,9 +294,9 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
           </tr>
           <tr><td colSpan={3} style={{ border: 'none', height: 10, padding: 0 }} /></tr>
           <tr>
-            <td style={{ border: 'none', width: 270 }} />
-            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 175 }}>{groupHeader[1] || 'MTD'}</td>
-            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 195 }}>{groupHeader[2] || 'YTD'}</td>
+            <td style={{ border: 'none', width: 320 }} />
+            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 180 }}>{groupHeader[1] || 'MTD'}</td>
+            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 200 }}>{groupHeader[2] || 'YTD'}</td>
           </tr>
           <tr>
             <td style={{ ...CF_IMG_CELL, textAlign: 'left' }}>{subHeader[0] || 'Particulars'}</td>
