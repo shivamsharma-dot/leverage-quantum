@@ -108,12 +108,17 @@ export default async function handler(req, res) {
     // Recruitment buckets (see shared/futworkProject.mjs's countrySuggestionsFor).
     // Not secret -- just a list of country names -- and any signed-in user
     // viewing the Roster's Edit modal needs to read them.
-    // ac_sales_manual -- the AC Sales count entered on Marketing Review (admin-only
-    // to WRITE, per the POST/PATCH branch below) -- made publicly READABLE so Overall's
-    // own MTD Scorecard Slack report (2026-09-10) shows a correct AC Sales figure for
-    // any signed-in user who clicks "Send to Slack" there, not just admins. Same
-    // precedent as affiliate_spend_manual just above it.
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries'])
+    // overall_ac_sales_manual -- the AC Sales count entered directly on Overall's own
+    // Send-to-Slack panel (2026-09-10) for its MTD Scorecard report -- deliberately a
+    // SEPARATE key from Marketing Review's own ac_sales_manual (the user explicitly
+    // asked to "keep both separate": Overall's is the live current month, Marketing
+    // Review's is whatever month that deck is reviewing -- they need not agree).
+    // Admin-only to WRITE (the POST/PATCH branch below), made publicly READABLE so any
+    // signed-in Overall viewer who clicks "Send to Slack" sees a correct figure, not
+    // just admins -- same precedent as affiliate_spend_manual just above it.
+    // (ac_sales_manual itself no longer needs to be here: only Marketing Review reads/
+    // writes it now, and that page is admin-only already.)
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))

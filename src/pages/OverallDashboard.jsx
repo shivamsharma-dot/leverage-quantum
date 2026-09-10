@@ -41,6 +41,9 @@ import { fetchAppsCountSince } from '../lib/appsCache'
 // dimension on QL itself (Vertical only exists on Applications), but Monthly QLs'
 // own BigQuery pipeline already computes it per (date, source).
 import { fetchMonthlyQlsRowsSince } from '../lib/monthlyQlsCache'
+// Gates the AC Sales editor in the Send-to-Slack panel to admins only, matching
+// api/preferences.mjs's own admin-only WRITE gate on overall_ac_sales_manual.
+import { useAuth } from '../hooks/useAuth'
 // Lazy -- these are the real Human/AI QL Detail pages (App.jsx already lazy-loads
 // them for their own routes; a dynamic import() to the same module path shares that
 // one chunk rather than duplicating ~50KB x2 into Overall's own bundle for every
@@ -1326,11 +1329,50 @@ function HighlightKPI({ label, value, sub, delta, prevValue }) {
   )
 }
 
+// AC Sales editor for the MTD Scorecard Slack report (pmReportV8.js), rendered
+// inside SlackReportPanel's own header via its extraHeader slot (2026-09-10, per
+// direct instruction -- "filled from here, through the panel", and deliberately a
+// SEPARATE stored value from Marketing Review's own AC Sales, not shared with it).
+// Read-only for a non-admin viewer (overall_ac_sales_manual is publicly readable but
+// admin-only to write, matching api/preferences.mjs's own gate) -- they still see the
+// figure feeding the report they might send, just can't change it.
+function AcSalesEditor({ monthLabel, value, saving, loaded, readOnly, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  useEffect(() => { if (!editing) setDraft(value != null ? String(value) : '') }, [value, editing])
+  const btnStyle = { padding: '4px 10px', borderRadius: 7, border: '1px solid ' + C.border, background: 'var(--card,#fff)', color: C.navy, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }
+  if (!loaded) return null
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text2,#475569)' }}>AC Sales ({monthLabel}):</span>
+        <input type="number" value={draft} onChange={e => setDraft(e.target.value)} autoFocus
+          onKeyDown={e => { if (e.key === 'Enter') { onSave(draft.trim() === '' ? '' : Number(draft)); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
+          style={{ width: 90, padding: '5px 8px', borderRadius: 7, border: '1px solid ' + C.border, fontSize: 13, fontFamily: FONT }} />
+        <button type="button" style={{ ...btnStyle, background: C.navy, color: '#fff', borderColor: C.navy }}
+          onClick={() => { onSave(draft.trim() === '' ? '' : Number(draft)); setEditing(false) }}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="button" style={btnStyle} onClick={() => setEditing(false)}>Cancel</button>
+      </div>
+    )
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 12.5, color: 'var(--text2,#475569)' }}>
+        <b>AC Sales ({monthLabel}):</b> {value != null ? value.toLocaleString('en-IN') : 'Not entered yet'}
+        {' — for this Scorecard only, separate from Marketing Review’s own AC Sales'}
+      </span>
+      {!readOnly && <button type="button" style={btnStyle} onClick={() => setEditing(true)}>{value != null ? 'Edit' : 'Enter'}</button>}
+    </div>
+  )
+}
+
 // dataSource: 'sheet' (the original CSV path, default -- /dashboard/overall) or
 // 'bigquery' (/dashboard/overall-bigquery, Shivam-only -- see App.jsx/Sidebar.jsx).
 // Fixed per route, not a runtime toggle -- see the CLAUDE.md entry for why the old
 // per-device Settings toggle was retired in favour of two dedicated pages.
 export default function OverallDashboard({ dataSource = 'sheet' }) {
+  const { user } = useAuth()
+  const isAdmin = !!(user && user.role === 'admin')
   const [rawRows, setRawRows] = useState([])
   const [affiliateManual, setAffiliateManual] = useState(null)
   // Campaign-name patterns excluded from CPL/CPQL/CPA math -- see
@@ -3257,7 +3299,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const now = new Date()
     const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
     const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-    const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
     // Today being the 1st of the month means yesterday falls in the PREVIOUS month --
     // there are zero complete days to report yet. Surface that honestly rather than
     // firing a since>until query or dividing by a zero day count.
@@ -3271,9 +3312,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     Promise.all([
       retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
       fetchAppsCountSince(monthStart).catch(() => null),
-      fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
-    ]).then(([raw, appsCount, prefsResp, qlSplitRaw]) => {
+    ]).then(([raw, appsCount, qlSplitRaw]) => {
       if (dead) return
       const rows = raw.map(mapRow)
       const emptyBucket = label => ({ label, spend: 0, leads: 0, totalQL: 0, humanQL: 0, futworkAiQl: 0, futworkHumanQ: 0, futworkAiQ: 0, srQl: 0, acQl: 0 })
@@ -3336,24 +3376,69 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
       }
 
-      const acSalesMap = (prefsResp.prefs && prefsResp.prefs.ac_sales_manual) || {}
-      const acSales = acSalesMap[ym] != null && acSalesMap[ym] !== '' ? Number(acSalesMap[ym]) : null
+      // acSales/qlSalePct are deliberately NOT set here -- they're derived reactively
+      // in mtdScorecardForReport below, off overallAcSales (its own separate, always-
+      // live state), so editing AC Sales through this panel updates the preview
+      // immediately without needing to close/reopen the panel or hit Refresh.
       const totalApps = typeof appsCount === 'number' ? appsCount : null
-      const qlSalePct = overallRow.totalQL > 0 && totalApps != null && acSales != null
-        ? ((totalApps + acSales) / overallRow.totalQL) * 100 : null
       const dailyRunRate = daysDone > 0 ? overallRow.totalQL / daysDone : null
       setMtdScorecard({
         ready: true,
         monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
         throughLabel: yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
         rows: buckets,
-        totalQL: overallRow.totalQL, totalApps, acSales, qlSalePct, dailyRunRate,
+        totalQL: overallRow.totalQL, totalApps, dailyRunRate,
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
         qlSplitAvailable: Array.isArray(qlSplitRaw),
       })
     }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message }) })
     return () => { dead = true }
   }, [slackPanelOpen, mtdScorecard])
+
+  // AC Sales for the MTD Scorecard -- deliberately a SEPARATE value from Marketing
+  // Review's own ac_sales_manual (explicit instruction, 2026-09-10: "keep both
+  // separate ... filled from here, through the panel"). Loaded once per panel-open
+  // (like mtdScorecard above), but kept in its own state rather than folded into that
+  // one-shot fetch, so saving a new value here updates the report preview instantly.
+  const [overallAcSales, setOverallAcSales] = useState({})
+  const [overallAcSalesLoaded, setOverallAcSalesLoaded] = useState(false)
+  const [overallAcSalesSaving, setOverallAcSalesSaving] = useState(false)
+  useEffect(() => {
+    if (!slackPanelOpen || overallAcSalesLoaded) return
+    let dead = false
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(d => { if (!dead) { setOverallAcSales((d.prefs && d.prefs.overall_ac_sales_manual) || {}); setOverallAcSalesLoaded(true) } })
+      .catch(() => { if (!dead) setOverallAcSalesLoaded(true) })
+    return () => { dead = true }
+  }, [slackPanelOpen, overallAcSalesLoaded])
+  // Optimistic write, reverted on failure -- same pattern Marketing Review's own
+  // saveAcSales already established for the sibling ac_sales_manual key.
+  const saveOverallAcSales = useCallback((ym, val) => {
+    const prev = overallAcSales
+    const next = { ...overallAcSales, [ym]: val }
+    setOverallAcSales(next)
+    setOverallAcSalesSaving(true)
+    fetch('/api/preferences', {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'overall_ac_sales_manual', value: next }),
+    }).then(r => { if (!r.ok) throw new Error('save failed') })
+      .catch(() => setOverallAcSales(prev))
+      .finally(() => setOverallAcSalesSaving(false))
+  }, [overallAcSales])
+
+  const currentYm = useMemo(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') }, [])
+  // The object buildV8 actually reads -- mtdScorecard's own one-shot fetch, plus the
+  // always-live AC Sales figure and everything derived from it, recomputed on every
+  // edit rather than frozen at fetch time.
+  const mtdScorecardForReport = useMemo(() => {
+    if (!mtdScorecard || !mtdScorecard.ready || mtdScorecard.noCompleteDays) return mtdScorecard
+    const raw = overallAcSales[currentYm]
+    const acSales = overallAcSalesLoaded && raw != null && raw !== '' ? Number(raw) : null
+    const qlSalePct = mtdScorecard.totalQL > 0 && mtdScorecard.totalApps != null && acSales != null
+      ? ((mtdScorecard.totalApps + acSales) / mtdScorecard.totalQL) * 100 : null
+    return { ...mtdScorecard, acSales, qlSalePct }
+  }, [mtdScorecard, overallAcSales, overallAcSalesLoaded, currentYm])
 
   // The columns a CEO actually reads, when they are on screen at all.
   const ceoCols = useMemo(() => displayCols.filter(c => CEO_IMAGE_KEYS.includes(c.key)), [displayCols])
@@ -4262,12 +4347,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       prevIsCalendarShift: !!(prevWindow && prevWindow.calendarShift),
       // The MTD Scorecard report (v8, pmReportV8.js) -- null/busy until the
       // dedicated effect above resolves; buildV8 renders a "still building" message
-      // in that case rather than crashing on missing fields.
-      mtdScorecard,
+      // in that case rather than crashing on missing fields. mtdScorecardForReport
+      // (not the raw mtdScorecard) so an AC Sales edit through the panel's own
+      // editor reflects in the preview immediately, without a Refresh.
+      mtdScorecard: mtdScorecardForReport,
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, prevWindow, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp, mtdScorecard])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, prevWindow, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp, mtdScorecardForReport])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every
@@ -4832,6 +4919,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 dashboardId="overall"
                 filename={'overall-' + grpBy}
                 rowCount={sortedFilteredRows.length}
+                extraHeader={
+                  <AcSalesEditor
+                    monthLabel={new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                    value={overallAcSalesLoaded && overallAcSales[currentYm] != null && overallAcSales[currentYm] !== '' ? Number(overallAcSales[currentYm]) : null}
+                    saving={overallAcSalesSaving}
+                    loaded={overallAcSalesLoaded}
+                    readOnly={!isAdmin}
+                    onSave={val => saveOverallAcSales(currentYm, val)}
+                  />
+                }
               />
             </div>
               </div>

@@ -3,26 +3,37 @@
 // A small, fixed executive scorecard requested directly (2026-09-10), matching an
 // exact spreadsheet layout: month-to-date Spend/Leads/Total QLs/CPL/CPQL/Lead-to-QL%
 // (plus the SR/AC QL split) broken into Overall/Paid/Organic/Referral, then a second
-// table of Total QL, its SR/AC split, Applications this month, AC Sales (manual),
-// a combined QL-to-outcome rate, and the QL daily run-rate. Two messages, one table
-// each -- this file's own established "one table per message" convention (V2/V3/V4).
+// table of Total QL, its SR/AC split, Applications this month, AC Sales, a combined
+// QL-to-outcome rate, and the QL daily run-rate. Two messages, one table each --
+// this file's own established "one table per message" convention (V2/V3/V4).
 //
 // Renamed 2026-09-10 per direct feedback: message 1 is "Marketing Efficiency"
 // (channel-level spend/CPL/CPQL -- literally what each channel costs to run),
 // message 2 is "Sales Efficiency" (QL through to an actual outcome -- what the
 // funnel is converting into).
 //
+// AC Sales here is entered directly in Overall's own Send-to-Slack panel (its
+// editor lives in OverallDashboard.jsx, rendered via SlackReportPanel's extraHeader
+// slot) -- a deliberately SEPARATE stored value (overall_ac_sales_manual) from
+// Marketing Review's own AC Sales (ac_sales_manual), per explicit instruction
+// (2026-09-10: "keep both separate ... it should be filled from here, through the
+// panel"). The two numbers can legitimately differ -- this one is always the live
+// current month, Marketing Review's is whatever month that review deck covers.
+//
 // Everything here reads off ctx.mtdScorecard, which OverallDashboard.jsx fetches
-// fresh (BigQuery agg table + apps_feed count + ac_sales_manual + Monthly QLs'
-// SR/AC split) the first time the Send-to-Slack panel opens in a session,
-// independent of whatever date range/grouping the page itself currently has
-// selected -- this report is always "this calendar month, through the last
-// COMPLETE day," never whatever the viewer happens to be looking at, and never
-// today's still-accumulating, partial numbers (same "complete days only"
-// convention as every other exec report in this app -- V5/V7, B2C's D-1 rule).
-// A real mismatch against the live Overall dashboard was traced directly to an
-// earlier version of this window running through TODAY instead -- fixed at the
-// source in OverallDashboard.jsx, not papered over here.
+// fresh (BigQuery agg table + apps_feed count + Monthly QLs' SR/AC split) the first
+// time the Send-to-Slack panel opens in a session, independent of whatever date
+// range/grouping the page itself currently has selected -- this report is always
+// "this calendar month, through the last COMPLETE day," never whatever the viewer
+// happens to be looking at, and never today's still-accumulating, partial numbers
+// (same "complete days only" convention as every other exec report in this app --
+// V5/V7, B2C's D-1 rule). A real mismatch against the live Overall dashboard was
+// traced directly to an earlier version of this window running through TODAY
+// instead -- fixed at the source in OverallDashboard.jsx, not papered over here.
+// AC Sales itself is the one exception: it's re-derived reactively off the panel's
+// own live editor state (mtdScorecardForReport in OverallDashboard.jsx), not frozen
+// at the moment the rest of this fetch resolved -- so editing it updates the preview
+// immediately.
 //
 // "Paid" = Facebook + Google + Affiliate + Bing + Remarketing, Quantum's own existing
 // isPaidSource() rule (confirmed with the requester rather than assumed). "Organic"
