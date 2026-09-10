@@ -23,6 +23,21 @@
 const DASH = '—'
 const pctText = n => (n == null ? DASH : n.toFixed(1) + '%')
 
+// Marketing Spend reads as crores/lakhs at exec scale (2026-09-10, asked for
+// directly: "1.26 cr, 1.25 lakh etc") -- CPL/CPQL keep the exact-rupee fmtINR,
+// staying small enough that a compact form would just be noise. Local helper
+// (not imported from pmReportV8.js) since every version here is self-contained
+// by this codebase's own convention.
+const CR = 1e7, LAKH = 1e5
+function moneyCompact(n) {
+  const v = Number(n)
+  if (!isFinite(v)) return DASH
+  const a = Math.abs(v)
+  if (a >= CR) return '₹' + (v / CR).toFixed(2) + ' Cr'
+  if (a >= LAKH) return '₹' + (v / LAKH).toFixed(2) + ' L'
+  return '₹' + Math.round(v).toLocaleString('en-IN')
+}
+
 const testLine = ctx => (ctx.isTest ? ':test_tube: *Test post* -- sent to the test channel to check formatting.' : null)
 
 function scoreTable(rows, fmtINR, fmtN) {
@@ -36,7 +51,7 @@ function scoreTable(rows, fmtINR, fmtN) {
     const leadToQl = futworkQueued > 0 ? ((r.humanQL + r.futworkAiQl) / futworkQueued) * 100 : null
     if (r.label === 'Overall') t.strongRows.push(t.rows.length)
     t.rows.push([
-      r.label, blankCost ? DASH : fmtINR(r.spend), fmtN(r.leads), noQl ? DASH : fmtN(r.totalQL),
+      r.label, blankCost ? DASH : moneyCompact(r.spend), fmtN(r.leads), noQl ? DASH : fmtN(r.totalQL),
       noQl || r.srQl == null ? DASH : fmtN(r.srQl), noQl || r.acQl == null ? DASH : fmtN(r.acQl),
       cpl == null ? DASH : fmtINR(cpl), cpql == null ? DASH : fmtINR(cpql),
       pctText(leadToQl),
