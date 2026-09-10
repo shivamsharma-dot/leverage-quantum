@@ -1070,8 +1070,24 @@ import { buildV5 } from './pmReportV5'
 import { buildV6 } from './pmReportV6'
 import { buildV7 } from './pmReportV7'
 import { buildV8 } from './pmReportV8'
+import { buildV9 } from './pmReportV9'
 
 export const REPORT_VERSIONS = [
+  {
+    id: 'v9',
+    code: 'V9',
+    msgKeys: ['scorecard', 'outcomes'],
+    name: 'Marketing + Sales Efficiency ' + DASH + ' with trend (2 messages)',
+    tagline: 'Same as V8, plus a run-rate-vs-last-month trend line under the headline so the report reads at a glance.',
+    recommended: true,
+    what: [
+      'Identical tables to V8 (see its own "what" list for the full column/definition detail) — Marketing Efficiency and Sales Efficiency, Overall/Paid/Organic/Referral, SR/AC split, AC Sales editable right in this panel.',
+      'New: a trend line under message 1\'s headline — Total QL run-rate vs last month\'s own per-day average (the app\'s existing MTD Dashboard rule for volume metrics), and Lead to QL % vs last month\'s total (the existing rule for ratio metrics). Only shows once last month\'s comparison data is available; silently omitted otherwise rather than showing a misleading dash.',
+      'Always the current calendar month through the last COMPLETE day, independent of whatever date range or grouping the page itself has selected.',
+      'No image, no CSV attachment — a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
+    ],
+    build: buildV9,
+  },
   {
     id: 'v8',
     code: 'V8',

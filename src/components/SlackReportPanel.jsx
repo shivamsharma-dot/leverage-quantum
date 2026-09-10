@@ -268,7 +268,13 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     setGateErr('')
     setBusy(true)
     try {
-      const files = await captureFiles()
+      // Only capture+send the PNG/CSV when this send's own messages actually opted
+      // in (attach:true) -- V1-V4/V7 do; V5/V6/V8/V9 never do (small fixed
+      // scorecards, not the funnel/campaign grid). Previously this fired
+      // unconditionally on every send regardless of versionId, silently shipping
+      // an unwanted "PM summary table" PNG + "PM summary (full data)" CSV
+      // alongside e.g. the MTD Scorecard (2026-09-10, caught live by the user).
+      const files = messages.some(m => m.attach) ? await captureFiles() : null
       const slackTarget = target
       const r = await fetch('/api/send-report', {
         method: 'POST',
