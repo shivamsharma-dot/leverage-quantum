@@ -3295,21 +3295,40 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const [overallRow, paidRow, organicRow, referralRow] = buckets
 
       // SR/AC QL split -- Overall's own data has no vertical dimension on QL (only
-      // Applications carry one), so this comes from Monthly QLs' own, separately
-      // synced pipeline. Its raw Source values (e.g. 'Content+Brand', 'Branding',
-      // 'Lead Source NA', 'Offline') are the un-normalized upstream labels, not
-      // Overall's own CASE-mapped ones -- but isPaidSource()'s paid-channel names
-      // and the literal 'Referral' string already match on both tables verbatim, so
-      // the exact same bucketing rule applies with no extra normalization needed:
-      // anything not paid and not 'Referral' lands in Organic either way, which is
-      // exactly where 'Content+Brand'/'Branding'/'Lead Source NA'/'Offline' belong.
+      // Applications carry one), so the SR:AC RATIO comes from Monthly QLs' own,
+      // separately synced pipeline. Its raw Source values (e.g. 'Content+Brand',
+      // 'Branding', 'Lead Source NA', 'Offline') are the un-normalized upstream
+      // labels, not Overall's own CASE-mapped ones -- but isPaidSource()'s paid-
+      // channel names and the literal 'Referral' string already match on both
+      // tables verbatim, so the exact same bucketing rule applies with no extra
+      // normalization needed: anything not paid and not 'Referral' lands in
+      // Organic either way, which is exactly where 'Content+Brand'/'Branding'/
+      // 'Lead Source NA'/'Offline' belong.
+      //
+      // Real bug found live (2026-09-10): applying Monthly QLs' own ABSOLUTE sr/ac
+      // counts gave SR+AC=3,398 against this exact bucket's own Total QL of 3,442 --
+      // a real, visible ~1.3% gap, since the two pipelines are independently-written
+      // BigQuery queries over similar-but-not-identical joins and don't reconcile to
+      // the row. Fixed by taking only the RATIO Monthly QLs observed (sr / (sr+ac))
+      // and applying it to THIS bucket's own authoritative Futwork QL total (Human +
+      // AI QL, i.e. excluding Superbot, which isn't split by vertical at all) -- so
+      // srQl + acQl now equals this row's own Futwork QL total EXACTLY, by
+      // construction, every time, rather than approximately most of the time.
       let superbotQl = 0
       if (Array.isArray(qlSplitRaw)) {
         const qlBucket = filterFn => qlSplitRaw.filter(filterFn).reduce((a, r) => ({
           sr: a.sr + r.futwork_qualified_sr + r.futwork_ai_qualified_sr,
           ac: a.ac + r.futwork_qualified_ac + r.futwork_ai_qualified_ac,
         }), { sr: 0, ac: 0 })
-        const applySplit = (row, filterFn) => { const s = qlBucket(filterFn); row.srQl = s.sr; row.acQl = s.ac }
+        const applySplit = (row, filterFn) => {
+          const s = qlBucket(filterFn)
+          const futworkTotal = row.humanQL + row.futworkAiQl
+          const observedTotal = s.sr + s.ac
+          if (futworkTotal <= 0) { row.srQl = 0; row.acQl = 0; return }
+          if (observedTotal <= 0) { row.srQl = null; row.acQl = null; return } // Monthly QLs has no split data for this bucket -- don't fabricate one
+          row.srQl = Math.round(futworkTotal * (s.sr / observedTotal))
+          row.acQl = futworkTotal - row.srQl
+        }
         applySplit(overallRow, () => true)
         applySplit(paidRow, r => isPaidSource(r.source))
         applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral')

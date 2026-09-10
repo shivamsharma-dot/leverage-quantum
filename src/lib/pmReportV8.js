@@ -63,7 +63,7 @@ function scoreTable(rows, fmtINR, fmtN) {
     if (r.label === 'Overall') t.strongRows.push(t.rows.length)
     t.rows.push([
       r.label, blankCost ? DASH : fmtINR(r.spend), fmtN(r.leads), fmtN(r.totalQL),
-      fmtN(r.srQl), fmtN(r.acQl),
+      r.srQl == null ? DASH : fmtN(r.srQl), r.acQl == null ? DASH : fmtN(r.acQl),
       cpl == null ? DASH : fmtINR(cpl), cpql == null ? DASH : fmtINR(cpql),
       pctText(leadToQl),
     ])
@@ -76,7 +76,7 @@ function outcomesTable(s, fmtN) {
     ['Total QL (MTD)', fmtN(s.totalQL)],
   ]
   if (s.qlSplitAvailable) {
-    rows.push(['— SR', fmtN(s.srQl)], ['— AC', fmtN(s.acQl)])
+    rows.push(['— SR', s.srQl == null ? DASH : fmtN(s.srQl)], ['— AC', s.acQl == null ? DASH : fmtN(s.acQl)])
     if (s.superbotQl) rows.push(['— Superbot (not split by vertical)', fmtN(s.superbotQl)])
   }
   rows.push(
@@ -119,7 +119,7 @@ export function buildV8(ctx) {
     key: 'scorecard', label: 'Marketing Efficiency',
     text: one.filter(Boolean).join('\n'),
     table: table1,
-    after: '_"Paid" = Facebook + Google + Affiliate + Bing + Remarketing. "Organic" includes the small "Others" bucket; Organic and Referral don\'t run real media spend, so their Spend/CPL/CPQL show as a dash rather than a stray near-zero figure. SR/AC is the QL split by vertical, from Monthly QLs\' own separately-synced pipeline — it can be a little off Total QLs above rather than summing to it exactly. "Lead to QL %" is Futwork Human QL + Futwork AI QL over Total Queued on Futwork — it excludes Superbot and Floor-routed leads, same definition used across the rest of Quantum._',
+    after: '_"Paid" = Facebook + Google + Affiliate + Bing + Remarketing. "Organic" includes the small "Others" bucket; Organic and Referral don\'t run real media spend, so their Spend/CPL/CPQL show as a dash rather than a stray near-zero figure. SR/AC splits Total QLs by vertical — the SR:AC ratio comes from Monthly QLs\' own pipeline, applied to this row\'s own QL total, so SR + AC always adds up to Total QLs exactly (minus any unsplit Superbot QL — see message 2). "Lead to QL %" is Futwork Human QL + Futwork AI QL over Total Queued on Futwork — it excludes Superbot and Floor-routed leads, same definition used across the rest of Quantum._',
   })
 
   const outcomes = outcomesTable(s, fmtN)
@@ -131,7 +131,7 @@ export function buildV8(ctx) {
     key: 'outcomes', label: 'Sales Efficiency',
     text: two.join('\n'),
     table: outcomes,
-    after: '_SR + AC won\'t always add up to exactly Total QL — the split comes from Monthly QLs\' own separately-synced pipeline. AC Sales, QL → Outcome % and the run-rate all read off the figures above them._',
+    after: '_SR + AC adds up to Total QL exactly — the SR:AC ratio comes from Monthly QLs\' own pipeline, applied to this figure. AC Sales, QL → Outcome % and the run-rate all read off the figures above them._',
   })
 
   return msgs
