@@ -1597,3 +1597,46 @@ built specifically for this kind of safe testing, not a real production channel.
 Surfaced this transparently rather than silently noting it, since it's directly
 relevant context, but did not treat it as a session error since nothing about it
 indicates an unintended or unauthorized send.
+
+## 2026-09-10 (later) -- MTD Scorecard: Affiliate spend was missing entirely (commit `ed68c5a`)
+
+User caught a real discrepancy live: the dashboard's own Custom-range picker showed
+Spend above ₹1 Cr (₹1,00,26,780) for Sep 1-9, while the Slack report's Overall row
+showed ₹99,72,780 for the identical window -- a genuine ₹54,000 gap, not a
+rounding/display artifact (I initially, wrongly, told the user it WAS just a rounding
+artifact before re-checking and finding the real bug -- see the fuller account of that
+mistake in this session's own history if picked up again).
+
+**Root cause**: Affiliate is a commission-based cost, never tracked via BigQuery/ad
+platforms -- its real per-campaign spend in `overall_bq_daily`/`overall_bq_daily_agg`
+is genuinely ₹0. Every other consumer of this data (`filtered`, `summaryMonthRows`,
+etc. in `OverallDashboard.jsx`) already covers this by merging in synthetic, evenly-
+spread-per-day Affiliate rows via `buildSyntheticAffiliateRows(map)`, driven by the
+Settings-configured `affiliate_spend_manual` preference -- but the MTD Scorecard's own
+independent fetch effect (added earlier this session) never included that merge, so
+its Spend was silently short by exactly the manual entry's share of the window.
+
+**Fix**: the `mtdScorecard` effect now also fetches `/api/preferences` for
+`affiliate_spend_manual`, builds the same synthetic rows via the existing
+`buildSyntheticAffiliateRows`, filters them to the report's own month-start-through-
+yesterday window, and concats them into the row set before bucketing -- exactly
+matching how the rest of the page already handles this.
+
+**Live-verified with fresh data after deploy**: Overall row now reads ₹1,02,15,780 /
+40,891 leads / 3,442 QLs (SR 1,764 / AC 1,678) / CPL ₹250 / CPQL ₹2,968 / 9.9%; Paid row
+₹1,02,14,803 / 38,784 / 3,300 (SR 1,702 / AC 1,598) / CPL ₹263 / CPQL ₹3,095 / 9.9% --
+both exactly matching the live dashboard's own Funnel Summary table for the same
+window (the underlying Affiliate manual entry had independently moved from ~₹54,000 to
+~₹2,43,000 for this window between the bug report and this verification -- a real
+business-side update, unrelated to and unaffected by the fix itself).
+
+**Two follow-up questions answered the same session, both via direct Supabase
+queries, no code change needed:**
+- *"Fetch the total value of affiliate in paid"* -- Affiliate's real BigQuery-only
+  spend is ₹0.00 for the window; 100% of its Paid-bucket contribution comes from the
+  manual entry, confirming the bug's root cause directly rather than by inference.
+- *"Organic and Paid Lead to QL, how both can be 9.9?"* -- genuine coincidence, not a
+  bug: Paid computes to 9.87% (33,429 Futwork Queued -> 3,300 Futwork QL) and Organic
+  computes to 9.90% (1,434 Futwork Queued -> 142 Futwork QL), both independently
+  rounding to display as "9.9%" -- no shared or duplicated data between the two
+  buckets.
