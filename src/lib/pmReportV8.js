@@ -67,14 +67,17 @@ function scoreTable(rows, fmtINR, fmtN) {
   const t = { columns: ['', 'Marketing Spend', 'Total Leads', 'Total QLs', 'SR', 'AC', 'CPL', 'CPQL', 'Lead to QL %'], rows: [], strongRows: [] }
   rows.forEach(r => {
     const blankCost = r.label === 'Organic' || r.label === 'Referral'
+    // Referral leads are never sent for qualification at all (a structural fact, not
+    // just "zero this period") -- Total QLs/SR/AC show a dash there, not a 0.
+    const noQl = r.label === 'Referral'
     const cpl = !blankCost && r.leads > 0 ? r.spend / r.leads : null
     const cpql = !blankCost && r.totalQL > 0 ? r.spend / r.totalQL : null
     const futworkQueued = r.futworkHumanQ + r.futworkAiQ
     const leadToQl = futworkQueued > 0 ? ((r.humanQL + r.futworkAiQl) / futworkQueued) * 100 : null
     if (r.label === 'Overall') t.strongRows.push(t.rows.length)
     t.rows.push([
-      r.label, blankCost ? DASH : fmtINR(r.spend), fmtN(r.leads), fmtN(r.totalQL),
-      r.srQl == null ? DASH : fmtN(r.srQl), r.acQl == null ? DASH : fmtN(r.acQl),
+      r.label, blankCost ? DASH : fmtINR(r.spend), fmtN(r.leads), noQl ? DASH : fmtN(r.totalQL),
+      noQl || r.srQl == null ? DASH : fmtN(r.srQl), noQl || r.acQl == null ? DASH : fmtN(r.acQl),
       cpl == null ? DASH : fmtINR(cpl), cpql == null ? DASH : fmtINR(cpql),
       pctText(leadToQl),
     ])
@@ -84,14 +87,14 @@ function scoreTable(rows, fmtINR, fmtN) {
 
 function outcomesTable(s, fmtN) {
   const rows = [
-    ['Total QL (MTD)', fmtN(s.totalQL)],
+    ['Total QL', fmtN(s.totalQL)],
   ]
   if (s.qlSplitAvailable) {
     rows.push(['— SR', s.srQl == null ? DASH : fmtN(s.srQl)], ['— AC', s.acQl == null ? DASH : fmtN(s.acQl)])
     if (s.superbotQl) rows.push(['— Superbot (not split by vertical)', fmtN(s.superbotQl)])
   }
   rows.push(
-    ['Applications this month', s.totalApps == null ? DASH : fmtN(s.totalApps)],
+    ['Applications', s.totalApps == null ? DASH : fmtN(s.totalApps)],
     ['AC Sales', s.acSales == null ? 'Not entered yet' : fmtN(s.acSales)],
     ['QL → Outcome %', pctText(s.qlSalePct)],
     ['QL daily run-rate', s.dailyRunRate == null ? DASH : fmtN(Math.round(s.dailyRunRate)) + ' / day'],
@@ -116,33 +119,27 @@ export function buildV8(ctx) {
 
   const msgs = []
   const table1 = scoreTable(s.rows, fmtINR, fmtN)
-  // Reuses the table's own already-computed Overall row (index 0, always present)
-  // rather than a third independent recomputation of the same ratio.
-  const [, ovSpend, ovLeads, ovTotalQL, , , , , ovLeadToQl] = table1.rows[0]
+  const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
   const one = [
     testLine(ctx),
     '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
-    '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only) · all sources · Source: Overall (BigQuery cache)_',
-    '',
-    'Overall this month: *' + ovSpend + '* spent, *' + ovLeads + '* leads, *' + ovTotalQL + '* QLs at *' + ovLeadToQl + '* Lead to QL.',
+    dateLine,
   ]
   msgs.push({
     key: 'scorecard', label: 'Marketing Efficiency',
     text: one.filter(Boolean).join('\n'),
     table: table1,
-    after: '_"Paid" = Facebook + Google + Affiliate + Bing + Remarketing. "Organic" includes the small "Others" bucket; Organic and Referral don\'t run real media spend, so their Spend/CPL/CPQL show as a dash rather than a stray near-zero figure. SR/AC splits Total QLs by vertical — the SR:AC ratio comes from Monthly QLs\' own pipeline, applied to this row\'s own QL total, so SR + AC always adds up to Total QLs exactly (minus any unsplit Superbot QL — see message 2). "Lead to QL %" is Futwork Human QL + Futwork AI QL over Total Queued on Futwork — it excludes Superbot and Floor-routed leads, same definition used across the rest of Quantum._',
   })
 
   const outcomes = outcomesTable(s, fmtN)
   const two = [
     '*:dart: Sales Efficiency*',
-    'Total QL this month — split by vertical — against applications, AC sales, and how much of QL is turning into either.',
+    dateLine,
   ]
   msgs.push({
     key: 'outcomes', label: 'Sales Efficiency',
     text: two.join('\n'),
     table: outcomes,
-    after: '_SR + AC adds up to Total QL exactly — the SR:AC ratio comes from Monthly QLs\' own pipeline, applied to this figure. AC Sales, QL → Outcome % and the run-rate all read off the figures above them._',
   })
 
   return msgs
