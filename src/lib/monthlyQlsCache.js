@@ -119,6 +119,28 @@ export async function fetchMonthlyQlsRows() {
   }))
 }
 
+// Same shape as fetchMonthlyQlsRows() above, but scoped to a lead_date_iso range --
+// for a caller that only needs a recent window (e.g. Overall's own MTD Scorecard
+// Slack report, 2026-09-10) rather than the whole growing table (1000+ rows and
+// climbing, unlike this table's own page which genuinely needs full history for its
+// Month dropdown).
+export async function fetchMonthlyQlsRowsSince(sinceIso, untilIso) {
+  const params = new URLSearchParams({ select: SELECT, order: 'row_key.asc' })
+  params.set('lead_date_iso', 'gte.' + sinceIso)
+  params.append('lead_date_iso', 'lte.' + untilIso)
+  const rows = await fetchAllPaginated(params)
+  return rows.map(r => ({
+    period: r.period || '',
+    date: r.lead_date || '',
+    source: r.source || '',
+    futwork_qualified_sr: Number(r.futwork_qualified_sr) || 0,
+    futwork_qualified_ac: Number(r.futwork_qualified_ac) || 0,
+    superbot_qualified: Number(r.superbot_qualified) || 0,
+    futwork_ai_qualified_sr: Number(r.futwork_ai_qualified_sr) || 0,
+    futwork_ai_qualified_ac: Number(r.futwork_ai_qualified_ac) || 0,
+  }))
+}
+
 // Newest synced_at stamp, so the page can show when the cache last ran rather
 // than when this tab happened to fetch. Best-effort: a failure here must
 // never block the actual data.

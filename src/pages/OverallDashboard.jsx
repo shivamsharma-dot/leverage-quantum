@@ -37,6 +37,10 @@ import {
 // Just the MTD application count for the "MTD Scorecard" Slack report (2026-09-10) --
 // see the mtdScorecard effect below.
 import { fetchAppsCountSince } from '../lib/appsCache'
+// The SR/AC QL split for that same report -- Overall's own data has no vertical
+// dimension on QL itself (Vertical only exists on Applications), but Monthly QLs'
+// own BigQuery pipeline already computes it per (date, source).
+import { fetchMonthlyQlsRowsSince } from '../lib/monthlyQlsCache'
 // Lazy -- these are the real Human/AI QL Detail pages (App.jsx already lazy-loads
 // them for their own routes; a dynamic import() to the same module path shares that
 // one chunk rather than duplicating ~50KB x2 into Overall's own bundle for every
@@ -3229,9 +3233,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // Feeds the "MTD Scorecard" Slack report version (pmReportV8.js, 2026-09-10) --
   // null until the panel has been opened once this session, then holds the fixed
   // shape buildV8 reads. Deliberately independent of the page's own bqRows/date
-  // range/grouping state: this report is always "the current calendar month to
-  // date," never whatever the viewer happens to have selected, so it always reads
-  // the same regardless of what tab/filter is on screen when Send to Slack is clicked.
+  // range/grouping state: this report is always "the current calendar month, up to
+  // the last COMPLETE day," never whatever the viewer happens to have selected.
+  //
+  // Real bug found live (2026-09-10): the first version of this window ran through
+  // TODAY, not yesterday -- a still-accumulating, partial day. That's why its Lead
+  // to QL % (9.7%) read lower than what the Overall dashboard itself showed for the
+  // same month (9.9%) -- the dashboard's own month view stops at the last complete
+  // day, matching this app's own long-standing convention for every other exec
+  // report (V5/V7's "complete days only," B2C's D-1 rule). Confirmed directly:
+  // re-summing the identical agg rows for Sep 1-9 (excluding the 10th) landed on
+  // exactly 40,891 leads, matching the live dashboard's own total to the digit --
+  // today's partial ~859 leads was the entire gap. Fixed by ending the window at
+  // yesterday, same as everywhere else in this app.
+  //
   // Cleared on every real Refresh (bqNonce bump) so a reopened panel re-fetches
   // rather than serving an increasingly stale snapshot for the rest of the session.
   const [mtdScorecard, setMtdScorecard] = useState(null)
@@ -3240,30 +3255,68 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (!slackPanelOpen || mtdScorecard) return
     let dead = false
     const now = new Date()
-    const monthStart = dayKey(new Date(now.getFullYear(), now.getMonth(), 1))
-    const today = dayKey(now)
-    const daysDone = now.getDate()
+    const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
+    const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
     const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+    // Today being the 1st of the month means yesterday falls in the PREVIOUS month --
+    // there are zero complete days to report yet. Surface that honestly rather than
+    // firing a since>until query or dividing by a zero day count.
+    if (yesterdayDate < monthStartDate) {
+      setMtdScorecard({ ready: true, noCompleteDays: true, monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) })
+      return
+    }
+    const monthStart = dayKey(monthStartDate)
+    const until = dayKey(yesterdayDate)
+    const daysDone = yesterdayDate.getDate()
     Promise.all([
-      retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until: today, sources: [] })),
+      retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
       fetchAppsCountSince(monthStart).catch(() => null),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
-    ]).then(([raw, appsCount, prefsResp]) => {
+      fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
+    ]).then(([raw, appsCount, prefsResp, qlSplitRaw]) => {
       if (dead) return
       const rows = raw.map(mapRow)
-      const emptyBucket = label => ({ label, spend: 0, leads: 0, totalQL: 0, humanQL: 0, futworkAiQl: 0, futworkHumanQ: 0, futworkAiQ: 0 })
+      const emptyBucket = label => ({ label, spend: 0, leads: 0, totalQL: 0, humanQL: 0, futworkAiQl: 0, futworkHumanQ: 0, futworkAiQ: 0, srQl: 0, acQl: 0 })
       const bucket = (label, filterFn) => rows.filter(filterFn).reduce((a, r) => ({
         label,
         spend: a.spend + r.spend, leads: a.leads + r.leads, totalQL: a.totalQL + r.totalQL,
         humanQL: a.humanQL + r.humanQL, futworkAiQl: a.futworkAiQl + r.futworkAiQl,
         futworkHumanQ: a.futworkHumanQ + r.futworkHumanQ, futworkAiQ: a.futworkAiQ + r.futworkAiQ,
+        srQl: a.srQl, acQl: a.acQl,
       }), emptyBucket(label))
-      const overallRow = bucket('Overall', () => true)
-      const paidRow = bucket('Paid', r => isPaidSource(r.source))
       // 'Others' folded into Organic (confirmed 2026-09-10) -- so Overall reconciles
       // exactly to Paid + Organic + Referral, with no unaccounted-for bucket.
-      const organicRow = bucket('Organic', r => !isPaidSource(r.source) && r.source !== 'Referral')
-      const referralRow = bucket('Referral', r => r.source === 'Referral')
+      const buckets = [
+        { label: 'Overall', test: () => true },
+        { label: 'Paid', test: r => isPaidSource(r.source) },
+        { label: 'Organic', test: r => !isPaidSource(r.source) && r.source !== 'Referral' },
+        { label: 'Referral', test: r => r.source === 'Referral' },
+      ].map(b => bucket(b.label, b.test))
+      const [overallRow, paidRow, organicRow, referralRow] = buckets
+
+      // SR/AC QL split -- Overall's own data has no vertical dimension on QL (only
+      // Applications carry one), so this comes from Monthly QLs' own, separately
+      // synced pipeline. Its raw Source values (e.g. 'Content+Brand', 'Branding',
+      // 'Lead Source NA', 'Offline') are the un-normalized upstream labels, not
+      // Overall's own CASE-mapped ones -- but isPaidSource()'s paid-channel names
+      // and the literal 'Referral' string already match on both tables verbatim, so
+      // the exact same bucketing rule applies with no extra normalization needed:
+      // anything not paid and not 'Referral' lands in Organic either way, which is
+      // exactly where 'Content+Brand'/'Branding'/'Lead Source NA'/'Offline' belong.
+      let superbotQl = 0
+      if (Array.isArray(qlSplitRaw)) {
+        const qlBucket = filterFn => qlSplitRaw.filter(filterFn).reduce((a, r) => ({
+          sr: a.sr + r.futwork_qualified_sr + r.futwork_ai_qualified_sr,
+          ac: a.ac + r.futwork_qualified_ac + r.futwork_ai_qualified_ac,
+        }), { sr: 0, ac: 0 })
+        const applySplit = (row, filterFn) => { const s = qlBucket(filterFn); row.srQl = s.sr; row.acQl = s.ac }
+        applySplit(overallRow, () => true)
+        applySplit(paidRow, r => isPaidSource(r.source))
+        applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral')
+        applySplit(referralRow, r => r.source === 'Referral')
+        superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
+      }
+
       const acSalesMap = (prefsResp.prefs && prefsResp.prefs.ac_sales_manual) || {}
       const acSales = acSalesMap[ym] != null && acSalesMap[ym] !== '' ? Number(acSalesMap[ym]) : null
       const totalApps = typeof appsCount === 'number' ? appsCount : null
@@ -3273,9 +3326,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       setMtdScorecard({
         ready: true,
         monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
-        asOfLabel: now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-        rows: [overallRow, paidRow, organicRow, referralRow],
+        throughLabel: yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        rows: buckets,
         totalQL: overallRow.totalQL, totalApps, acSales, qlSalePct, dailyRunRate,
+        srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
+        qlSplitAvailable: Array.isArray(qlSplitRaw),
       })
     }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message }) })
     return () => { dead = true }
