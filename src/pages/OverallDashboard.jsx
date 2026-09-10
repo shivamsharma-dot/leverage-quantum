@@ -3313,9 +3313,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
       fetchAppsCountSince(monthStart).catch(() => null),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
-    ]).then(([raw, appsCount, qlSplitRaw]) => {
+      fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
+    ]).then(([raw, appsCount, qlSplitRaw, prefsResp]) => {
       if (dead) return
-      const rows = raw.map(mapRow)
+      // Real bug found live (2026-09-10): this report's Spend was short by exactly
+      // Affiliate's manual monthly entry (affiliate_spend_manual) -- Affiliate's real
+      // per-campaign BigQuery spend is genuinely ₹0 (it's a commission cost, not an
+      // ad-platform spend), so overall_bq_daily/_agg correctly have nothing for it.
+      // The rest of this page has always covered that gap by merging in synthetic,
+      // evenly-spread-per-day Affiliate rows client-side (buildSyntheticAffiliateRows)
+      // -- this report just never did the same merge. Fixed by doing exactly that,
+      // filtered to this report's own date window.
+      const affiliateManualMap = (prefsResp.prefs && prefsResp.prefs.affiliate_spend_manual) || null
+      const syntheticAffiliate = buildSyntheticAffiliateRows(affiliateManualMap)
+        .filter(r => r.date >= monthStartDate && r.date <= yesterdayDate)
+      const rows = raw.map(mapRow).concat(syntheticAffiliate)
       const emptyBucket = label => ({ label, spend: 0, leads: 0, totalQL: 0, humanQL: 0, futworkAiQl: 0, futworkHumanQ: 0, futworkAiQ: 0, srQl: 0, acQl: 0 })
       const bucket = (label, filterFn) => rows.filter(filterFn).reduce((a, r) => ({
         label,
