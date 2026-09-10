@@ -4353,38 +4353,61 @@ function b2cParseDays(csv, cols) {
 // Cash Flow dashboard and the Gazette). 'CF' has no daily granularity at
 // all -- Finance computes MTD/YTD themselves -- so this is read and used
 // ONLY by the Cash Flow Slack report (src/lib/b2cReport.js's
-// buildB2CCashflowTable), which now shows Finance's own numbers verbatim
-// instead of re-deriving Day/MTD/FY from daily rows.
+// buildB2CCashflowTable / buildB2CCashflowImage), which now shows Finance's
+// own numbers verbatim instead of re-deriving Day/MTD/FY from daily rows.
 // The user's ask was the exact visual block the sheet itself boxes off in a
-// green border, G3:I25 -- G3 is a merged 'B2C Student Mobility' title and G4
-// is blank, so starting the read at G5 instead (the 'MTD'/'YTD (From
-// 1/4/2026)' super-header row) makes gviz's own CSV header-inference merge
-// that with row 6's 'Particulars'/'Amount (INR CR.)' into one clean header
-// per column -- including the YTD fiscal-year label, read live off the sheet
-// rather than hardcoded, so it never goes stale on its own. Data is
-// identical either way (confirmed 2026-09-10 by diffing both ranges);
-// gviz's ranged CSV silently drops the sheet's own blank spacer rows
-// (rows 8/15/24), which is fine -- bold section-total rows already carry the
-// sheet's visual grouping in the Slack table.
+// green border, G3:I25. Read as 4 separate small ranges rather than one big
+// one, because the sheet's own layout is genuinely 4 distinct pieces --
+// a merged title (G3, one cell), a blank spacer row (G4), a 'MTD'/'YTD (From
+// 1/4/2026)' group-header row (G5) that only spans columns H/I, and the real
+// 'Particulars'/'Amount (INR CR.)' header (G6) -- and the CEO-facing image
+// version (buildB2CCashflowImage) needs the title and both header rows kept
+// SEPARATE to reproduce the sheet's own two-level header and merged title
+// exactly, not concatenated into one line the way the native Slack table's
+// single header row already does. Data (G7:I25) is fetched as its own range
+// too, since starting a range exactly at the first real data row avoids any
+// of gviz's own header-auto-detection ambiguity. Each of the 4 fetches is
+// caught in isolation -- a bad range/tab must never take down the P&L/Cash
+// Flow/monthly-plan fetches that share fetchB2CData(), and a genuinely
+// missing piece just degrades that one piece (see the callers below) rather
+// than failing the whole thing.
 const B2C_CASHFLOW_STMT_SHEET_TAB = 'CF';
-const B2C_CASHFLOW_STMT_RANGE = 'G5:I25';
-// The sheet's own bold section-total rows -- confirmed 2026-09-10 via a
-// direct XLSX export of this exact tab + cell-style inspection (font.bold),
-// not guessed from the screenshot. Every other row in the range is a plain,
-// unbold line item. If Finance ever renames one of these four labels the
-// way the old cash-flow tab's own headers have drifted before, that one row
-// silently stops rendering bold rather than erroring -- worth a quick check
-// against the live sheet if a future report send looks under-formatted.
+const B2C_CASHFLOW_STMT_TITLE_RANGE = 'G3:I3';
+const B2C_CASHFLOW_STMT_GROUP_RANGE = 'G5:I5';
+const B2C_CASHFLOW_STMT_SUB_RANGE = 'G6:I6';
+const B2C_CASHFLOW_STMT_DATA_RANGE = 'G7:I25';
+// The sheet's own bold (and underlined) section-total rows -- confirmed
+// 2026-09-10 via a direct XLSX export of this exact tab + cell-style
+// inspection (font.bold / font.underline), not guessed from a screenshot.
+// Every other row in the range is a plain, unbold, non-underlined line item.
+// If Finance ever renames one of these four labels the way the old
+// cash-flow tab's own headers have drifted before, that one row silently
+// stops rendering bold rather than erroring -- worth a quick check against
+// the live sheet if a future report send looks under-formatted.
 const B2C_CASHFLOW_STMT_BOLD_LABELS = new Set(['Opening Balance :', 'Cash Inflow', 'Cash Outflow :', 'Closing Balance']);
-function b2cParseCashflowStatement(csv) {
+function b2cOneRow(csv) {
   const lines = splitCsvRows(csv).filter(function (l) { return l.trim().length > 0 });
-  if (lines.length < 2) return { configured: false, headerLabels: [], rows: [] };
-  const headerLabels = splitCsvLine(lines[0]).map(function (h) { return String(h == null ? '' : h).trim() });
-  const rows = lines.slice(1).map(splitCsvLine).map(function (cells) {
+  return lines.length ? splitCsvLine(lines[0]).map(function (h) { return String(h == null ? '' : h).trim() }) : [];
+}
+function b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv) {
+  const title = (b2cOneRow(titleCsv)[0] || '').trim();
+  const groupHeader = b2cOneRow(groupCsv); // ['', 'MTD', 'YTD (From 1/4/2026)']
+  const subHeader = b2cOneRow(subCsv); // ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
+  const lines = splitCsvRows(dataCsv || '').filter(function (l) { return l.trim().length > 0 });
+  const rows = lines.map(splitCsvLine).map(function (cells) {
     const label = String(cells[0] == null ? '' : cells[0]).trim();
     return { label: label, mtd: b2cNum(cells[1]), ytd: b2cNum(cells[2]), bold: B2C_CASHFLOW_STMT_BOLD_LABELS.has(label) };
   }).filter(function (r) { return r.label; });
-  return { configured: true, headerLabels: headerLabels, rows: rows };
+  if (!rows.length) return { configured: false, title: title, groupHeader: [], subHeader: [], headerLabels: [], rows: [] };
+  // Merged single-line header, for the native Slack table -- e.g. 'MTD
+  // Amount (INR CR.)' -- byte-identical to what gviz used to auto-merge when
+  // this was read as one G5:I25 range (confirmed 2026-09-10).
+  const headerLabels = [
+    subHeader[0] || 'Particulars',
+    [groupHeader[1], subHeader[1]].filter(Boolean).join(' ') || 'MTD Amount (INR CR.)',
+    [groupHeader[2], subHeader[2]].filter(Boolean).join(' ') || 'YTD Amount (INR CR.)',
+  ];
+  return { configured: true, title: title, groupHeader: groupHeader, subHeader: subHeader, headerLabels: headerLabels, rows: rows };
 }
 
 // Pure data fetch, no req/res -- factored out of handleB2C so a server-side
@@ -4403,10 +4426,18 @@ export async function fetchB2CData() {
     return r.text();
   };
   // Fetched and caught in isolation, outside the Promise.all below -- a
-  // problem reading this one new tab (renamed again, transient hiccup) must
+  // problem reading this new tab (renamed again, transient hiccup) must
   // never take down the P&L/Cash Flow/monthly-plan fetches that share this
-  // same function.
-  const cfStatementPromise = grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_STMT_SHEET_TAB) + '&range=' + B2C_CASHFLOW_STMT_RANGE).catch(function () { return null });
+  // same function. Each of the 4 small ranges is caught independently too --
+  // one missing piece (e.g. the title cell edited away) degrades gracefully
+  // rather than losing the whole statement.
+  const cfGrab = function (range) { return grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_STMT_SHEET_TAB) + '&range=' + range).catch(function () { return '' }) };
+  const cfStatementPromise = Promise.all([
+    cfGrab(B2C_CASHFLOW_STMT_TITLE_RANGE),
+    cfGrab(B2C_CASHFLOW_STMT_GROUP_RANGE),
+    cfGrab(B2C_CASHFLOW_STMT_SUB_RANGE),
+    cfGrab(B2C_CASHFLOW_STMT_DATA_RANGE),
+  ]);
   const csvs = await Promise.all([
     grab(base + '&sheet=' + encodeURIComponent(B2C_PNL_SHEET_TAB)),
     grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_SHEET_TAB)),
@@ -4426,8 +4457,8 @@ export async function fetchB2CData() {
       };
     }).filter(function (m) { return m.month });
   });
-  const cfCsv = await cfStatementPromise;
-  const cashflowStatement = cfCsv ? b2cParseCashflowStatement(cfCsv) : { configured: false, headerLabels: [], rows: [] };
+  const [titleCsv, groupCsv, subCsv, dataCsv] = await cfStatementPromise;
+  const cashflowStatement = b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv);
   return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, cashflowStatement: cashflowStatement, ts: Date.now() };
 }
 

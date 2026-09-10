@@ -262,6 +262,67 @@ const STATEMENT_LABELS = {
   },
 }
 
+// Pixel-exact replica of the 'CF' tab's own Cash Flow statement layout, used
+// only by the 'B2C - Daily Cashflow (sheet image)' Slack version
+// (src/lib/b2cReport.js's buildB2CCashflowImage) -- rendered off-screen and
+// screenshotted via captureNodePng, never shown to the user. A native Slack
+// table block cannot merge cells, right-align just the item rows, or leave
+// off its own default full grid border, so this exists purely to match the
+// sheet exactly where the native table (b2cReport.js's buildB2CCashflowTable)
+// can only approximate it. Every visual rule here was confirmed against the
+// live sheet's real cell formatting (a direct XLSX export + openpyxl
+// inspection, 2026-09-10), not eyeballed from a screenshot: Arial, a merged
+// title, blank spacer rows before -- and only before -- a section-total row
+// (never after the very first row), bold+underlined section totals, plain
+// right-aligned item labels indented under them, and plain 2-decimal
+// numbers with no rupee sign or 'Cr' suffix (the header cell already states
+// the unit, exactly as the sheet itself does).
+const CF_IMG_BOLD_LABELS = new Set(['Opening Balance :', 'Cash Inflow', 'Cash Outflow :', 'Closing Balance'])
+function cfImgAmt(n) { return (n == null || !isFinite(n)) ? '' : n.toFixed(2) }
+const CF_IMG_CELL = { border: '1px solid #000', padding: '5px 10px', fontSize: 13, lineHeight: 1.3 }
+const CashflowStatementImage = React.forwardRef(function CashflowStatementImage({ cf }, ref) {
+  const rows = (cf && cf.rows) || []
+  const groupHeader = (cf && cf.groupHeader && cf.groupHeader.length) ? cf.groupHeader : ['', 'MTD', 'YTD']
+  const subHeader = (cf && cf.subHeader && cf.subHeader.length) ? cf.subHeader : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
+  const title = (cf && cf.title) || 'B2C Student Mobility'
+  return (
+    <div ref={ref} style={{ position: 'fixed', left: -99999, top: 0, background: '#fff', width: 640, fontFamily: 'Arial, Helvetica, sans-serif', color: '#000' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+        <tbody>
+          <tr>
+            <td colSpan={3} style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, textDecoration: 'underline' }}>{title}</td>
+          </tr>
+          <tr><td colSpan={3} style={{ border: 'none', height: 10, padding: 0 }} /></tr>
+          <tr>
+            <td style={{ border: 'none', width: 270 }} />
+            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 175 }}>{groupHeader[1] || 'MTD'}</td>
+            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 195 }}>{groupHeader[2] || 'YTD'}</td>
+          </tr>
+          <tr>
+            <td style={{ ...CF_IMG_CELL, textAlign: 'left' }}>{subHeader[0] || 'Particulars'}</td>
+            <td style={{ ...CF_IMG_CELL, textAlign: 'center' }}>{subHeader[1] || 'Amount (INR CR.)'}</td>
+            <td style={{ ...CF_IMG_CELL, textAlign: 'center' }}>{subHeader[2] || 'Amount (INR CR.)'}</td>
+          </tr>
+          {rows.map(function (r, i) {
+            const bold = CF_IMG_BOLD_LABELS.has(r.label)
+            const cell = { ...CF_IMG_CELL, fontWeight: bold ? 700 : 400, textDecoration: bold ? 'underline' : 'none' }
+            return (
+              <React.Fragment key={i}>
+                {bold && i > 0 ? <tr><td colSpan={3} style={{ border: 'none', height: 10, padding: 0 }} /></tr> : null}
+                <tr>
+                  <td style={{ ...cell, textAlign: bold ? 'left' : 'right' }}>{r.label}</td>
+                  <td style={{ ...cell, textAlign: 'right' }}>{cfImgAmt(r.mtd)}</td>
+                  <td style={{ ...cell, textAlign: 'right' }}>{cfImgAmt(r.ytd)}</td>
+                </tr>
+              </React.Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+})
+
 export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const { user } = useAuth()
   const isCashFlow = statement === 'cashflow'
@@ -547,6 +608,9 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // Slack: the CEO gets exactly the numbers the page shows. Nothing is
   // recomputed for the message, and the table image rides along in the thread.
   const tableRef = useRef(null)
+  // Cash Flow only -- the hidden CashflowStatementImage node captured for
+  // the 'b2c_cashflow_image' Slack version (see captureSlackFiles below).
+  const cfImageRef = useRef(null)
   const [slackOpen, setSlackOpen] = useState(false)
 
   // Daily Report -- the scheduled 3 PM IST approval pipeline (posts a native
@@ -698,8 +762,24 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       ]
     }
   }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats, activeWindow, windowLabel, revVsCashflowNote, data])
-  const captureSlackFiles = useCallback(async function () {
+  const captureSlackFiles = useCallback(async function (versionId) {
     await nextPaint()
+    // Cash Flow's 'sheet image' version screenshots the hidden
+    // CashflowStatementImage replica instead of the on-page revenue/cost
+    // table below (which shows this page's own daily-derived MTD, not the
+    // 'CF' tab's own MTD/YTD statement that version is reporting on).
+    if (versionId === 'b2c_cashflow_image') {
+      const cfNode = cfImageRef.current
+      const cfShot = cfNode ? await captureNodePng(cfNode, { ratios: [3, 2, 1.5, 1] }) : null
+      const cf = (data && data.cashflowStatement) || {}
+      const cfCols = [(cf.subHeader && cf.subHeader[0]) || 'Particulars', (cf.groupHeader && cf.groupHeader[1]) || 'MTD', (cf.groupHeader && cf.groupHeader[2]) || 'YTD']
+      const cfBody = (cf.rows || []).map(function (r) {
+        const o = {}
+        o[cfCols[0]] = r.label; o[cfCols[1]] = r.mtd; o[cfCols[2]] = r.ytd
+        return o
+      })
+      return { pngBase64: cfShot ? cfShot.base64 : null, pixelRatio: cfShot ? cfShot.pixelRatio : null, csv: rowsToCsv(cfCols, cfBody) }
+    }
     const node = tableRef.current
     // Shot at 3x first: the CEO reads this table as an image in Slack, and it has
     // to survive being opened on a phone. captureNodePng walks the ratio down on
@@ -719,7 +799,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       return r
     })
     return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(cols, body) }
-  }, [day, mtd, prev, hasPrev, prevLab, REV, periodLabel])
+  }, [day, mtd, prev, hasPrev, prevLab, REV, periodLabel, data])
 
   // One row-renderer shared by the (P&L-only) Online/Offline revenue
   // subgroups below and by Cash Flow's flat revenue list -- same markup
@@ -877,6 +957,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               filename={(isCashFlow ? 'ceo-b2c-cashflow-' : 'ceo-b2c-pnl-') + (month || '')}
               rowCount={rows.length}
             />
+            {isCashFlow ? <CashflowStatementImage cf={data && data.cashflowStatement} ref={cfImageRef} /> : null}
           </div>
         </div>
         <div className={styles.scroll}>

@@ -274,7 +274,11 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
       // unconditionally on every send regardless of versionId, silently shipping
       // an unwanted "PM summary table" PNG + "PM summary (full data)" CSV
       // alongside e.g. the MTD Scorecard (2026-09-10, caught live by the user).
-      const files = messages.some(m => m.attach) ? await captureFiles() : null
+      // versionId is passed through so a page whose captureFiles needs to
+      // capture a DIFFERENT node per version (e.g. CeoB2CDashboard's
+      // cashflow-image version) can tell which one is being sent -- every
+      // other page's captureFiles simply ignores the extra argument.
+      const files = messages.some(m => m.attach) ? await captureFiles(versionId) : null
       const slackTarget = target
       const r = await fetch('/api/send-report', {
         method: 'POST',

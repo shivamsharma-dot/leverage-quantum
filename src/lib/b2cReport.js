@@ -416,6 +416,39 @@ function buildB2CCashflowTable(ctx) {
   }]
 }
 
+// -- image, a pixel-exact render of the 'CF' tab's own layout ---------------
+// A native Slack table (above) cannot merge cells, cannot right-align just
+// the item rows, and always draws its own full grid border -- so it can
+// only ever APPROXIMATE the sheet, never match it. This version instead
+// posts a rendered PNG of a hidden DOM node (CeoB2CDashboard.jsx's
+// CashflowStatementImage) built to reproduce the sheet's exact look: the
+// merged 'B2C Student Mobility' title, the two-level MTD/YTD header, plain
+// (unformatted) 2-decimal numbers with no ₹ or 'Cr' suffix, right-aligned
+// indented item labels under left-aligned bold+underlined section totals,
+// and blank spacer rows between sections -- all as the client already
+// captured it, via the same captureNodePng/attach:true mechanism the P&L
+// page's ASCII-table version already uses for its own image attachment.
+// This builder itself does no rendering -- it only supplies the short
+// caption text; the PNG is captured client-side and attached by
+// SlackReportPanel, same as every other attach:true version.
+function buildB2CCashflowImage(ctx) {
+  const c = ctx || {}
+  const cf = c.cfStatement || {}
+  const L = []
+  L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' — Cash Flow*')
+  L.push('_A straight image of the sheet’s own Cash Flow statement -- month to date and year to date._')
+  return [{
+    key: 'b2c_cashflow_image', label: 'B2C - Daily Cashflow (sheet image)', attach: true,
+    text: L.join('\n'),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: noteMrkdwn(c) }] },
+    ],
+    context: noteMrkdwn(c),
+  }]
+}
+
 export const B2C_CASHFLOW_TABLE_VERSIONS = [{
   id: 'b2c_cashflow_full',
   code: 'B2C-CF',
@@ -430,6 +463,19 @@ export const B2C_CASHFLOW_TABLE_VERSIONS = [{
     'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Daily P&L report',
   ],
   build: buildB2CCashflowTable,
+}, {
+  id: 'b2c_cashflow_image',
+  code: 'B2C-CF-IMG',
+  msgKeys: ['b2c_cashflow_image'],
+  name: 'B2C - Daily Cashflow (sheet image)',
+  tagline: 'A pixel-exact picture of the CF tab -- title, two-level header, indentation, underlines and all.',
+  what: [
+    'A PNG matching the sheet exactly -- merged title, MTD/YTD group header, right-aligned indented line items, bold+underlined section totals, blank spacer rows',
+    'Plain numbers exactly as the sheet shows them (no ₹, no Cr suffix -- the header already says the unit)',
+    'Only available from the on-page Send to Slack panel, never the automated daily cron (there is no page to screenshot from a server)',
+    'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Daily P&L report',
+  ],
+  build: buildB2CCashflowImage,
 }]
 
 export const B2C_REPORT_VERSIONS = [{
