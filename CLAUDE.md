@@ -1364,3 +1364,87 @@ comparison is made mid-month.
 
 **No code was changed in this session -- purely investigative**, per the user's explicit
 choice to leave the WHERE-clause drift undocumented-in-code and just recorded here.
+
+## 2026-09-10 -- Overall: new "MTD Scorecard" Slack report (commit `b416f33`)
+
+User pasted a screenshot of a spreadsheet layout -- two small tables (Marketing
+Spend/Leads/Total QLs/CPL/CPQL/Lead-to-QL% by Overall/Paid/Organic/Referral, plus
+Total QL/SR Apps/AC Sales/QL-Sale%/QL daily run-rate for the current month) -- and
+asked for a Slack report reproducing it from data already in Quantum, with "only
+AC Sales to be filled manually," explicitly inviting questions since "this needs to
+be correct."
+
+**Investigated before asking anything.** Confirmed live against production Supabase
+that "Referral" is a real Source value in Overall's own BigQuery data (not the
+separate Referral sheet/dashboard) -- Sep'26 has exactly 8 distinct sources
+(Affiliate, Bing, Facebook, Google, Organic, Others, Referral, Remarketing).
+Confirmed Marketing Review already has the exact "AC Sales" manual field the image
+wants (`ac_sales_manual` in `app_preferences`, keyed by year-month) -- reused that
+one value rather than building a second, driftable manual-entry mechanism.
+
+**Two rounds of `AskUserQuestion` resolved every real fork**, since guessing wrong on
+any of these would have produced a plausible-looking but wrong number:
+1. "Paid" = Quantum's own existing `isPaidSource()` rule (Facebook/Google/Affiliate/
+   Bing/Remarketing) -- confirmed, including that Affiliate counts as paid.
+2. The 8th real bucket, "Others" (not paid, not Organic, not Referral, unaccounted
+   for in the image's 4 rows) -- folded into Organic, so Overall reconciles exactly
+   to Paid + Organic + Referral with nothing left over.
+3. "SR Apps" -- NOT filtered by the Apps page's Vertical=SR classification as first
+   guessed; confirmed to be the plain, unfiltered Total Applications count for the
+   month, placed in the row the image labels "SR."
+4. "QL - Sale %" -- confirmed as one combined rate, (Applications + AC Sales) ÷
+   Total QL, not two separate per-row rates.
+5. A genuine naming COLLISION caught before writing any code: Overall already has a
+   metric literally called "Lead to QL %," but it's defined narrowly as (Futwork
+   Human QL + Futwork AI QL) ÷ Total Queued on Futwork -- excluding Superbot and
+   Floor-routed leads entirely, NOT a plain Total QL ÷ Total Leads rate. Asked
+   directly rather than assume either reading; user confirmed the existing, narrower
+   app-wide definition, not the naive one.
+6. Trigger point: NOT Marketing Review -- a new option on Overall's own existing
+   "Send to Slack" button/panel, since that page already has the Slack-send
+   infrastructure and the request was explicitly for Overall.
+
+**Built as a new report version (v8) in the existing multi-version Slack-report
+system**, not a new UI component -- `SlackReportPanel`/`buildReportMessages` already
+support picking from named report "versions" (this is how B2C's Performance
+Brief/full ledger/full particulars work too), so this slots in as one more option in
+the dropdown Overall's page already has, with zero new picker/channel UI needed.
+New self-contained file `src/lib/pmReportV8.js` (matching this codebase's own "every
+version lives in its own file, forever, never edited" convention for v5/v6/v7) with
+two messages: message 1 the 4-row channel breakdown table, message 2 the Total
+QL/Applications/AC Sales/QL→Outcome%/run-rate table. Registered in
+`REPORT_VERSIONS` in `src/lib/pmReport.js`.
+
+**Data wiring, all in `OverallDashboard.jsx`**: a new `mtdScorecard` state + effect,
+fetching fresh (independent of whatever date range/grouping the page itself has
+selected, since this report is always "the current calendar month to date") the
+first time the Send-to-Slack panel opens each session -- `fetchOverallBqAggRows` for
+month-to-date across all sources, a new lightweight `fetchAppsCountSince()` in
+`src/lib/appsCache.js` (a single `count=exact` request, not the ~7,000+ row full
+fetch `fetchAppsCacheRows` does), and `ac_sales_manual` off `/api/preferences`.
+Cleared on every real Refresh (`bqNonce` change) so a stale scorecard never lingers
+for the rest of a long session. `ac_sales_manual` was added to `api/preferences.mjs`'s
+`PUBLIC_KEYS` allowlist (read-only; writing stays admin-only, unchanged) so a
+non-admin Overall viewer who clicks Send to Slack still gets a correct AC Sales
+figure, not a silently-missing one -- same precedent already set by
+`affiliate_spend_manual`.
+
+**Live-verified the real preview, not just that it builds.** Deployed, then opened
+the real "Send to Slack" panel on `/dashboard/overall` and selected the new "MTD
+Scorecard" version (it also happened to load as the default first entry, being
+newest-on-top per this file's own registry convention). Confirmed every number
+by hand: Overall row (Spend ₹1,01,13,585 / Leads 41,750 / QLs 3,442 / CPL ₹242 /
+CPQL ₹2,938 / Lead-to-QL 9.7%) reconciles exactly to Paid (₹1,01,12,608/39,634/
+3,300) + Organic (₹977/2,065/142) + Referral (₹0/51/0) with nothing left over;
+Referral's CPQL and Lead-to-QL% correctly render as a real dash (not a wrong ₹0) since
+its Total QL is genuinely zero -- initially misread this as ₹0 on a small screenshot,
+re-zoomed and confirmed it is in fact a dash, exactly as coded. Message 2: Total QL
+3,442 matches message 1's Overall row exactly; Applications this month showed 152,
+independently cross-checked with a direct Supabase count query against `apps_feed`
+(`first_app_submitted_at >= 2026-09-01`) -- exact match; AC Sales correctly showed
+"Not entered yet" (September's figure genuinely hasn't been entered on Marketing
+Review yet) rather than a wrong zero, which correctly cascaded QL → Outcome % to a
+dash too; QL daily run-rate showed 344/day = 3,442 ÷ 10 (today is Sep 10). Zero
+console errors. Closed the panel via Escape without sending -- this was a
+verification pass, not a real send; the user (or whoever picks this up) still needs
+to pick a real destination channel and press Send when ready.
