@@ -1651,8 +1651,15 @@ function mrkdwnSections(t) {
 function reportBlocks(m, opts) {
   const clip = t => String(t || '').slice(0, 2900)
   const blocks = []
-  if (m.text) mrkdwnSections(m.text).forEach(function (t) { blocks.push({ type: 'section', text: { type: 'mrkdwn', text: t } }) })
-  if (opts.bare) return blocks.length ? blocks : [{ type: 'section', text: { type: 'mrkdwn', text: clip(m.label || 'Report') } }]
+  // A leading divider gives a consecutive top-level post from the same bot some
+  // visual space from the one before it -- Slack otherwise groups same-bot posts
+  // tightly with no visible gap (2026-09-10, asked for directly on V8/V9's second
+  // message). Pushed before anything else so it survives every degrade level below,
+  // including the bare fallback.
+  if (m.leadingDivider) blocks.push({ type: 'divider' })
+  let hasText = false
+  if (m.text) mrkdwnSections(m.text).forEach(function (t) { blocks.push({ type: 'section', text: { type: 'mrkdwn', text: t } }); hasText = true })
+  if (opts.bare) return hasText ? blocks : blocks.concat([{ type: 'section', text: { type: 'mrkdwn', text: clip(m.label || 'Report') } }])
   // A section takes at most 10 fields, so a longer grid simply continues in the next.
   const fields = Array.isArray(m.fields) ? m.fields.filter(Boolean).slice(0, 20) : []
   for (let i = 0; i < fields.length; i += 10) {
@@ -1706,9 +1713,10 @@ async function slackPostReportMessage(token, channel, m) {
   // the same way the rest of this file does: the full layout first, then only
   // the blocks Slack has shipped everywhere, then the plain text fallback.
   if (Array.isArray(m.blocks) && m.blocks.length) {
+    const rawBlocks = m.leadingDivider ? [{ type: 'divider' }].concat(m.blocks) : m.blocks
     const EVERYWHERE = new Set(['header', 'section', 'divider', 'context', 'actions', 'image', 'rich_text'])
-    const safe = m.blocks.filter(b => b && EVERYWHERE.has(b.type))
-    const tries = safe.length && safe.length < m.blocks.length ? [m.blocks, safe] : [m.blocks]
+    const safe = rawBlocks.filter(b => b && EVERYWHERE.has(b.type))
+    const tries = safe.length && safe.length < rawBlocks.length ? [rawBlocks, safe] : [rawBlocks]
     let blockErr = null
     let blockTs = null
     for (const bl of tries) {

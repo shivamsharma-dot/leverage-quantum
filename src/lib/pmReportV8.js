@@ -140,6 +140,9 @@ export function buildV8(ctx) {
     key: 'outcomes', label: 'Sales Efficiency',
     text: two.join('\n'),
     table: outcomes,
+    // Visual gap from message 1 -- Slack otherwise groups two consecutive posts
+    // from the same bot with no visible space (2026-09-10, asked for directly).
+    leadingDivider: true,
   })
 
   return msgs
