@@ -1448,3 +1448,83 @@ dash too; QL daily run-rate showed 344/day = 3,442 ÷ 10 (today is Sep 10). Zero
 console errors. Closed the panel via Escape without sending -- this was a
 verification pass, not a real send; the user (or whoever picks this up) still needs
 to pick a real destination channel and press Send when ready.
+
+## 2026-09-10 (later) -- MTD Scorecard: real date-window bug found and fixed, plus 5 rounds of direct feedback (commits `65eecfc`, `241fe9f`)
+
+User reviewed the real Slack preview from the entry above and sent concrete feedback,
+opening with a genuine correctness catch: "Lead - QL is 9.9 in overall dashboard, in
+slack report its less."
+
+**Root-caused properly, not waved off as "expected drift."** This exact codebase has
+a documented history (see the entry two above this one) of Sheet-vs-BigQuery refresh-
+timing skew explaining small mismatches -- but this time both `overall_bq_daily` and
+`overall_bq_daily_agg` shared the identical `synced_at`, ruling that out immediately.
+Investigated for real: opened the live Overall (BigQuery) page, found "Lead to QL %"
+isn't even the KPI card being compared -- it's the "QUEUED -> TOTAL QL" conversion-
+chain box (9.9%) sitting near the top of the page. Recomputed the identical metric
+directly against Supabase for Sep 1-10 (the window this report was using) and got
+9.70%, not 9.9% -- a real, reproducible mismatch, not noise. Compared Total Leads too:
+report said 41,750 (Sep 1-10), the live page's own TOTAL row said 40,891 -- and the
+gap, 859, was *exactly* Sep 10's entire daily contribution. Recomputing everything for
+Sep 1-9 only (excluding today) landed on 40,891 leads and 9.9% Lead-to-QL, matching
+the live dashboard to the digit. **The bug: this report's MTD window ran through
+TODAY, a still-accumulating partial day, while the Overall dashboard's own month view
+-- and every other exec report already in this codebase (V5/V7's "complete days
+only," B2C's D-1 rule) -- deliberately stops at the last COMPLETE day.** Fixed by
+ending the window at yesterday everywhere in `OverallDashboard.jsx`'s `mtdScorecard`
+effect, with an explicit guard for "today is the 1st of the month" (zero complete
+days yet -- shows a plain "check back tomorrow" message rather than firing a
+since>until query or dividing by zero days).
+
+**Four more feedback items, all shipped in the same pass:**
+- **Organic/Referral now always show Marketing Spend/CPL/CPQL as a dash**, even
+  though a small non-zero spend can technically exist (Organic showed ₹977 before) --
+  neither is a real paid-media channel, so a stray near-zero cost figure read as
+  noise, not signal. The underlying totals are still summed correctly in
+  `mtdScorecard`; only the table's *display* blanks these two cells.
+- **AC Sales**: dropped the "(manual)" suffix from the row label, and removed the
+  "AC Sales is entered manually on the Marketing Review page" note from the
+  Slack-facing text entirely -- that's internal operating detail, not something a
+  Slack audience needs to see. (Answered directly rather than in the report copy:
+  it's still filled in on the Marketing Review page, in the Executive Summary
+  table's AC Sales row, via its edit-pencil button -- nothing about *where* it's
+  entered changed, only what the Slack message says about it.)
+- **QL split by vertical (SR/AC) added to both tables**, sourced from Monthly QLs'
+  own BigQuery pipeline as directed ("QL split can be taken from Monthly QLs page")
+  -- Overall's own data has no vertical dimension on QL itself (only Applications
+  carry one). New `fetchMonthlyQlsRowsSince(since, until)` in `monthlyQlsCache.js`
+  (a lightweight, date-scoped sibling to the existing whole-table
+  `fetchMonthlyQlsRows()`, which pulls the full, ever-growing table -- unnecessary
+  for a report that only needs a handful of MTD days). A real schema question
+  resolved by checking data, not assuming: Monthly QLs' own raw `source` values
+  ('Content+Brand', 'Branding', 'Lead Source NA', 'Offline') are the un-normalized
+  upstream labels, NOT Overall's own CASE-mapped ones -- but `isPaidSource()`'s paid-
+  channel names and the literal 'Referral' string already match verbatim on both
+  tables, so the exact same Paid/Organic/Referral bucketing rule applies with zero
+  extra normalization: anything not paid and not 'Referral' lands in Organic either
+  way, which is exactly where those raw upstream labels belong. Superbot QL isn't
+  split by vertical in this pipeline -- disclosed as its own line only when actually
+  non-zero, never silently folded into SR or AC. **A real, expected small gap found
+  during live verification** (SR 1,741 + AC 1,657 = 3,398 vs. Total QL 3,442) -- since
+  the split is read from a genuinely separate, independently-synced pipeline, not
+  forced to reconcile, and explicitly disclosed as such in both messages rather than
+  left for a reader to notice and wonder about.
+- **Message titles renamed** per direct instruction: message 1 "Marketing
+  Efficiency" (was "MTD Scorecard"), message 2 "Sales Efficiency" (was "Outcomes") --
+  used exactly as suggested. **Visual polish**: each message now opens with a
+  one-line plain-English summary of its own table's headline numbers (e.g. "Overall
+  this month: ₹99,72,780 spent, 40,891 leads, 3,442 QLs at 9.9% Lead to QL.") --
+  deliberately built by reusing the table's own already-computed, already-formatted
+  cell values rather than a third independent recalculation of the same ratio.
+
+**Live-verified the corrected preview end-to-end**, not just that it builds: message
+1's subtitle now reads "Sept 2026 1st through 9 Sept (complete days only)"; its
+headline sentence and table both show 40,891 leads / 9.9% Lead to QL, matching the
+live Overall dashboard exactly; Organic and Referral rows show real dashes for
+Spend/CPL/CPQL; the new SR/AC columns show real, non-zero per-bucket splits. Message
+2 shows Total QL 3,442 with SR 1,741 / AC 1,657 broken out, Applications 152, "AC
+Sales" (no longer "(manual)") correctly reading "Not entered yet" for September, and
+QL daily run-rate now correctly 382/day (3,442 ÷ 9 complete days, was wrongly 344/day
+÷10 including today before the fix). Zero real console errors (only the pre-existing,
+documented benign extension "message channel closed" noise). Closed the panel without
+sending -- verification only, same as the entry above.
