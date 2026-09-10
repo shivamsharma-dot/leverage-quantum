@@ -361,43 +361,43 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   build: buildB2CFullTable,
 }]
 
-// -- native full-particulars table, Daily Cash Flow tab ---------------------
-// Same mechanism as buildB2CFullTable above, but reading the Cash Flow tab's
-// own line items -- SR is one combined figure there (never split into
-// Online/Offline like P&L), and every label is verbatim off the sheet's own
-// C2:F2 (revenue) / H2:L2 (cost) header cells, not shortened. No EBITDA row:
-// the sheet's own bottom line here is still "Net cash inflow", never renamed.
-const CASHFLOW_LINES = [
-  ['sr', 'Actuals SR Revenue (Online + Offline)'], ['ac', 'Actuals AC Online Revenue'],
-  ['vas', 'Actuals Leverage One Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + Leverage One)'],
-]
-const CASHFLOW_HEADS = [
-  ['people', 'Actuals People Cost (incl. corporate people)'], ['pm', 'Actuals PM Cost'],
-  ['op', 'Actuals Operating Cost (AC + Leverage One)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
-  ['corp', 'Actuals Corp. Overheads'],
-]
+// -- native table, sourced directly from the 'CF' tab's own statement -------
+// Finance rebuilt Cash Flow (2026-09) as a small, already-aggregated MTD/YTD
+// table on its own tab ('CF' -- api/crm-leads.js's B2C_CASHFLOW_STMT_* has
+// the full story, including exactly which range and why), with real bold
+// section-total rows (Opening Balance / Cash Inflow / Cash Outflow / Closing
+// Balance) confirmed against the live sheet's own cell formatting. This
+// builder just relays those rows verbatim -- no arithmetic of its own, no
+// Day/MTD/FY split (the source has no daily granularity at all, so there is
+// no 'Last Day' column here, unlike buildB2CFullTable's P&L table above).
+function crAmt(n) {
+  if (n == null || !isFinite(n)) return '—'
+  const sg = n < 0 ? '-' : ''
+  return sg + '₹' + Math.abs(n).toFixed(2) + ' Cr'
+}
 function buildB2CCashflowTable(ctx) {
   const c = ctx || {}
-  const raw = c.raw || {}
-  const day = raw.day || {}
-  const mtd = raw.mtd || {}
-  const fy = raw.fy || {}
-  const row = function (key, label, bold) {
-    const f = bold ? cellBold : cellText
-    return [f(label), f(money(day[key])), f(money(mtd[key])), f(money(fy[key]))]
-  }
-  const rows = [[cellBold('Line Item'), cellBold('Last Day'), cellBold('MTD'), cellBold(fy.label ? fy.label + ' (YTD)' : 'YTD')]]
-  CASHFLOW_LINES.forEach(function (d) { rows.push(row(d[0], d[1])) })
-  rows.push(row('rev', 'Total Cash Inflow', true))
-  CASHFLOW_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
-  rows.push(row('cost', 'Total Cash Outflow', true))
-  rows.push(row('net', 'Net cash inflow', true))
-  const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
+  const cf = c.cfStatement || {}
+  const dataRows = Array.isArray(cf.rows) ? cf.rows : []
+  // Falls back to the sheet's own literal wording if the fetch ever comes
+  // back empty (e.g. the tab briefly renamed again) -- the YTD label is read
+  // live off the sheet's own header cell (see api/crm-leads.js) rather than
+  // hardcoded, so it never goes stale on its own each fiscal year.
+  const headerLabels = (Array.isArray(cf.headerLabels) && cf.headerLabels.length === 3) ? cf.headerLabels : ['Particulars', 'MTD Amount (INR CR.)', 'YTD Amount (INR CR.)']
+  const rows = [[cellBold(headerLabels[0]), cellBold(headerLabels[1]), cellBold(headerLabels[2])]]
+  dataRows.forEach(function (r) {
+    const f = r.bold ? cellBold : cellText
+    rows.push([f(r.label), f(crAmt(r.mtd)), f(crAmt(r.ytd))])
+  })
+  const cols = [{ is_wrapped: true, align: 'left' }, { align: 'right' }, { align: 'right' }]
   const L = []
   L.push(':bar_chart: *B2C - Daily Cashflow*')
-  L.push('_Last completed day, month to date and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
+  L.push('_Straight off the Cash Flow statement’s own MTD/YTD table -- Finance’s numbers, verbatim. No day-level figure exists in this source._')
   return [{
-    key: 'b2c_cashflow_full', label: 'B2C - Daily Cashflow', attach: true,
+    // attach:false -- unlike the older per-day version, there is no on-page
+    // table showing this exact data to screenshot; the native table above
+    // already is the whole report.
+    key: 'b2c_cashflow_full', label: 'B2C - Daily Cashflow', attach: false,
     text: L.join('\n'),
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
@@ -421,10 +421,11 @@ export const B2C_CASHFLOW_TABLE_VERSIONS = [{
   code: 'B2C-CF',
   msgKeys: ['b2c_cashflow_full'],
   name: 'B2C - Daily Cashflow (native table)',
-  tagline: 'One native Slack table, Cash Flow\'s own line items, Last Day / MTD / YTD.',
+  tagline: 'One native Slack table, straight off the CF tab\'s own MTD/YTD Cash Flow statement.',
   what: [
-    'Every line item verbatim off the Daily Cash Flow tab -- SR, AC Online, Leverage One Online, Offline revenue, Total Cash Inflow, each cost head, Total Cash Outflow, then Net cash inflow',
-    'Three columns: Last Day, MTD, and year to date',
+    'Every line item verbatim off the \'CF\' tab -- Opening Balance, Cash Inflow (and its 5 lines), Cash Outflow (and its 7 heads), Closing Balance',
+    'Two columns: month to date and year to date (from the sheet\'s own fiscal-year start), both in ₹ Cr -- no Last Day column, since this source has no daily figure',
+    'Bold section-total rows, matching the sheet\'s own formatting exactly',
     'A real Slack table block, not a code block or an image',
     'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Daily P&L report',
   ],

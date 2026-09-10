@@ -632,6 +632,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       // Slack table reads these directly instead of the narrower rev/cost
       // slices above (which only ever carried the combined sr/offRev totals).
       raw: { day: day, mtd: mtd, fy: fy },
+      // Cash Flow's native table (only) reads this instead of raw/day/mtd/fy
+      // above -- Finance's own pre-aggregated MTD/YTD statement off the 'CF'
+      // tab (api/crm-leads.js), fetched as part of the same /api/crm-leads
+      // response this page already loads into `data`. Additive: the P&L
+      // builder never reads this key.
+      cfStatement: data && data.cashflowStatement,
       peopleMonthly: peopleMonthly,
       ytd: fy,
       // The closing sections of the message are arithmetic on these two windows.
@@ -691,7 +697,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         },
       ]
     }
-  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats, activeWindow, windowLabel, revVsCashflowNote])
+  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats, activeWindow, windowLabel, revVsCashflowNote, data])
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
@@ -834,7 +840,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                         ) : null}
                       </div>
                       <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 10 }}>
-                        Can't go later than {d1} &mdash; today's row is still filling in.
+                        Can't go later than {d1} &mdash; today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's current MTD/YTD figures, which have no daily grain to cut off.
                       </div>
                       <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
                         Approval sends to

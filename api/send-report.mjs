@@ -2140,13 +2140,19 @@ async function handleB2CDailyReport(req, res) {
       ? approvalDestinationLabel(approvalHook)
       : '(destination not configured)'
 
+    // Cash Flow (2026-09) no longer builds its ctx from day-level rows at
+    // all -- Finance's own 'CF' tab already hands over a finished MTD/YTD
+    // statement (api/crm-leads.js's fetchB2CData -> cashflowStatement), so
+    // its job just relays that straight into the native-table builder
+    // instead of going through buildB2CServerContext/throughDate (which has
+    // nothing to act on here -- there is no daily grain to cut off at D-1).
     const jobs = [
-      { statement: 'pnl', days: data.pnl && data.pnl.days, version: B2C_FULL_TABLE_VERSIONS[0] },
-      { statement: 'cashflow', days: data.cashFlow && data.cashFlow.days, version: B2C_CASHFLOW_TABLE_VERSIONS[0] },
+      { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
+      { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement }) },
     ]
     const posted = []
     for (const job of jobs) {
-      const ctx = buildB2CServerContext(job.days || [], job.statement, throughDate)
+      const ctx = job.buildCtx()
       if (cfg.b2c_rev_vs_cashflow_note) ctx.revVsCashflowNote = cfg.b2c_rev_vs_cashflow_note
       const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
       const pendingId = await savePendingB2CReport(job.statement, messages)

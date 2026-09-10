@@ -4344,20 +4344,69 @@ function b2cParseDays(csv, cols) {
   return { days: days, gridFrom: gridFrom, gridTo: gridTo };
 }
 
+// Finance rebuilt the Cash Flow statement (2026-09) as a small, already
+// pre-aggregated MTD/YTD table on its own dedicated tab literally named 'CF'
+// -- confirmed live against the sheet (its full tab list also still has the
+// old 'Daily Cash Flow - Ramesh' AND an intermediate 'Daily Cash Flow -
+// Final_7 Sep', both untouched -- B2C_CASHFLOW_SHEET_TAB/b2cParseDays above
+// still read 'Ramesh' and keep working exactly as before for the on-page
+// Cash Flow dashboard and the Gazette). 'CF' has no daily granularity at
+// all -- Finance computes MTD/YTD themselves -- so this is read and used
+// ONLY by the Cash Flow Slack report (src/lib/b2cReport.js's
+// buildB2CCashflowTable), which now shows Finance's own numbers verbatim
+// instead of re-deriving Day/MTD/FY from daily rows.
+// The user's ask was the exact visual block the sheet itself boxes off in a
+// green border, G3:I25 -- G3 is a merged 'B2C Student Mobility' title and G4
+// is blank, so starting the read at G5 instead (the 'MTD'/'YTD (From
+// 1/4/2026)' super-header row) makes gviz's own CSV header-inference merge
+// that with row 6's 'Particulars'/'Amount (INR CR.)' into one clean header
+// per column -- including the YTD fiscal-year label, read live off the sheet
+// rather than hardcoded, so it never goes stale on its own. Data is
+// identical either way (confirmed 2026-09-10 by diffing both ranges);
+// gviz's ranged CSV silently drops the sheet's own blank spacer rows
+// (rows 8/15/24), which is fine -- bold section-total rows already carry the
+// sheet's visual grouping in the Slack table.
+const B2C_CASHFLOW_STMT_SHEET_TAB = 'CF';
+const B2C_CASHFLOW_STMT_RANGE = 'G5:I25';
+// The sheet's own bold section-total rows -- confirmed 2026-09-10 via a
+// direct XLSX export of this exact tab + cell-style inspection (font.bold),
+// not guessed from the screenshot. Every other row in the range is a plain,
+// unbold line item. If Finance ever renames one of these four labels the
+// way the old cash-flow tab's own headers have drifted before, that one row
+// silently stops rendering bold rather than erroring -- worth a quick check
+// against the live sheet if a future report send looks under-formatted.
+const B2C_CASHFLOW_STMT_BOLD_LABELS = new Set(['Opening Balance :', 'Cash Inflow', 'Cash Outflow :', 'Closing Balance']);
+function b2cParseCashflowStatement(csv) {
+  const lines = splitCsvRows(csv).filter(function (l) { return l.trim().length > 0 });
+  if (lines.length < 2) return { configured: false, headerLabels: [], rows: [] };
+  const headerLabels = splitCsvLine(lines[0]).map(function (h) { return String(h == null ? '' : h).trim() });
+  const rows = lines.slice(1).map(splitCsvLine).map(function (cells) {
+    const label = String(cells[0] == null ? '' : cells[0]).trim();
+    return { label: label, mtd: b2cNum(cells[1]), ytd: b2cNum(cells[2]), bold: B2C_CASHFLOW_STMT_BOLD_LABELS.has(label) };
+  }).filter(function (r) { return r.label; });
+  return { configured: true, headerLabels: headerLabels, rows: rows };
+}
+
 // Pure data fetch, no req/res -- factored out of handleB2C so a server-side
 // caller with no HTTP request in hand (the b2c_daily_report cron in
-// api/send-report.mjs) can get the exact same {pnl, cashFlow, monthly} shape
-// the CeoB2CDashboard page reads, without going through an HTTP round trip
-// (which would also need a session cookie this caller doesn't have).
+// api/send-report.mjs) can get the exact same {pnl, cashFlow, monthly,
+// cashflowStatement} shape the CeoB2CDashboard page reads, without going
+// through an HTTP round trip (which would also need a session cookie this
+// caller doesn't have).
 export async function fetchB2CData() {
   const id = await getB2CSheetId();
-  if (!id) return { configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, ts: Date.now() };
+  if (!id) return { configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, cashflowStatement: { configured: false, headerLabels: [], rows: [] }, ts: Date.now() };
   const base = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv';
   const grab = async function (u) {
     const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     if (!r.ok) throw new Error('sheet ' + r.status);
     return r.text();
   };
+  // Fetched and caught in isolation, outside the Promise.all below -- a
+  // problem reading this one new tab (renamed again, transient hiccup) must
+  // never take down the P&L/Cash Flow/monthly-plan fetches that share this
+  // same function.
+  const cfStatementPromise = grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_STMT_SHEET_TAB) + '&range=' + B2C_CASHFLOW_STMT_RANGE).catch(function () { return null });
   const csvs = await Promise.all([
     grab(base + '&sheet=' + encodeURIComponent(B2C_PNL_SHEET_TAB)),
     grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_SHEET_TAB)),
@@ -4377,7 +4426,9 @@ export async function fetchB2CData() {
       };
     }).filter(function (m) { return m.month });
   });
-  return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, ts: Date.now() };
+  const cfCsv = await cfStatementPromise;
+  const cashflowStatement = cfCsv ? b2cParseCashflowStatement(cfCsv) : { configured: false, headerLabels: [], rows: [] };
+  return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, cashflowStatement: cashflowStatement, ts: Date.now() };
 }
 
 // Full-fidelity B2C Gazette data (2026-08-25 rebuild) -- revenue/cost LINE
@@ -4515,6 +4566,7 @@ async function handleB2C(req, res, me) {
       ...data,
       pnl: canPnl ? data.pnl : { days: [] },
       cashFlow: canCashFlow ? data.cashFlow : { days: [] },
+      cashflowStatement: canCashFlow ? data.cashflowStatement : { configured: false, headerLabels: [], rows: [] },
     });
   } catch (e) {
     return res.status(502).json({ error: 'sheet fetch failed', detail: String((e && e.message) || e) });
