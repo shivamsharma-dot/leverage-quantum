@@ -1528,3 +1528,72 @@ QL daily run-rate now correctly 382/day (3,442 ÷ 9 complete days, was wrongly 3
 ÷10 including today before the fix). Zero real console errors (only the pre-existing,
 documented benign extension "message channel closed" noise). Closed the panel without
 sending -- verification only, same as the entry above.
+
+## 2026-09-10 (later still) -- MTD Scorecard: SR+AC now reconciles exactly, AC Sales split into its own separate, panel-editable value (commits `fbc1043`, `2f86913`)
+
+User sent one more, sharper round of feedback on the just-shipped fix, plus a
+screenshot that turned out to be missing its row labels.
+
+**"QL sum, 1741+1657 is not equal to 3442 (fix it)" -- fixed for real, not just
+disclosed.** The previous entry's fix only ADDED a footnote explaining the gap; this
+round the user explicitly wanted it actually closed. First tried the obvious thing --
+manually re-triggered `monthly-qls-sync.yml` (completed in 3m34s) -- and confirmed via
+a direct Supabase query that the gap was UNCHANGED after a fresh sync (still
+1,741+1,657=3,398 against a Total QL of 3,442), proving this was never a staleness
+problem: two independently-written BigQuery queries (Overall's own vs. Monthly QLs')
+simply don't count the identical universe of Futwork QLs, gap and all, sync after
+sync. Real fix: stopped trusting Monthly QLs' own ABSOLUTE sr/ac counts and instead
+took only the RATIO it observed (sr / (sr+ac)), then applied that ratio to THIS
+bucket's own authoritative Futwork QL total (Overall's own Human QL + AI QL, i.e.
+excluding Superbot) -- so `srQl + acQl` now equals the row's own QL total EXACTLY, by
+construction, on every single row (Overall/Paid/Organic/Referral), not approximately
+on one of them. Renders a dash (not a misleading 0) on the rare row where Monthly QLs
+has literally zero split data to derive a ratio from.
+
+**The confusing image was just a cropped screenshot missing its row-label column.**
+The user asked "if it shows 2897 below for paid, then how come blended CPQL shows
+3022" -- but the crop showed only 4 raw CPQL numbers stacked with no labels, so there
+was no way to tell which value belonged to which row from that image alone. Explained
+directly rather than guessing at a fix: the true order is Overall (blended, ALL
+sources including free Organic/Referral QLs) = ₹2,897, Paid-only = ₹3,022 -- blended
+CPQL is *lower* than paid-only CPQL precisely because blending in free/organic QLs
+dilutes the average cost. This is correct, expected marketing math, not a bug -- the
+apparent contradiction only existed because the crop hid which row was which.
+
+**AC Sales split into a genuinely separate, panel-editable value**, per explicit
+instruction: "keep both separate — it should be filled from here, through the
+panel." New Supabase key `overall_ac_sales_manual` (`app_preferences`, admin-only to
+write, publicly readable -- same pattern as the sibling `ac_sales_manual`, which was
+removed from `PUBLIC_KEYS` since only admin-only Marketing Review reads/writes it
+now). New `AcSalesEditor` component in `OverallDashboard.jsx`, rendered inline inside
+the *existing* Send-to-Slack panel via its `extraHeader` slot (no nested modal) --
+read-only for a non-admin viewer, editable for admins. The two AC Sales figures can
+now legitimately differ: Overall's is always the live current month, Marketing
+Review's is whatever month that separate review deck happens to cover. Value is
+derived reactively (`mtdScorecardForReport`, a `useMemo` layered on top of the raw
+one-shot `mtdScorecard` fetch) so saving a new number updates the Slack preview
+*immediately* -- no Refresh, no reopening the panel.
+
+**Live-verified the full loop, not just that it compiles.** Reopened the panel on
+`/dashboard/overall`: message 1's table now shows Overall SR 1,764 + AC 1,678 = 3,442
+(exact match to Total QLs), Paid 1,702+1,598=3,300 (exact), Organic 61+81=142 (exact),
+Referral 0+0=0 (exact) -- every row reconciles by construction. Message 2 mirrors the
+Overall split (1,764/1,678, summing to 3,442). Clicked the new "Enter" link next to
+"AC Sales (Sept 2026): Not entered yet — for this Scorecard only, separate from
+Marketing Review's own AC Sales" in the panel header, typed 25, hit Save -- the header
+updated to "25" and message 2's preview updated INSTANTLY (QL → Outcome % recalculated
+live to 5.1% = (152+25)÷3,442), with zero need to close/reopen the panel. Edited it
+back to empty and saved again to leave the field genuinely clear afterward, matching
+this session's own established rule about not leaving fake test numbers in a
+CEO-facing feature. Zero console errors throughout.
+
+**One real thing noticed and correctly NOT treated as a problem**: `report_logs`
+showed a genuine send already on record -- `"slack pm report v8 (test)"`, sent
+2026-09-10 07:36:41 UTC (01:06 pm IST) to `slack:voxpath`, `triggered_by:
+shivam.sharma@leverageedu.com`. This session never clicked Send on v8 (every
+verification pass was closed via Escape) -- the timestamp and account match the
+user's own real activity, and the destination was the dedicated sandbox/test channel
+built specifically for this kind of safe testing, not a real production channel.
+Surfaced this transparently rather than silently noting it, since it's directly
+relevant context, but did not treat it as a session error since nothing about it
+indicates an unintended or unauthorized send.
