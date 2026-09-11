@@ -353,6 +353,41 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
   )
 })
 
+// Compact read-only render of a Slack native-table message's plain-value
+// mirror ({columns, rows, strongRows} -- b2cReport.js builds this on every
+// message alongside the real Slack blocks specifically so a preview like
+// this one never needs to understand Slack's rich_text/raw_text cell shapes).
+// Used by the Daily Report popover's preview only.
+function DailyPreviewTable({ table }) {
+  if (!table || !Array.isArray(table.columns)) return null
+  const strong = new Set(table.strongRows || [])
+  return (
+    <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 8 }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11 }}>
+        <thead>
+          <tr>
+            {table.columns.map(function (c, i) {
+              return <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', background: 'var(--bg2)', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid var(--card-border)' }}>{c}</th>
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {(table.rows || []).map(function (r, ri) {
+            const bold = strong.has(ri)
+            return (
+              <tr key={ri}>
+                {r.map(function (v, ci) {
+                  return <td key={ci} style={{ textAlign: ci === 0 ? 'left' : 'right', padding: '4px 8px', fontWeight: bold ? 700 : 400, whiteSpace: 'nowrap', borderBottom: '1px solid var(--card-border)' }}>{v}</td>
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const { user } = useAuth()
   const isCashFlow = statement === 'cashflow'
@@ -660,6 +695,14 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const [dailyDateOpen, setDailyDateOpen] = useState(false)
   const [dailySending, setDailySending] = useState(false)
   const [dailyMsg, setDailyMsg] = useState('')
+  // Preview -- built server-side by the SAME code the real send uses
+  // (api/send-report.mjs's buildB2CDailyMessages, via a preview-only
+  // endpoint that never touches Slack or b2c_pending_reports), so what's
+  // shown here can never disagree with what "Send report now" actually
+  // posts. Reloaded on open and whenever the through-date changes.
+  const [dailyPreview, setDailyPreview] = useState(null)
+  const [dailyPreviewLoading, setDailyPreviewLoading] = useState(false)
+  const [dailyPreviewErr, setDailyPreviewErr] = useState('')
 
   const openDaily = useCallback(function () {
     setDailyOpen(true)
@@ -675,6 +718,26 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       })
       .catch(function () { setDailyLoaded(true) })
   }, [dailyLoaded, d1])
+
+  useEffect(function () {
+    if (!dailyOpen) return
+    let alive = true
+    setDailyPreviewLoading(true); setDailyPreviewErr('')
+    fetch('/api/send-report?type=b2c_daily_preview', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'b2c_daily_preview', throughDate: dailyThroughDate }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d } }) })
+      .then(function (res) {
+        if (!alive) return
+        if (!res.ok) throw new Error(res.d.error || 'Could not load preview')
+        setDailyPreview(res.d.jobs || [])
+      })
+      .catch(function (e) { if (alive) { setDailyPreviewErr(e.message); setDailyPreview(null) } })
+      .finally(function () { if (alive) setDailyPreviewLoading(false) })
+    return function () { alive = false }
+  }, [dailyOpen, dailyThroughDate])
 
   const saveDailyApproveDest = useCallback(function (value) {
     setDailyApproveDest(value)
@@ -909,7 +972,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                   <>
                     <div onClick={function () { setDailyOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
                     <div style={{
-                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, width: 320,
+                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, width: 460, maxWidth: '90vw',
                       background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
                       boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', padding: 14,
                       boxSizing: 'border-box', overflow: 'visible',
@@ -964,6 +1027,42 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                           { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
                         ]}
                       />
+                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '12px 0 4px' }}>
+                        Preview
+                      </label>
+                      <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--card-border)', borderRadius: 10, padding: 10, background: 'var(--bg2)' }}>
+                        {dailyPreviewLoading ? (
+                          <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Building preview…</div>
+                        ) : dailyPreviewErr ? (
+                          <div style={{ fontSize: 11.5, color: '#B42318' }}>{dailyPreviewErr}</div>
+                        ) : Array.isArray(dailyPreview) && dailyPreview.length ? (
+                          dailyPreview.map(function (job, i) {
+                            const msg = (job.messages || [])[0]
+                            return (
+                              <div key={job.statement} style={{ marginBottom: i < dailyPreview.length - 1 ? 14 : 0 }}>
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
+                                  {job.statement === 'pnl' ? 'Daily P&L' : 'Cash Flow'}
+                                </div>
+                                {msg && msg.table ? <DailyPreviewTable table={msg.table} /> : null}
+                                {job.image && job.image.pngBase64 ? (
+                                  <div style={{ marginTop: 8 }}>
+                                    <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 4 }}>Sheet image, attached alongside the table above:</div>
+                                    <img
+                                      src={'data:image/png;base64,' + job.image.pngBase64}
+                                      alt="Cash Flow statement"
+                                      style={{ maxWidth: '100%', border: '1px solid var(--card-border)', borderRadius: 6, display: 'block' }}
+                                    />
+                                  </div>
+                                ) : job.statement === 'cashflow' ? (
+                                  <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 6 }}>Image could not be rendered for this preview -- the table above still sends normally.</div>
+                                ) : null}
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Nothing to preview yet.</div>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
                         <Button size="sm" variant="secondary" onClick={sendDailyReportNow} disabled={dailySending}>
                           {dailySending ? 'Sending…' : 'Send report now'}

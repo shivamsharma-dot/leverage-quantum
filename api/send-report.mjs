@@ -1999,18 +1999,33 @@ function findTestChannelId(cfg, wantedName) {
   return hit ? hit.id : null
 }
 
-async function savePendingB2CReport(statement, messages) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json', Prefer: 'return=representation',
-    },
-    body: JSON.stringify({ statement, messages, status: 'pending' }),
-  })
-  const rows = await r.json().catch(() => [])
-  if (!r.ok || !rows[0]) throw new Error('Could not save the pending report (has supabase/sql/b2c_pending_reports_setup.sql been run?)')
-  return rows[0].id
+async function savePendingB2CReport(statement, messages, image) {
+  const post = async (body) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json', Prefer: 'return=representation',
+      },
+      body: JSON.stringify(body),
+    })
+    const rows = await r.json().catch(() => [])
+    return { ok: r.ok, row: rows[0] }
+  }
+  const base = { statement, messages, status: 'pending' }
+  if (image) {
+    // supabase/sql/b2c_pending_reports_add_image.sql may not have been run
+    // yet -- an unknown column fails the WHOLE insert (not just the extra
+    // fields), so a failed attempt retries without them rather than losing
+    // the report entirely. Once the migration is run this branch never
+    // fires again.
+    const withImage = await post({ ...base, image_png_base64: image.pngBase64, image_csv: image.csv, image_filename: image.filename })
+    if (withImage.ok && withImage.row) return withImage.row.id
+    console.error('[b2c daily report] pending insert with image failed, retrying without it -- has b2c_pending_reports_add_image.sql been run?')
+  }
+  const { ok, row } = await post(base)
+  if (!ok || !row) throw new Error('Could not save the pending report (has supabase/sql/b2c_pending_reports_setup.sql been run?)')
+  return row.id
 }
 
 // The ONE place that decides where the Approve button actually goes -- both
@@ -2090,6 +2105,64 @@ async function slackSendDM(token, userId, text) {
   return d.ts
 }
 
+// Builds the exact P&L + Cash Flow messages (and, for Cash Flow, the
+// server-rendered image) a Daily Report send would use -- pure, no Slack
+// posting and no Supabase writes, so both the real send (handleB2CDailyReport)
+// and the preview-only endpoint (handleB2CDailyPreview) build from ONE place
+// and can never show the approver something different from what actually
+// ships.
+async function buildB2CDailyMessages(data, cfg, throughDate) {
+  const jobs = [
+    { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
+    { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement }) },
+  ]
+  const built = []
+  for (const job of jobs) {
+    const ctx = job.buildCtx()
+    if (cfg.b2c_rev_vs_cashflow_note) ctx.revVsCashflowNote = cfg.b2c_rev_vs_cashflow_note
+    const messages = job.version.build(ctx)
+    let image = null
+    if (job.statement === 'cashflow') {
+      try {
+        const { renderCashflowStatementPng, cashflowStatementCsv } = await import('../lib/cashflowStatementImage.mjs')
+        const cf = data.cashflowStatement
+        const pngBuf = renderCashflowStatementPng(cf)
+        image = {
+          pngBase64: pngBuf.toString('base64'),
+          csv: cashflowStatementCsv(cf),
+          filename: 'ceo-b2c-cashflow-' + new Date().toISOString().slice(0, 10),
+        }
+      } catch (e) { console.error('[b2c daily report] cashflow image render failed', e.message) }
+    }
+    built.push({ statement: job.statement, messages, image })
+  }
+  return built
+}
+
+// Preview-only: an admin looking at the Daily Report popover before
+// committing to a send. Builds the identical jobs buildB2CDailyMessages
+// gives the real send -- same data, same image -- but never touches Slack
+// or b2c_pending_reports. Session-gated only (no cron path -- nothing
+// automated ever needs a preview of itself).
+async function handleB2CDailyPreview(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me || me.role !== 'admin') return res.status(401).json({ error: 'Not signed in' })
+
+  const throughDate = req.body && typeof req.body.throughDate === 'string' ? req.body.throughDate : null
+  try {
+    const data = await fetchB2CDataSafe()
+    if (!data || data.configured === false) {
+      return res.status(500).json({ error: 'B2C sheet is not configured -- set it in Settings > Data.' })
+    }
+    const cfg = await getReportConfig()
+    const built = await buildB2CDailyMessages(data, cfg, throughDate)
+    return res.status(200).json({ ok: true, jobs: built })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 async function handleB2CDailyReport(req, res) {
   // Vercel's own cron feature sends Authorization: Bearer $CRON_SECRET
   // automatically once CRON_SECRET is set on the project -- the same secret
@@ -2146,18 +2219,32 @@ async function handleB2CDailyReport(req, res) {
     // its job just relays that straight into the native-table builder
     // instead of going through buildB2CServerContext/throughDate (which has
     // nothing to act on here -- there is no daily grain to cut off at D-1).
-    const jobs = [
-      { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
-      { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement }) },
-    ]
+    // buildB2CDailyMessages is the SAME builder handleB2CDailyPreview calls,
+    // so a preview shown before sending can never disagree with this.
+    const built = await buildB2CDailyMessages(data, cfg, throughDate)
     const posted = []
-    for (const job of jobs) {
-      const ctx = job.buildCtx()
-      if (cfg.b2c_rev_vs_cashflow_note) ctx.revVsCashflowNote = cfg.b2c_rev_vs_cashflow_note
-      const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
-      const pendingId = await savePendingB2CReport(job.statement, messages)
+    for (const job of built) {
+      const { statement, messages, image } = job // pristine -- this exact array is what gets stored AND what the real channel receives on approval
+      const pendingId = await savePendingB2CReport(statement, messages, image)
       const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButtons(messages[0], pendingId, approvalLabel))
-      posted.push({ statement: job.statement, pendingId, ts })
+      // The sandbox copy gets the image threaded under the approval message
+      // (this is only the preview the approver checks before deciding) --
+      // the real send on approval posts it as its own top-level message
+      // instead (handleSlackViewSubmission), matching how the on-page
+      // manual send already does for the same reason: the image IS the
+      // report, not an attachment to one.
+      if (image) {
+        try {
+          const files = [await slackUploadFile(hook.token, {
+            filename: image.filename + '.png', buffer: Buffer.from(image.pngBase64, 'base64'), title: 'Cash Flow statement',
+          })]
+          if (image.csv) files.push(await slackUploadFile(hook.token, {
+            filename: image.filename + '.csv', buffer: Buffer.from(image.csv, 'utf8'), title: 'Cash Flow statement (CSV)',
+          }))
+          await slackCompleteUpload(hook.token, { files, channel: hook.channel, threadTs: ts })
+        } catch (e) { console.error('[b2c daily report] cashflow image upload (sandbox) failed', e.message) }
+      }
+      posted.push({ statement, pendingId, ts })
     }
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: (isVercelCron || isManualCron) ? 'cron' : 'admin' })
     return res.status(200).json({ ok: true, posted })
@@ -2397,6 +2484,25 @@ async function handleSlackViewSubmission(payload) {
     try {
       if (hook.mode === 'bot' && hook.channel) {
         for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
+        // Frozen at pending-creation time (see savePendingB2CReport) --
+        // posted as its own top-level message, same as the on-page manual
+        // 'sheet image' send, since the image IS the report rather than an
+        // attachment to the table message above it.
+        if (row.image_png_base64) {
+          try {
+            const files = [await slackUploadFile(token, {
+              filename: (row.image_filename || 'ceo-b2c-cashflow') + '.png',
+              buffer: Buffer.from(row.image_png_base64, 'base64'), title: 'Cash Flow statement',
+            })]
+            if (row.image_csv) files.push(await slackUploadFile(token, {
+              filename: (row.image_filename || 'ceo-b2c-cashflow') + '.csv',
+              buffer: Buffer.from(row.image_csv, 'utf8'), title: 'Cash Flow statement (CSV)',
+            }))
+            await slackCompleteUpload(token, {
+              files, channel: hook.channel, initialComment: ':bar_chart: *B2C Student Mobility — Cash Flow*',
+            })
+          } catch (e) { console.error('[b2c approve] cashflow image upload (real channel) failed', e.message) }
+        }
       }
       await logReport({ report_type: logType, recipients: ['slack:' + (hook.label || '?')], status: 'sent', triggered_by: actor })
       if (meta.channel && meta.ts) {
@@ -2664,6 +2770,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'b2c_daily_report') {
     return handleB2CDailyReport(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'b2c_daily_preview') {
+    return handleB2CDailyPreview(req, res)
   }
 
   const RESEND_KEY = process.env.RESEND_API_KEY
