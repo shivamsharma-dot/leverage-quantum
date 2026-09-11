@@ -215,12 +215,63 @@ function ValueSelectPopover({ options, onPick, onClose }) {
   )
 }
 
-function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, onChange, onRemove }) {
+// Same searched-list pattern as ValueSelectPopover, but for picking the FIELD itself --
+// LeadSquared's own Advanced Filters call this step "Configure Fields" and make it
+// searchable rather than a plain dropdown, since a real CRM has dozens of fields
+// (confirmed via help.leadsquared.com/how-do-i-use-advanced-search-feature-in-leadsquared/).
+// This list has grown to 30+ (Channel, Owner, 8 Opportunity fields) since the plain
+// Dropdown this replaced was first built, so search genuinely helps now.
+function FieldSelectPopover({ options, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.label.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 230, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search fields…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          {shown.map(o => (
+            <button key={o.value} type="button" onClick={() => onPick(o.value)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              {o.label}
+            </button>
+          ))}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No fields</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// Renders one condition as a plain-English chip, e.g. "Country is Germany" or "Budget
+// is defined" -- shown in the toolbar for every applied filter, LeadSquared-style
+// (their own pinned filters sit visibly next to the Add Filter icon rather than staying
+// hidden inside a popover you have to reopen to see what's even applied).
+function conditionSummary(c) {
+  const f = FILTERABLE_FIELDS.find(x => x.key === c.field)
+  const op = OPERATOR_MAP[c.operator]
+  if (!f || !op) return ''
+  return op.value === 'none' ? `${f.label} ${op.label}` : `${f.label} ${op.label} "${c.value}"`
+}
+
+function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, fieldPickerOpen, onOpenFieldPicker, onChange, onRemove }) {
   const op = OPERATOR_MAP[cond.operator]
+  const fieldLabel = (FILTERABLE_FIELDS.find(f => f.key === cond.field) || {}).label || cond.field
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <Dropdown value={cond.field} onChange={v => onChange({ field: v, value: '' })} minWidth={150}
-        options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
+      <div style={{ position: 'relative', minWidth: 150, flexShrink: 0 }}>
+        <button type="button" onClick={onOpenFieldPicker}
+          style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: FONT, background: 'var(--bg3)', color: C.text, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {fieldLabel}
+        </button>
+        {fieldPickerOpen && (
+          <FieldSelectPopover options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))}
+            onPick={v => { onChange({ field: v, value: '' }); onOpenFieldPicker() }} onClose={onOpenFieldPicker} />
+        )}
+      </div>
       <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: '' })} minWidth={130}
         options={OPERATORS.map(o => ({ value: o.key, label: o.label }))} />
       {op.value === 'text' && (
@@ -248,14 +299,12 @@ function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, onCha
 
 function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
   const [openValueRowId, setOpenValueRowId] = useState(null)
+  const [openFieldRowId, setOpenFieldRowId] = useState(null)
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
       <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 480, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 12 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8 }}>Filters</div>
-        {conditions.length === 0 && (
-          <div style={{ fontSize: 12, color: C.muted, padding: '4px 0 10px' }}>No conditions yet -- add one below.</div>
-        )}
         {/* Deliberately no maxHeight/overflowY here -- a scrollable ancestor clips any
             position:absolute descendant to its own box regardless of z-index, which was
             silently trapping the Field/Operator Dropdown's option list (and the value
@@ -269,13 +318,15 @@ function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, on
             <ConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
               valuePickerOpen={openValueRowId === c.id}
               onOpenValuePicker={() => setOpenValueRowId(v => v === c.id ? null : c.id)}
+              fieldPickerOpen={openFieldRowId === c.id}
+              onOpenFieldPicker={() => setOpenFieldRowId(v => v === c.id ? null : c.id)}
               onChange={patch => onUpdate(c.id, patch)} onRemove={() => onRemove(c.id)} />
           ))}
         </div>
         <button type="button" onClick={onAdd}
           style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          Add condition
+          Add Filter
         </button>
         {conditions.length > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '0.5px solid ' + C.border, flexWrap: 'wrap' }}>
@@ -615,9 +666,9 @@ export default function LiveQLsDashboard() {
 
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => setFilterOpen(v => !v)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: activeConditions.length ? C.navyBg : 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: activeConditions.length ? C.navy : C.muted, whiteSpace: 'nowrap' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                  {activeConditions.length ? `Filters (${activeConditions.length})` : 'Filters'}
+                  Filters
                 </button>
                 {filterOpen && (
                   <FilterBuilderPopover conditions={conditions} combinator={combinator} filterOptions={filterOptions}
@@ -626,6 +677,21 @@ export default function LiveQLsDashboard() {
                     onClose={() => setFilterOpen(false)} />
                 )}
               </div>
+              {/* Every applied filter shown as its own chip, right here in the toolbar --
+                  LeadSquared's own Advanced Filters keep frequently-used ("pinned") filters
+                  visibly next to the Add Filter icon rather than hidden inside a popover you
+                  have to reopen just to see what's currently applied. Clicking a chip reopens
+                  the popover to edit it; the × removes it directly, no popover needed. */}
+              {activeConditions.map(c => (
+                <span key={c.id} onClick={() => setFilterOpen(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 6px 5px 10px', borderRadius: 999, background: C.navyBg, color: C.navy, fontSize: 11.5, fontWeight: 700, fontFamily: FONT, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                  {conditionSummary(c)}
+                  <button type="button" onClick={e => { e.stopPropagation(); removeCondition(c.id) }} title="Remove this filter"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.navy, display: 'flex', alignItems: 'center', padding: 2, borderRadius: '50%' }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </span>
+              ))}
               {activeConditions.length > 0 && (
                 <button onClick={() => setConditions([])} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
               )}
