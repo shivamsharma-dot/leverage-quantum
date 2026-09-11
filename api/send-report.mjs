@@ -2124,12 +2124,15 @@ async function buildB2CDailyMessages(data, cfg, throughDate) {
     let image = null
     if (job.statement === 'cashflow') {
       try {
-        const { renderCashflowStatementPng, cashflowStatementCsv } = await import('../lib/cashflowStatementImage.mjs')
+        // Image only -- no CSV alongside it (requested removed, 2026-09-12).
+        // csv stays null rather than deleting the field: savePendingB2CReport
+        // / the upload steps below already only attach it when truthy.
+        const { renderCashflowStatementPng } = await import('../lib/cashflowStatementImage.mjs')
         const cf = data.cashflowStatement
         const pngBuf = renderCashflowStatementPng(cf)
         image = {
           pngBase64: pngBuf.toString('base64'),
-          csv: cashflowStatementCsv(cf),
+          csv: null,
           filename: 'ceo-b2c-cashflow-' + new Date().toISOString().slice(0, 10),
         }
       } catch (e) { console.error('[b2c daily report] cashflow image render failed', e.message) }

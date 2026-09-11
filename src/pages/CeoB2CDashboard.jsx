@@ -282,21 +282,24 @@ function cfImgAmt(n) { return (n == null || !isFinite(n)) ? '' : n.toFixed(2) }
 const CF_IMG_CELL = { border: '1px solid #000', padding: '5px 10px', fontSize: 13, lineHeight: 1.3, boxSizing: 'border-box' }
 const CF_IMG_W = { label: 320, mtd: 180, ytd: 200 }
 // slackShare.js's captureNodePng unconditionally adds `style:{padding:'18px'}`
-// to the clone it rasterizes, but sizes the capture canvas from THIS node's
-// own pre-padding width -- so the padded clone (18px wider on the right than
-// what was measured) reliably overflows the canvas by that same 18px, and
-// the rightmost content (the YTD column) gets clipped. Caught live
-// 2026-09-11: the first blank-PNG fix rendered real content, but the YTD
-// figures were cut off mid-digit. Confirmed by reading captureNodePng's
-// call in html-to-image's own source (getImageSize measures the node
-// BEFORE cloning/padding; applyStyle adds the padding only to the clone
-// afterward). Real fix belongs in captureNodePng itself (every page that
-// calls it is exposed to the same silent clip whenever content already
-// runs edge-to-edge), but that's shared by every other Slack image export
-// in the app -- safer to reserve slack locally here than risk changing
-// shared capture math no other page has actually hit yet. A blank 48px
-// buffer added to ONLY the outer node's own width (not the inner columns)
-// gives the padding room to grow into without ever touching real content.
+// to the clone it rasterizes (all 4 sides), but sizes the capture canvas
+// from THIS node's own pre-padding box -- so the padded clone is reliably
+// ~18-36px bigger on the RIGHT and BOTTOM than what was measured, and
+// whatever sits at those edges gets clipped. Caught live 2026-09-11 in two
+// separate rounds: first the YTD column's right edge, then (after fixing
+// only the width) the Closing Balance row's bottom edge -- same bug, the
+// other axis, because the first fix only reserved slack horizontally.
+// Confirmed by reading captureNodePng's call in html-to-image's own source
+// (getImageSize measures the node BEFORE cloning/padding; applyStyle adds
+// the padding only to the clone afterward). Real fix belongs in
+// captureNodePng itself (every page that calls it is exposed to the same
+// silent clip whenever content already runs edge-to-edge on either axis),
+// but that's shared by every other Slack image export in the app -- safer
+// to reserve slack locally here than risk changing shared capture math no
+// other page has actually hit yet. A blank 48px buffer on BOTH the outer
+// node's width AND its height (never the inner columns/rows) gives the
+// padding room to grow into on every edge without ever touching real
+// content.
 const CF_IMG_SAFETY_MARGIN = 48
 // Plain <div> rows/cells, not a real <table> -- html-to-image's foreignObject
 // capture has known, real problems reproducing <table>/border-collapse
@@ -348,6 +351,7 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
             </React.Fragment>
           )
         })}
+        <div style={{ height: CF_IMG_SAFETY_MARGIN }} />
       </div>
     </div>
   )
@@ -868,16 +872,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     // table below (which shows this page's own daily-derived MTD, not the
     // 'CF' tab's own MTD/YTD statement that version is reporting on).
     if (versionId === 'b2c_cashflow_image') {
+      // Image only -- no CSV. The sheet image already IS the whole report
+      // for this version (per its own imageIsMessage note above); a
+      // separate CSV of the same 16 rows was requested removed, 2026-09-12.
       const cfNode = cfImageRef.current
       const cfShot = cfNode ? await captureNodePng(cfNode, { ratios: [3, 2, 1.5, 1] }) : null
-      const cf = (data && data.cashflowStatement) || {}
-      const cfCols = [(cf.subHeader && cf.subHeader[0]) || 'Particulars', (cf.groupHeader && cf.groupHeader[1]) || 'MTD', (cf.groupHeader && cf.groupHeader[2]) || 'YTD']
-      const cfBody = (cf.rows || []).map(function (r) {
-        const o = {}
-        o[cfCols[0]] = r.label; o[cfCols[1]] = r.mtd; o[cfCols[2]] = r.ytd
-        return o
-      })
-      return { pngBase64: cfShot ? cfShot.base64 : null, pixelRatio: cfShot ? cfShot.pixelRatio : null, csv: rowsToCsv(cfCols, cfBody) }
+      return { pngBase64: cfShot ? cfShot.base64 : null, pixelRatio: cfShot ? cfShot.pixelRatio : null, csv: null }
     }
     const node = tableRef.current
     // Shot at 3x first: the CEO reads this table as an image in Slack, and it has

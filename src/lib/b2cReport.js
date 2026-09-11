@@ -448,15 +448,12 @@ function buildB2CCashflowImage(ctx) {
   const cf = c.cfStatement || {}
   const L = []
   L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' — Cash Flow*')
-  L.push('_A straight image of the sheet’s own Cash Flow statement -- month to date and year to date._')
-  L.push('')
   L.push(noteMrkdwn(c))
   return [{
     key: 'b2c_cashflow_image', label: 'B2C - Daily Cashflow (sheet image)', attach: true, imageIsMessage: true,
     text: L.join('\n'),
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
-      { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
       { type: 'context', elements: [{ type: 'mrkdwn', text: noteMrkdwn(c) }] },
     ],
     context: noteMrkdwn(c),
