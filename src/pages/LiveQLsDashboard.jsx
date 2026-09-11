@@ -69,7 +69,7 @@ const FULL_FIELDS = [
 // enrichedRows below), not one of the backend's own activity fields, so it's kept out
 // of FULL_FIELDS deliberately -- it already has its own dedicated table column and
 // shouldn't also get folded into the generic "every activity field" column set.
-const FILTERABLE_FIELDS = [...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }]
+const FILTERABLE_FIELDS = [{ key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }]
 
 // LeadSquared's own resolved display names for the two vendor/bot placeholder owners a
 // lead can be left sitting under instead of a real floor owner -- confirmed live
@@ -100,21 +100,22 @@ function formatDurationBetween(aStr, bStr) {
 
 // "Owner Assigned On" is LeadSquared's "Current Owner Assignment Time" -- a live,
 // mutable field. Confirmed live against real data (2026-09-11): it very often reflects
-// a REASSIGNMENT that happened AFTER a given QL call, not an assignment that preceded
+// a REASSIGNMENT that happens AFTER a given QL call, not an assignment that preceded
 // it (e.g. an automated post-QL routing/distribution step -- this account has a
-// "Distribute Opportunity" field for exactly that). A plain absolute difference would
-// silently misrepresent that as "how long the assigned owner took to reach QL" when
-// it's actually the reverse, so this states the direction explicitly instead of hiding
-// it with Math.abs() -- confirmed by reconciling against real rows where
-// (Opp Created -> QL) + (Owner Assigned -> QL) exactly equals (Owner Assigned - Opp
-// Created), which only holds when the QL call came BEFORE the owner assignment.
-function formatOwnerAssignVsQl(ownerAssignedOnStr, qlCallStr) {
-  if (!ownerAssignedOnStr || !qlCallStr) return null
-  const assigned = new Date(ownerAssignedOnStr.replace(' ', 'T'))
+// "Distribute Opportunity" field for exactly that) -- confirmed by reconciling real
+// rows where (Opp Created -> QL) + (Owner Assigned -> QL) exactly equalled (Owner
+// Assigned - Opp Created), which only holds when the QL call came BEFORE the owner
+// assignment. So the natural business order here is Call, then (later) Owner
+// Assigned -- this reports that direction as the plain/normal case, and calls out the
+// atypical one (the owner was already assigned before this particular call) instead
+// of hiding either direction with Math.abs().
+function formatCallToOwnerAssign(qlCallStr, ownerAssignedOnStr) {
+  if (!qlCallStr || !ownerAssignedOnStr) return null
   const call = new Date(qlCallStr.replace(' ', 'T'))
-  if (isNaN(assigned.getTime()) || isNaN(call.getTime())) return null
-  const mag = formatDurationSeconds(Math.abs((call.getTime() - assigned.getTime()) / 1000))
-  return call.getTime() >= assigned.getTime() ? mag : mag + ' after'
+  const assigned = new Date(ownerAssignedOnStr.replace(' ', 'T'))
+  if (isNaN(call.getTime()) || isNaN(assigned.getTime())) return null
+  const mag = formatDurationSeconds(Math.abs((assigned.getTime() - call.getTime()) / 1000))
+  return assigned.getTime() >= call.getTime() ? mag : mag + ' before'
 }
 
 // ---- Advanced filter: a small condition builder (field / operator / value), any
@@ -392,7 +393,13 @@ export default function LiveQLsDashboard() {
   const enrichedRows = useMemo(() => allRows.map(r => {
     const o = r.opportunityId ? ownerCache[r.opportunityId] : null
     const od = o && typeof o === 'object' ? o : null
-    return { ...r, ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null }
+    return {
+      ...r,
+      // Matches exactly what the table already displays ("Human"/"AI"), so the filter's
+      // value picker doesn't show the raw lowercase channel key instead.
+      channelLabel: r.channel === 'human' ? 'Human' : 'AI',
+      ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null,
+    }
   }), [allRows, ownerCache])
 
   // Fields where every fetched row for the ACTIVE date window came back blank are hidden
@@ -540,7 +547,7 @@ export default function LiveQLsDashboard() {
       'Owner Assigned On': r.ownerAssignedOn || '',
       'Opportunity Created On': r.oppCreatedOn || '',
       'Time: Opp Created -> QL Call': formatDurationBetween(r.oppCreatedOn, r.createdOn) || '',
-      'Time: Owner Assigned -> QL Call': formatOwnerAssignVsQl(r.ownerAssignedOn, r.createdOn) || '',
+      'Time: QL Call -> Owner Assigned': formatCallToOwnerAssign(r.createdOn, r.ownerAssignedOn) || '',
       'Misassigned Owner (Futwork/Futwork AI)': r.ownerName && MISASSIGNED_OWNER_NAMES.has(r.ownerName) ? 'Yes' : '',
     }
     visibleFields.forEach(f => { row[f.label] = r[f.key] || '' })
@@ -631,7 +638,7 @@ export default function LiveQLsDashboard() {
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
                       ['Opp Created → QL Call', 'Elapsed time between the Opportunity being created and this QL call, auto-scaled to seconds/minutes/hours/days.'],
-                      ['Owner Assigned → QL Call', 'Elapsed time between the current owner being assigned and this QL call. “Current Owner Assignment Time” is a live field, so it often reflects a REASSIGNMENT that happened AFTER the call (e.g. automatic post-QL routing), not the owner who actually made it -- shown as “X after” when that’s the case, rather than hiding the direction.'],
+                      ['QL Call → Owner Assigned', 'Elapsed time from this QL call to the current owner being assigned. “Current Owner Assignment Time” is a live field, so it often reflects a REASSIGNMENT that happens AFTER the call (e.g. automatic post-QL routing), not the owner who actually made it -- shown as “X before” on the rarer, opposite case where the owner was already assigned before this call.'],
                       ['Misassigned owner', 'A row highlighted red means the Opportunity Owner is still “Futwork” or “Futwork AI” -- LeadSquared’s own bot/vendor placeholder accounts, not a real floor owner. Filter on Opportunity Owner is/is not to isolate these.'],
                       ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh. Any field that came back blank for every row in the current window is hidden from the table.'],
                       ['Filters', 'Build any number of field/operator/value conditions and combine them with ALL (AND) or ANY (OR). Narrows the Records table, the Distribution popup, and the QL KPI cards -- Queued counts are never affected.'],
@@ -698,7 +705,7 @@ export default function LiveQLsDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'Owner Assigned → QL Call', ...visibleFields.map(f => f.label)].map(h => (
+                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...visibleFields.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -755,8 +762,8 @@ export default function LiveQLsDashboard() {
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the Opportunity's own creation and this QL call.">
                               {cellVal(formatDurationBetween(ownerData && ownerData.createdOn, r.createdOn))}
                             </td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the current owner assignment and this QL call. '... after' means the CURRENT owner was assigned after this call -- likely a later reassignment, not the owner who actually made this call.">
-                              {cellVal(formatOwnerAssignVsQl(ownerData && ownerData.ownerAssignedOn, r.createdOn))}
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time from this QL call to the current owner assignment. '... before' means the CURRENT owner was already assigned before this call, rather than assigned as a result of it.">
+                              {cellVal(formatCallToOwnerAssign(r.createdOn, ownerData && ownerData.ownerAssignedOn))}
                             </td>
                             {visibleFields.map(f => (
                               <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
