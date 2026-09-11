@@ -3318,7 +3318,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const daysInPrevMonth = prevMonthEnd.getDate()
     Promise.all([
       retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
-      fetchAppsCountSince(monthStart).catch(() => null),
+      fetchAppsCountSince(monthStart, until).catch(() => null),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
       retryFetch(() => fetchOverallBqAggRows({ since: dayKey(prevMonthStart), until: dayKey(prevMonthEnd), sources: [] })).catch(() => null),

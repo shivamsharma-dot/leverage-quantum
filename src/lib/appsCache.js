@@ -104,8 +104,18 @@ export async function fetchAppsCacheSyncedAt() {
 // needs "how many applications this month," not the ~7,000+ full rows fetchAppsCacheRows
 // pulls and pages through. One Prefer:count=exact request with limit=1 gets the total
 // off the response's own Content-Range header without downloading a single row body.
-export async function fetchAppsCountSince(sinceIso) {
-  const p = new URLSearchParams({ select: 'row_key', first_app_submitted_at: 'gte.' + sinceIso, limit: '1' })
+//
+// Real bug found live (2026-09-11): this had no upper bound at all, so the MTD
+// Scorecard's Applications figure silently counted through TODAY -- breaking that
+// report's own stated "complete days only" rule (Spend/Leads/QL all correctly stop
+// at yesterday) -- confirmed by a live mismatch, e.g. 186 (no upper bound) vs. 180
+// (through yesterday, matching the Overall dashboard's own figure). Optional
+// untilIso closes that gap; omitted, this keeps its old no-upper-bound behavior for
+// any other caller that genuinely wants "since X, no cap."
+export async function fetchAppsCountSince(sinceIso, untilIso) {
+  const params = { select: 'row_key', first_app_submitted_at: 'gte.' + sinceIso, limit: '1' }
+  const p = new URLSearchParams(params)
+  if (untilIso) p.append('first_app_submitted_at', 'lte.' + untilIso)
   const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + p.toString(), { headers: headers({ Prefer: 'count=exact' }) })
   if (!r.ok) throw new Error(TABLE + ' count failed (' + r.status + '): ' + await r.text())
   const range = r.headers.get('content-range') || ''
