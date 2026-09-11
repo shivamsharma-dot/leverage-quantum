@@ -91,8 +91,12 @@ function scoreTable(rows, fmtINR, fmtN) {
     const futworkQueued = r.futworkHumanQ + r.futworkAiQ
     const leadToQl = futworkQueued > 0 ? ((r.humanQL + r.futworkAiQl) / futworkQueued) * 100 : null
     if (r.label === 'Overall') t.strongRows.push(t.rows.length)
+    // "Total Leads" shows Futwork Queued, not Total Leads Generated (2026-09-11,
+    // asked for directly) -- keeps the column's own denominator consistent with
+    // what Lead to QL % actually divides by, rather than the two being two
+    // different, independently-timestamped counts sitting side by side.
     t.rows.push([
-      r.label, blankCost ? DASH : moneyCompact(r.spend), fmtN(r.leads), noQl ? DASH : fmtN(r.totalQL),
+      r.label, blankCost ? DASH : moneyCompact(r.spend), noQl ? DASH : fmtN(futworkQueued), noQl ? DASH : fmtN(r.totalQL),
       noQl || r.srQl == null ? DASH : fmtN(r.srQl), noQl || r.acQl == null ? DASH : fmtN(r.acQl),
       cpl == null ? DASH : fmtINR(cpl), cpql == null ? DASH : fmtINR(cpql),
       pctText(leadToQl),
