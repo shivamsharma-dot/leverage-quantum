@@ -2514,7 +2514,16 @@ async function handleSlackReport(req, res) {
     // Sequential on purpose: Slack orders by arrival, so posting in parallel would
     // let message 3 land above message 1.
     let attachTs = null
+    // A message flagged imageIsMessage (b2cReport.js's buildB2CCashflowImage)
+    // IS the report -- there's no separate table/summary worth a leading post
+    // of its own. Skip posting it and carry its text forward as the file
+    // upload's own initial_comment instead, so the PNG lands as a normal
+    // top-level channel message (no threadTs) with the caption riding along,
+    // rather than a near-duplicate caption message with the actual image
+    // buried a tap away in its thread.
+    let imageInitialComment = null
     for (const m of list) {
+      if (m.imageIsMessage) { imageInitialComment = m.text; continue }
       const ts = await slackPostReportMessage(hook.token, hook.channel, m)
       if (m.attach && !attachTs) attachTs = ts
     }
@@ -2529,9 +2538,10 @@ async function handleSlackReport(req, res) {
         filename: base + '-' + stamp + '.csv', buffer: Buffer.from(String(csv), 'utf8'), title: 'PM summary (full data)',
       }))
       if (files.length) {
-        const note = (pixelRatio && pixelRatio < 2) ? '_Image scaled down to fit the upload size limit._' : null
+        const scaledNote = (pixelRatio && pixelRatio < 2) ? '_Image scaled down to fit the upload size limit._' : null
+        const initialComment = attachTs ? null : [imageInitialComment, scaledNote].filter(Boolean).join('\n\n') || null
         await slackCompleteUpload(hook.token, {
-          files, channel: hook.channel, threadTs: attachTs, initialComment: attachTs ? null : note,
+          files, channel: hook.channel, threadTs: attachTs, initialComment,
         })
       }
     }

@@ -279,46 +279,59 @@ const STATEMENT_LABELS = {
 // the unit, exactly as the sheet itself does).
 const CF_IMG_BOLD_LABELS = new Set(['Opening Balance :', 'Cash Inflow', 'Cash Outflow :', 'Closing Balance'])
 function cfImgAmt(n) { return (n == null || !isFinite(n)) ? '' : n.toFixed(2) }
-const CF_IMG_CELL = { border: '1px solid #000', padding: '5px 10px', fontSize: 13, lineHeight: 1.3 }
+const CF_IMG_CELL = { border: '1px solid #000', padding: '5px 10px', fontSize: 13, lineHeight: 1.3, boxSizing: 'border-box' }
+const CF_IMG_W = { label: 320, mtd: 180, ytd: 200 }
+// Plain <div> rows/cells, not a real <table> -- html-to-image's foreignObject
+// capture has known, real problems reproducing <table>/border-collapse
+// exactly (a first version of this component used a table and the resulting
+// PNG posted to Slack came out blank -- caught live 2026-09-11). Div rows +
+// fixed pixel widths sidestep that whole class of bug and look identical.
 const CashflowStatementImage = React.forwardRef(function CashflowStatementImage({ cf }, ref) {
   const rows = (cf && cf.rows) || []
   const groupHeader = (cf && cf.groupHeader && cf.groupHeader.length) ? cf.groupHeader : ['', 'MTD', 'YTD']
   const subHeader = (cf && cf.subHeader && cf.subHeader.length) ? cf.subHeader : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
   const title = (cf && cf.title) || 'B2C Student Mobility'
+  const totalW = CF_IMG_W.label + CF_IMG_W.mtd + CF_IMG_W.ytd
+  const cellStyle = function (bold) { return { ...CF_IMG_CELL, fontWeight: bold ? 700 : 400, textDecoration: bold ? 'underline' : 'none' } }
   return (
-    <div ref={ref} style={{ position: 'fixed', left: -99999, top: 0, background: '#fff', width: 700, fontFamily: 'Arial, Helvetica, sans-serif', color: '#000', whiteSpace: 'nowrap' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
-        <tbody>
-          <tr>
-            <td colSpan={3} style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, textDecoration: 'underline' }}>{title}</td>
-          </tr>
-          <tr><td colSpan={3} style={{ border: 'none', height: 10, padding: 0 }} /></tr>
-          <tr>
-            <td style={{ border: 'none', width: 320 }} />
-            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 180 }}>{groupHeader[1] || 'MTD'}</td>
-            <td style={{ ...CF_IMG_CELL, textAlign: 'center', fontWeight: 700, width: 200 }}>{groupHeader[2] || 'YTD'}</td>
-          </tr>
-          <tr>
-            <td style={{ ...CF_IMG_CELL, textAlign: 'left' }}>{subHeader[0] || 'Particulars'}</td>
-            <td style={{ ...CF_IMG_CELL, textAlign: 'center' }}>{subHeader[1] || 'Amount (INR CR.)'}</td>
-            <td style={{ ...CF_IMG_CELL, textAlign: 'center' }}>{subHeader[2] || 'Amount (INR CR.)'}</td>
-          </tr>
-          {rows.map(function (r, i) {
-            const bold = CF_IMG_BOLD_LABELS.has(r.label)
-            const cell = { ...CF_IMG_CELL, fontWeight: bold ? 700 : 400, textDecoration: bold ? 'underline' : 'none' }
-            return (
-              <React.Fragment key={i}>
-                {bold && i > 0 ? <tr><td colSpan={3} style={{ border: 'none', height: 10, padding: 0 }} /></tr> : null}
-                <tr>
-                  <td style={{ ...cell, textAlign: bold ? 'left' : 'right' }}>{r.label}</td>
-                  <td style={{ ...cell, textAlign: 'right' }}>{cfImgAmt(r.mtd)}</td>
-                  <td style={{ ...cell, textAlign: 'right' }}>{cfImgAmt(r.ytd)}</td>
-                </tr>
-              </React.Fragment>
-            )
-          })}
-        </tbody>
-      </table>
+    // Zero-size, overflow:hidden ancestor at the real page origin (0,0) --
+    // NOT `position:fixed; left:-99999px` on the captured node itself. Some
+    // browsers skip painting content translated tens of thousands of pixels
+    // off-screen as a compositing optimization, which is the other real
+    // candidate for the same blank-PNG bug; clipping via a 0x0 ancestor
+    // instead keeps the captured node's own layout/paint completely normal
+    // (html-to-image serializes the target node's subtree directly -- an
+    // ancestor's overflow:hidden doesn't affect that serialization at all,
+    // it only keeps this invisible to a real user).
+    <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      <div ref={ref} style={{ width: totalW, background: '#fff', fontFamily: 'Arial, Helvetica, sans-serif', color: '#000', whiteSpace: 'nowrap' }}>
+        <div style={{ ...CF_IMG_CELL, width: totalW, textAlign: 'center', fontWeight: 700, textDecoration: 'underline' }}>{title}</div>
+        <div style={{ height: 10 }} />
+        <div style={{ display: 'flex' }}>
+          <div style={{ width: CF_IMG_W.label }} />
+          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.mtd, textAlign: 'center', fontWeight: 700 }}>{groupHeader[1] || 'MTD'}</div>
+          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.ytd, textAlign: 'center', fontWeight: 700 }}>{groupHeader[2] || 'YTD'}</div>
+        </div>
+        <div style={{ display: 'flex' }}>
+          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.label, textAlign: 'left' }}>{subHeader[0] || 'Particulars'}</div>
+          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.mtd, textAlign: 'center' }}>{subHeader[1] || 'Amount (INR CR.)'}</div>
+          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.ytd, textAlign: 'center' }}>{subHeader[2] || 'Amount (INR CR.)'}</div>
+        </div>
+        {rows.map(function (r, i) {
+          const bold = CF_IMG_BOLD_LABELS.has(r.label)
+          const c = cellStyle(bold)
+          return (
+            <React.Fragment key={i}>
+              {bold && i > 0 ? <div style={{ height: 10 }} /> : null}
+              <div style={{ display: 'flex' }}>
+                <div style={{ ...c, width: CF_IMG_W.label, textAlign: bold ? 'left' : 'right' }}>{r.label}</div>
+                <div style={{ ...c, width: CF_IMG_W.mtd, textAlign: 'right' }}>{cfImgAmt(r.mtd)}</div>
+                <div style={{ ...c, width: CF_IMG_W.ytd, textAlign: 'right' }}>{cfImgAmt(r.ytd)}</div>
+              </div>
+            </React.Fragment>
+          )
+        })}
+      </div>
     </div>
   )
 })

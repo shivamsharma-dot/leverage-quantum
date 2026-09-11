@@ -431,14 +431,28 @@ function buildB2CCashflowTable(ctx) {
 // This builder itself does no rendering -- it only supplies the short
 // caption text; the PNG is captured client-side and attached by
 // SlackReportPanel, same as every other attach:true version.
+//
+// imageIsMessage:true -- every OTHER attach:true version posts its own text
+// as a leading message, then the file lands as a threaded reply under it
+// (api/send-report.mjs's handleSlackReport, `threadTs: attachTs`) -- fine
+// when the leading message is a real report in its own right (a table, a
+// summary). Here the image IS the whole report; threading it under a
+// near-duplicate caption just hid it an extra tap away in Slack (caught live
+// 2026-09-11 -- the image also didn't render at all that time, a SEPARATE
+// bug fixed in CashflowStatementImage itself). This flag tells
+// handleSlackReport to skip the separate leading post and instead attach
+// this message's own `text` as the file's initial_comment, so the PNG
+// itself IS the main-channel message.
 function buildB2CCashflowImage(ctx) {
   const c = ctx || {}
   const cf = c.cfStatement || {}
   const L = []
   L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' — Cash Flow*')
   L.push('_A straight image of the sheet’s own Cash Flow statement -- month to date and year to date._')
+  L.push('')
+  L.push(noteMrkdwn(c))
   return [{
-    key: 'b2c_cashflow_image', label: 'B2C - Daily Cashflow (sheet image)', attach: true,
+    key: 'b2c_cashflow_image', label: 'B2C - Daily Cashflow (sheet image)', attach: true, imageIsMessage: true,
     text: L.join('\n'),
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
