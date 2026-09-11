@@ -739,6 +739,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     return function () { alive = false }
   }, [dailyOpen, dailyThroughDate])
 
+  useEffect(function () {
+    function onKey(e) { if (e.key === 'Escape' && dailyOpen && !dailySending) setDailyOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return function () { window.removeEventListener('keydown', onKey) }
+  }, [dailyOpen, dailySending])
+
   const saveDailyApproveDest = useCallback(function (value) {
     setDailyApproveDest(value)
     fetch('/api/preferences', {
@@ -964,116 +970,128 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               </Button>
             ) : null}
             {ready ? (
-              <div style={{ position: 'relative' }}>
-                <Button size="sm" variant="secondary" onClick={openDaily} icon={<SlackIcon size={13} />}>
-                  Daily Report
-                </Button>
-                {dailyOpen ? (
-                  <>
-                    <div onClick={function () { setDailyOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
-                    <div style={{
-                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, width: 460, maxWidth: '90vw',
-                      background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
-                      boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', padding: 14,
-                      boxSizing: 'border-box', overflow: 'visible',
-                    }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
-                        Send the daily P&amp;L + Cash Flow report
-                      </div>
-                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-                        Send through
-                      </label>
-                      <div style={{ position: 'relative', marginBottom: 10 }}>
-                        <button type="button" onClick={function () { setDailyDateOpen(function (v) { return !v }) }} style={{
-                          width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 8,
-                          border: '1px solid ' + (dailyDateOpen ? '#1F3C84' : 'var(--card-border)'),
-                          background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit',
-                          cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        }}>
-                          <span>{dailyThroughDate}</span>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
-                          </svg>
-                        </button>
-                        {dailyDateOpen ? (
-                          <>
-                            <div onClick={function () { setDailyDateOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 401 }} />
-                            <div style={{
-                              position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 402,
-                              background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
-                              boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
-                            }}>
-                              <SingleDatePicker
-                                value={dailyThroughDate} max={d1}
-                                onChange={setDailyThroughDate}
-                                onClose={function () { setDailyDateOpen(false) }}
-                              />
-                            </div>
-                          </>
-                        ) : null}
-                      </div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 10 }}>
-                        Can't go later than {d1} &mdash; today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's current MTD/YTD figures, which have no daily grain to cut off.
-                      </div>
-                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-                        Approval sends to
-                      </label>
-                      <Dropdown
-                        value={dailyApproveDest || (dailyTestChannels[0] ? 'test:' + dailyTestChannels[0].id : 'test')}
-                        onChange={saveDailyApproveDest}
-                        fullWidth
-                        options={[
-                          ...dailyTestChannels.map(function (c) { return { value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name } }),
-                          { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
-                        ]}
-                      />
-                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '12px 0 4px' }}>
-                        Preview
-                      </label>
-                      <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--card-border)', borderRadius: 10, padding: 10, background: 'var(--bg2)' }}>
-                        {dailyPreviewLoading ? (
-                          <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Building preview…</div>
-                        ) : dailyPreviewErr ? (
-                          <div style={{ fontSize: 11.5, color: '#B42318' }}>{dailyPreviewErr}</div>
-                        ) : Array.isArray(dailyPreview) && dailyPreview.length ? (
-                          dailyPreview.map(function (job, i) {
-                            const msg = (job.messages || [])[0]
-                            return (
-                              <div key={job.statement} style={{ marginBottom: i < dailyPreview.length - 1 ? 14 : 0 }}>
-                                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
-                                  {job.statement === 'pnl' ? 'Daily P&L' : 'Cash Flow'}
-                                </div>
-                                {msg && msg.table ? <DailyPreviewTable table={msg.table} /> : null}
-                                {job.image && job.image.pngBase64 ? (
-                                  <div style={{ marginTop: 8 }}>
-                                    <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 4 }}>Sheet image, attached alongside the table above:</div>
-                                    <img
-                                      src={'data:image/png;base64,' + job.image.pngBase64}
-                                      alt="Cash Flow statement"
-                                      style={{ maxWidth: '100%', border: '1px solid var(--card-border)', borderRadius: 6, display: 'block' }}
-                                    />
-                                  </div>
-                                ) : job.statement === 'cashflow' ? (
-                                  <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 6 }}>Image could not be rendered for this preview -- the table above still sends normally.</div>
-                                ) : null}
-                              </div>
-                            )
-                          })
-                        ) : (
-                          <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Nothing to preview yet.</div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-                        <Button size="sm" variant="secondary" onClick={sendDailyReportNow} disabled={dailySending}>
-                          {dailySending ? 'Sending…' : 'Send report now'}
-                        </Button>
-                        {dailyMsg ? (
-                          <span style={{ fontSize: 11, fontWeight: 600, color: dailyMsg.charAt(0) === '✕' ? '#B42318' : 'var(--green-ink, #2E7D4F)' }}>{dailyMsg}</span>
-                        ) : null}
-                      </div>
+              <Button size="sm" variant="secondary" onClick={openDaily} icon={<SlackIcon size={13} />}>
+                Daily Report
+              </Button>
+            ) : null}
+            {dailyOpen ? (
+              <div
+                onClick={function () { if (!dailySending) setDailyOpen(false) }}
+                style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+              >
+                <div onClick={function (e) { e.stopPropagation() }} style={{
+                  background: 'var(--card)', width: '100%', maxWidth: 640, maxHeight: '88vh',
+                  borderRadius: 16, boxShadow: '0 24px 64px rgba(15,23,42,0.28)',
+                  display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                }}>
+                  <div style={{ padding: '15px 18px', borderBottom: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(31,60,132,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <SlackIcon size={17} />
                     </div>
-                  </>
-                ) : null}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em' }}>Daily Report</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>Daily P&amp;L + Cash Flow, together -- posted to the sandbox for Approve/Disapprove.</div>
+                    </div>
+                    <button onClick={function () { setDailyOpen(false) }} title="Close" disabled={dailySending} style={{ border: 'none', background: 'none', cursor: dailySending ? 'default' : 'pointer', padding: 6, borderRadius: 7, color: 'var(--text3)', lineHeight: 0, opacity: dailySending ? 0.5 : 1 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+
+                  <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
+                    <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                      Send through
+                    </label>
+                    <div style={{ position: 'relative', marginBottom: 10, maxWidth: 260 }}>
+                      <button type="button" onClick={function () { setDailyDateOpen(function (v) { return !v }) }} style={{
+                        width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 8,
+                        border: '1px solid ' + (dailyDateOpen ? '#1F3C84' : 'var(--card-border)'),
+                        background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit',
+                        cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      }}>
+                        <span>{dailyThroughDate}</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                        </svg>
+                      </button>
+                      {dailyDateOpen ? (
+                        <>
+                          <div onClick={function () { setDailyDateOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 901 }} />
+                          <div style={{
+                            position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 902,
+                            background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
+                            boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
+                          }}>
+                            <SingleDatePicker
+                              value={dailyThroughDate} max={d1}
+                              onChange={setDailyThroughDate}
+                              onClose={function () { setDailyDateOpen(false) }}
+                            />
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 14 }}>
+                      Can't go later than {d1} &mdash; today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's current MTD/YTD figures, which have no daily grain to cut off.
+                    </div>
+                    <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                      Approval sends to
+                    </label>
+                    <Dropdown
+                      value={dailyApproveDest || (dailyTestChannels[0] ? 'test:' + dailyTestChannels[0].id : 'test')}
+                      onChange={saveDailyApproveDest}
+                      fullWidth
+                      options={[
+                        ...dailyTestChannels.map(function (c) { return { value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name } }),
+                        { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
+                      ]}
+                    />
+                    <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '16px 0 6px' }}>
+                      Preview
+                    </label>
+                    <div style={{ border: '1px solid var(--card-border)', borderRadius: 10, padding: 12, background: 'var(--bg2)' }}>
+                      {dailyPreviewLoading ? (
+                        <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Building preview…</div>
+                      ) : dailyPreviewErr ? (
+                        <div style={{ fontSize: 11.5, color: '#B42318' }}>{dailyPreviewErr}</div>
+                      ) : Array.isArray(dailyPreview) && dailyPreview.length ? (
+                        dailyPreview.map(function (job, i) {
+                          const msg = (job.messages || [])[0]
+                          return (
+                            <div key={job.statement} style={{ marginBottom: i < dailyPreview.length - 1 ? 18 : 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
+                                {job.statement === 'pnl' ? 'Daily P&L' : 'Cash Flow'}
+                              </div>
+                              {msg && msg.table ? <DailyPreviewTable table={msg.table} /> : null}
+                              {job.image && job.image.pngBase64 ? (
+                                <div style={{ marginTop: 10 }}>
+                                  <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 4 }}>Sheet image, attached alongside the table above:</div>
+                                  <img
+                                    src={'data:image/png;base64,' + job.image.pngBase64}
+                                    alt="Cash Flow statement"
+                                    style={{ maxWidth: '100%', border: '1px solid var(--card-border)', borderRadius: 6, display: 'block' }}
+                                  />
+                                </div>
+                              ) : job.statement === 'cashflow' ? (
+                                <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 6 }}>Image could not be rendered for this preview -- the table above still sends normally.</div>
+                              ) : null}
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Nothing to preview yet.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderTop: '1px solid var(--card-border)', flexWrap: 'wrap' }}>
+                    <Button size="sm" variant="secondary" onClick={sendDailyReportNow} disabled={dailySending}>
+                      {dailySending ? 'Sending…' : 'Send report now'}
+                    </Button>
+                    {dailyMsg ? (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: dailyMsg.charAt(0) === '✕' ? '#B42318' : 'var(--green-ink, #2E7D4F)' }}>{dailyMsg}</span>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             ) : null}
             <SlackReportPanel
