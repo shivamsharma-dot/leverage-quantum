@@ -297,6 +297,10 @@ export default function LiveQLsDashboard() {
   const [distributionField, setDistributionField] = useState('country')
   const [page, setPage] = useState(0)
   const [showInfo, setShowInfo] = useState(false)
+  // opportunityId -> { ownerName, createdOn, ownerAssignedOn } | 'loading' | 'error'.
+  // Fetched lazily, only for whichever rows are on the CURRENTLY VISIBLE page -- see the
+  // effect below and the backend comment on fetchLiveQlOpportunityOwners.
+  const [ownerCache, setOwnerCache] = useState({})
   const PAGE_SIZE = 25
 
   async function load() {
@@ -324,6 +328,16 @@ export default function LiveQLsDashboard() {
     const a = (data.ai.rows || []).map(r => ({ ...r, channel: 'ai' }))
     return [...h, ...a]
   }, [data])
+
+  // Fields where every fetched row for the ACTIVE date window came back blank are hidden
+  // from the table entirely, per explicit request -- "if it came always blank, dont show
+  // it." Scoped to allRows (the whole window, not just the visible page) so this is an
+  // honest read of the real data, not a guess from a small sample; it can genuinely differ
+  // between windows (a field blank for "Today" may be populated for "Last Month"), which is
+  // the correct, data-driven behavior for what was asked, not a bug.
+  const visibleFields = useMemo(() => (
+    FULL_FIELDS.filter(f => allRows.some(r => r[f.key] != null && r[f.key] !== ''))
+  ), [allRows])
 
   // Distinct observed values per field, for the 'is'/'is not' operators' value picker.
   const filterOptions = useMemo(() => {
@@ -365,9 +379,37 @@ export default function LiveQLsDashboard() {
   const safePage = Math.min(page, totalPages - 1)
   const pageRows = filteredRows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
 
+  // Opportunity Owner / Owner Assigned On / Opportunity Created On come from a separate
+  // per-Opportunity LeadSquared lookup (see fetchLiveQlOpportunityOwners in
+  // api/crm-leads.js), not the activity fields above -- fetched only for whichever
+  // opportunityIds are on the page actually being looked at right now, and cached by id so
+  // paging back to an already-seen page is instant.
+  useEffect(() => {
+    const ids = [...new Set(pageRows.map(r => r.opportunityId).filter(Boolean))]
+      .filter(id => !ownerCache[id])
+    if (!ids.length) return
+    setOwnerCache(prev => { const next = { ...prev }; ids.forEach(id => { next[id] = 'loading' }); return next })
+    fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_opportunity_owners&ids=${ids.map(encodeURIComponent).join(',')}`)
+      .then(d => {
+        setOwnerCache(prev => {
+          const next = { ...prev }
+          ;(d.rows || []).forEach(r => { next[r.opportunityId] = r.error ? 'error' : r })
+          return next
+        })
+      })
+      .catch(() => {
+        setOwnerCache(prev => { const next = { ...prev }; ids.forEach(id => { next[id] = 'error' }); return next })
+      })
+  }, [pageRows]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Owner/Owner Assigned On/Opportunity Created On are deliberately NOT included here --
+  // they're fetched lazily per visible page (see the effect above), so most rows in a
+  // multi-page export would never have been looked up and would export blank, which would
+  // read as real "no owner" data rather than "never fetched." The table itself is the
+  // right place to see them; export stays scoped to data the backend returns in full.
   const exportRows = filteredRows.map(r => {
     const row = { Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn, 'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '' }
-    FULL_FIELDS.forEach(f => { row[f.label] = r[f.key] || '' })
+    visibleFields.forEach(f => { row[f.label] = r[f.key] || '' })
     return row
   })
 
@@ -451,7 +493,9 @@ export default function LiveQLsDashboard() {
                       ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
                       ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filters, same as the Queued cards.'],
-                      ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh.'],
+                      ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
+                      ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself -- fetched only for whichever rows are on the page you’re viewing, so they may show … briefly while loading. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
+                      ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh. Any field that came back blank for every row in the current window is hidden from the table.'],
                       ['Filters', 'Build any number of field/operator/value conditions and combine them with ALL (AND) or ANY (OR). Narrows the Records table, the Distribution popup, and the QL KPI cards -- Queued counts are never affected.'],
                     ].map(([m, d]) => (
                       <div key={m} style={{ display: 'flex', gap: 10, padding: '7px 0', borderTop: '0.5px solid #F3F4F6' }}>
@@ -494,6 +538,7 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="Human QLs" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label="Queued to QL %" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="QLs This Period" value={fmtN(totalQlUnfiltered)} sub="Human + AI, for the date range -- ignores the Filters above" accent={C.green} icon={KPI_ICONS.total} />
               </div>
 
               <div style={{ padding: '16px 28px 28px' }}>
@@ -504,19 +549,24 @@ export default function LiveQLsDashboard() {
                     meant to be scanned, not read paragraph-style, so it scrolls
                     horizontally inside its own card rather than wrapping text and
                     producing uneven row heights. */}
-                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${FULL_FIELDS.length + 4} columns`}
+                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${visibleFields.length + 7} columns`}
                   action={totalPages > 1 ? <PaginationControl page={safePage} totalPages={totalPages} onPrev={() => setPage(safePage - 1)} onNext={() => setPage(safePage + 1)} /> : null}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Created On', 'Prospect ID', 'Opportunity ID', ...FULL_FIELDS.map(f => f.label)].map(h => (
+                          {['Channel', 'Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', ...visibleFields.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {pageRows.map(r => (
+                        {pageRows.map(r => {
+                          const owner = r.opportunityId ? ownerCache[r.opportunityId] : null
+                          const ownerLoading = owner === 'loading'
+                          const ownerFailed = owner === 'error'
+                          const ownerData = owner && typeof owner === 'object' ? owner : null
+                          return (
                           <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border }}>
                             <td style={{ padding: '7px 10px', fontWeight: 700, color: r.channel === 'human' ? C.blue : C.cyan, whiteSpace: 'nowrap' }}>{r.channel === 'human' ? 'Human' : 'AI'}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.createdOn}</td>
@@ -534,13 +584,17 @@ export default function LiveQLsDashboard() {
                                   style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
                               ) : '—'}
                             </td>
-                            {FULL_FIELDS.map(f => (
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerName) || '—'}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerAssignedOn) || '—'}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.createdOn) || '—'}</td>
+                            {visibleFields.map(f => (
                               <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
                             ))}
                           </tr>
-                        ))}
+                          )
+                        })}
                         {pageRows.length === 0 && (
-                          <tr><td colSpan={FULL_FIELDS.length + 4} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
+                          <tr><td colSpan={visibleFields.length + 7} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
                         )}
                       </tbody>
                     </table>

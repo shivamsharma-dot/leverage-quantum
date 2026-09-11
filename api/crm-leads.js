@@ -773,6 +773,45 @@ async function fetchLiveQlMetrics(creds, { date }) {
   }
 }
 
+// Enriches a small batch of Live QL rows with their linked Opportunity's Owner, real
+// Created On, and current owner-assignment timestamp -- none of these live on the
+// Activity object itself (they're Opportunity-level fields), and GetOpportunityDetails
+// is a per-record endpoint with no "many IDs" mode, so this is deliberately called for
+// only the CURRENTLY VISIBLE PAGE of the Records table (25 rows), not the whole
+// date-window's worth -- same "lazy per-page enrichment" pattern already used for Meta
+// Ads Creatives' thumbnails, keeping this well within LeadSquared's rate limits.
+//
+// Confirmed live (2026-09-11, 15 real opportunities sampled across both channels) which
+// of the account's own "assignment" fields are actually populated: "First assigned to" /
+// "First assigned on" (the fields literally named "first") are unused on this account --
+// 0 of 15 had any value. "Current Owner Assignment Time" was populated on 15 of 15, so
+// that's what's surfaced here (clearly labeled as "current", not misrepresented as
+// "first") -- for a lead that's only ever been assigned once, the two are the same
+// moment anyway. Owner/Created On were both populated on 15 of 15.
+const LIVE_QL_OWNER_LOOKUP_MAX = 100
+async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
+  const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_LOOKUP_MAX)
+  const [ownerMap, details] = await Promise.all([
+    fetchLeadSquaredUsersMap(creds),
+    Promise.all(ids.map(async id => {
+      try {
+        const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityDetails', creds, { OpportunityId: id })
+        const byName = {}
+        ;(Array.isArray(data && data.Fields) ? data.Fields : []).forEach(f => { byName[f.DisplayName] = f.Value })
+        return {
+          opportunityId: id,
+          ownerId: byName['Owner'] || null,
+          createdOn: byName['Created On'] || null,
+          ownerAssignedOn: byName['Current Owner Assignment Time'] || null,
+        }
+      } catch (e) {
+        return { opportunityId: id, error: e.message }
+      }
+    })),
+  ])
+  return details.map(d => d.error ? d : { ...d, ownerName: d.ownerId ? resolveOwnerName(ownerMap, d.ownerId) : null })
+}
+
 // ActivityTypes.Get -- lists every activity type configured on this account (code + real
 // display name), used to power an Activity Type filter dropdown matching LeadSquared's own
 // Manage Activity screen instead of showing raw numeric EventCodes.
@@ -2857,6 +2896,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
+    if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
