@@ -3425,7 +3425,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
         throughLabel: yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
         rows: buckets,
-        totalQL: overallRow.totalQL, totalApps, dailyRunRate,
+        totalQL: overallRow.totalQL, totalApps, dailyRunRate, daysDone,
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
         qlSplitAvailable: Array.isArray(qlSplitRaw),
         prevMonthLabel: prevMonthStart.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),

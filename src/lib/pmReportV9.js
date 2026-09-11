@@ -60,21 +60,47 @@ function scoreTable(rows, fmtINR, fmtN) {
   return t
 }
 
+// Reshaped 2026-09-11 per direct feedback + a real screenshot spec: message 2
+// used to be a flat 2-column list (Total QL / SR / AC / Applications / AC Sales /
+// QL -> Outcome % / QL daily run-rate as separate rows, one shared Outcome% for
+// the whole month). Now it's a 4-column table with Total/SR/AC as ROWS, each
+// with its OWN Applications-or-AC-Sales figure, its own Outcome %, and its own
+// run-rate -- SR's outcome is tracked via Applications (this app's Applications
+// metric has always effectively been the SR-vertical figure), AC's via the
+// separate manually-entered AC Sales, and the Total row is their sum. Verified
+// against a real screenshot before building: 198=165+33, 6%=198/3442,
+// 9%=165/1764, 2%=33/1678, 344/176/168=Total/SR/AC QL over the same days-done --
+// every cell reconciled exactly, confirming this is a pure reshape of fields
+// mtdScorecard already computes, not a new metric.
+//
+// Percent cells here are a WHOLE number (Math.round, no decimal) -- confirmed
+// against the screenshot ("6%" not "5.8%"), deliberately different from table
+// 1's Lead to QL % (which keeps 1 decimal, untouched by this change).
 function outcomesTable(s, fmtN) {
-  const rows = [
-    ['Total QL', fmtN(s.totalQL)],
-  ]
-  if (s.qlSplitAvailable) {
-    rows.push(['— SR', s.srQl == null ? DASH : fmtN(s.srQl)], ['— AC', s.acQl == null ? DASH : fmtN(s.acQl)])
-    if (s.superbotQl) rows.push(['— Superbot (not split by vertical)', fmtN(s.superbotQl)])
-  }
-  rows.push(
-    ['Applications', s.totalApps == null ? DASH : fmtN(s.totalApps)],
-    ['AC Sales', s.acSales == null ? 'Not entered yet' : fmtN(s.acSales)],
-    ['QL → Outcome %', pctText(s.qlSalePct)],
-    ['QL daily run-rate', s.dailyRunRate == null ? DASH : fmtN(Math.round(s.dailyRunRate)) + ' / day'],
-  )
-  return { columns: ['', 'Value'], rows, strongRows: [] }
+  const t = { columns: ['', 'Total QL', 'Applications/AC Sales', 'QL → Outcome %', 'QL daily run-rate'], rows: [], strongRows: [] }
+  const pctWhole = (num, den) => (num == null || den == null || den <= 0) ? DASH : Math.round((num / den) * 100) + '%'
+  const runRate = ql => (ql == null || s.daysDone == null || s.daysDone <= 0) ? DASH : fmtN(Math.round(ql / s.daysDone))
+
+  // Total row -- Applications/AC Sales dashes out entirely (not a partial,
+  // misleading Applications-only number) whenever AC Sales isn't entered yet,
+  // matching the AC row's own dash rule below.
+  const totalAppOrSales = s.acSales == null || s.totalApps == null ? null : s.totalApps + s.acSales
+  t.strongRows.push(t.rows.length)
+  t.rows.push(['', fmtN(s.totalQL), totalAppOrSales == null ? DASH : fmtN(totalAppOrSales), pctWhole(totalAppOrSales, s.totalQL), runRate(s.totalQL)])
+
+  // SR/AC rows dash out if Monthly QLs' own pipeline didn't load this session
+  // (qlSplitAvailable false) -- srQl/acQl default to 0 in that case, which would
+  // otherwise misleadingly read as "zero SR/AC QLs" rather than "unknown".
+  const srQl = s.qlSplitAvailable ? s.srQl : null
+  const acQl = s.qlSplitAvailable ? s.acQl : null
+  t.rows.push(['— SR', srQl == null ? DASH : fmtN(srQl), s.totalApps == null ? DASH : fmtN(s.totalApps), pctWhole(s.totalApps, srQl), runRate(srQl)])
+  t.rows.push(['— AC', acQl == null ? DASH : fmtN(acQl), s.acSales == null ? DASH : fmtN(s.acSales), pctWhole(s.acSales, acQl), runRate(acQl)])
+
+  // Superbot isn't split by vertical at all -- its own row only when it's
+  // actually non-zero, dashed on the two columns that don't apply to it.
+  if (s.superbotQl) t.rows.push(['— Superbot', fmtN(s.superbotQl), DASH, DASH, runRate(s.superbotQl)])
+
+  return t
 }
 
 // Volume metric: per-day run-rate vs last month's own per-day average.

@@ -1081,8 +1081,9 @@ export const REPORT_VERSIONS = [
     tagline: 'Same as V8, plus a run-rate-vs-last-month trend line under the headline so the report reads at a glance.',
     recommended: true,
     what: [
-      'Identical tables to V8 (see its own "what" list for the full column/definition detail) — Marketing Efficiency and Sales Efficiency, Overall/Paid/Organic/Referral, SR/AC split, AC Sales editable right in this panel.',
-      'New: a trend line under message 1\'s headline — Total QL run-rate vs last month\'s own per-day average (the app\'s existing MTD Dashboard rule for volume metrics), and Lead to QL % vs last month\'s total (the existing rule for ratio metrics). Only shows once last month\'s comparison data is available; silently omitted otherwise rather than showing a misleading dash.',
+      'Message 1 (Marketing Efficiency): identical to V8 (see its own "what" list for the full column/definition detail) — Overall/Paid/Organic/Referral, SR/AC split, AC Sales editable right in this panel.',
+      'Message 1 also has a trend line under the headline — Total QL run-rate vs last month\'s own per-day average (the app\'s existing MTD Dashboard rule for volume metrics), and Lead to QL % vs last month\'s total (the existing rule for ratio metrics). Only shows once last month\'s comparison data is available; silently omitted otherwise rather than showing a misleading dash.',
+      'Message 2 (Sales Efficiency), reshaped 2026-09-11: a 4-column table with Total/SR/AC as rows, not a flat list. Each row gets its own Total QL, its own Applications-or-AC-Sales figure (SR tracks via Applications, AC via the manually-entered AC Sales, Total is their sum), its own QL → Outcome % (whole number, no decimal), and its own QL daily run-rate. A Superbot row appears only when it\'s actually non-zero (not split by vertical, so its Applications/AC Sales and % cells are a dash).',
       'Always the current calendar month through the last COMPLETE day, independent of whatever date range or grouping the page itself has selected.',
       'No image, no CSV attachment — a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
     ],
