@@ -1704,3 +1704,15 @@ User asked to "check live page" and pasted a screenshot of the just-shipped tabl
 **Also fixed while in there**: rows showing a bare dash for owner data used to mean either "no Opportunity ID on this row at all" or "the lookup genuinely failed" -- indistinguishable. Split into a distinct "no opportunity" label for the first case (a real, meaningful data gap worth knowing about on its own) vs "—" reserved for an actual failed lookup.
 
 **Verified**: `npm run build` clean; pushed (`61116f9`); confirmed live via content-check (the literal string "no opportunity" is present in the deployed chunk). The direction-fix itself was unit-tested standalone against the exact numbers from the user's screenshot before pushing, so this one is higher-confidence than most "not yet click-through-verified" entries in this file -- but the actual on-screen rendering (does "4m after" read clearly, does the row highlighting still work correctly alongside it) is still worth a real look, no authenticated browser session available this session either.
+
+## 2026-09-11 (later still) -- Live QLs: "not all owners fetching" -- a real loading-state bug, not slowness alone
+
+User: "why not all the owners are fetching up, same goes for opp assigned on and opp created on / why, be short in response."
+
+**Short root cause, as given**: the background enrichment is deliberately sequential -- 100 opportunities per request, one batch after another -- to stay gentle on LeadSquared's rate limits, so a wide date range with thousands of distinct opportunities genuinely takes a while to get through everyone.
+
+**But there was also a real bug on top of that, found immediately on rereading the effect**: only the CURRENT 100-id chunk ever got marked `'loading'` in `ownerCache` -- every id still queued behind it had no cache entry at all, which the table rendered as a plain "—" (indistinguishable from "resolved, genuinely no data") instead of "…" (still waiting its turn). So the honest answer to "why isn't it fetching" was, for most queued rows, "it hasn't started yet, but the UI was lying about that."
+
+**Fix**: mark every id in the current warm-up batch as `'loading'` up front (one `setOwnerCache` call before the sequential loop starts) rather than per-chunk -- every queued row now correctly shows "…" for its whole wait, not a misleading dash. The `LIVE_QL_OWNER_WARM_CAP` (2,000 distinct opportunities) is unchanged and still separately disclosed via the Records card's "(capped)" note.
+
+**Verified**: `npm run build` clean; pushed (`ef178e2`). Content-check for this one specifically failed to find anything (grepped for a code COMMENT string, which minification strips -- a mistake, not evidence the deploy didn't land) -- confirmed instead via `vercel ls`/deployment metadata that a fresh Ready/Production deployment landed within a few minutes of the push, consistent with every other deploy this session. Not click-through-verified in a real browser (no session available) -- worth confirming that a wide window (e.g. Last Month) now shows "…" consistently across all not-yet-resolved rows instead of a mix of "…" and "—".
