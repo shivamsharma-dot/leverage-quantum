@@ -295,6 +295,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
             chartPng: chartPng(x.chart) || null,
             label: x.label || null, attach: !!x.attach,
             blocks: x.blocks || null, metadata: x.metadata || null,
+            imageIsMessage: !!x.imageIsMessage,
           })),
           pngBase64: files ? files.pngBase64 : null,
           pixelRatio: files ? files.pixelRatio : null,

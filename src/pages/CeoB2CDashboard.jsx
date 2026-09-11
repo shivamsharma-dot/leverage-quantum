@@ -281,6 +281,23 @@ const CF_IMG_BOLD_LABELS = new Set(['Opening Balance :', 'Cash Inflow', 'Cash Ou
 function cfImgAmt(n) { return (n == null || !isFinite(n)) ? '' : n.toFixed(2) }
 const CF_IMG_CELL = { border: '1px solid #000', padding: '5px 10px', fontSize: 13, lineHeight: 1.3, boxSizing: 'border-box' }
 const CF_IMG_W = { label: 320, mtd: 180, ytd: 200 }
+// slackShare.js's captureNodePng unconditionally adds `style:{padding:'18px'}`
+// to the clone it rasterizes, but sizes the capture canvas from THIS node's
+// own pre-padding width -- so the padded clone (18px wider on the right than
+// what was measured) reliably overflows the canvas by that same 18px, and
+// the rightmost content (the YTD column) gets clipped. Caught live
+// 2026-09-11: the first blank-PNG fix rendered real content, but the YTD
+// figures were cut off mid-digit. Confirmed by reading captureNodePng's
+// call in html-to-image's own source (getImageSize measures the node
+// BEFORE cloning/padding; applyStyle adds the padding only to the clone
+// afterward). Real fix belongs in captureNodePng itself (every page that
+// calls it is exposed to the same silent clip whenever content already
+// runs edge-to-edge), but that's shared by every other Slack image export
+// in the app -- safer to reserve slack locally here than risk changing
+// shared capture math no other page has actually hit yet. A blank 48px
+// buffer added to ONLY the outer node's own width (not the inner columns)
+// gives the padding room to grow into without ever touching real content.
+const CF_IMG_SAFETY_MARGIN = 48
 // Plain <div> rows/cells, not a real <table> -- html-to-image's foreignObject
 // capture has known, real problems reproducing <table>/border-collapse
 // exactly (a first version of this component used a table and the resulting
@@ -304,7 +321,7 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
     // ancestor's overflow:hidden doesn't affect that serialization at all,
     // it only keeps this invisible to a real user).
     <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-      <div ref={ref} style={{ width: totalW, background: '#fff', fontFamily: 'Arial, Helvetica, sans-serif', color: '#000', whiteSpace: 'nowrap' }}>
+      <div ref={ref} style={{ width: totalW + CF_IMG_SAFETY_MARGIN, background: '#fff', fontFamily: 'Arial, Helvetica, sans-serif', color: '#000', whiteSpace: 'nowrap' }}>
         <div style={{ ...CF_IMG_CELL, width: totalW, textAlign: 'center', fontWeight: 700, textDecoration: 'underline' }}>{title}</div>
         <div style={{ height: 10 }} />
         <div style={{ display: 'flex' }}>
