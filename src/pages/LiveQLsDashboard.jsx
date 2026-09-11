@@ -82,18 +82,39 @@ const MISASSIGNED_OWNER_NAMES = new Set(['Futwork', 'Futwork AI'])
 // under a minute, minutes under an hour, hours under a day, days beyond that. Both
 // inputs come from the same source (LeadSquared, India Standard Time) so a naive
 // same-assumption parse is safe for a DIFFERENCE even without an explicit TZ.
-function formatDurationBetween(aStr, bStr) {
-  if (!aStr || !bStr) return null
-  const a = new Date(aStr.replace(' ', 'T'))
-  const b = new Date(bStr.replace(' ', 'T'))
-  if (isNaN(a.getTime()) || isNaN(b.getTime())) return null
-  const diffSec = Math.abs((a.getTime() - b.getTime()) / 1000)
+function formatDurationSeconds(diffSec) {
   if (diffSec < 60) return Math.round(diffSec) + 's'
   const diffMin = diffSec / 60
   if (diffMin < 60) return Math.round(diffMin) + 'm'
   const diffHr = diffMin / 60
   if (diffHr < 24) return diffHr.toFixed(1) + 'h'
   return (diffHr / 24).toFixed(1) + 'd'
+}
+function formatDurationBetween(aStr, bStr) {
+  if (!aStr || !bStr) return null
+  const a = new Date(aStr.replace(' ', 'T'))
+  const b = new Date(bStr.replace(' ', 'T'))
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return null
+  return formatDurationSeconds(Math.abs((a.getTime() - b.getTime()) / 1000))
+}
+
+// "Owner Assigned On" is LeadSquared's "Current Owner Assignment Time" -- a live,
+// mutable field. Confirmed live against real data (2026-09-11): it very often reflects
+// a REASSIGNMENT that happened AFTER a given QL call, not an assignment that preceded
+// it (e.g. an automated post-QL routing/distribution step -- this account has a
+// "Distribute Opportunity" field for exactly that). A plain absolute difference would
+// silently misrepresent that as "how long the assigned owner took to reach QL" when
+// it's actually the reverse, so this states the direction explicitly instead of hiding
+// it with Math.abs() -- confirmed by reconciling against real rows where
+// (Opp Created -> QL) + (Owner Assigned -> QL) exactly equals (Owner Assigned - Opp
+// Created), which only holds when the QL call came BEFORE the owner assignment.
+function formatOwnerAssignVsQl(ownerAssignedOnStr, qlCallStr) {
+  if (!ownerAssignedOnStr || !qlCallStr) return null
+  const assigned = new Date(ownerAssignedOnStr.replace(' ', 'T'))
+  const call = new Date(qlCallStr.replace(' ', 'T'))
+  if (isNaN(assigned.getTime()) || isNaN(call.getTime())) return null
+  const mag = formatDurationSeconds(Math.abs((call.getTime() - assigned.getTime()) / 1000))
+  return call.getTime() >= assigned.getTime() ? mag : mag + ' after'
 }
 
 // ---- Advanced filter: a small condition builder (field / operator / value), any
@@ -512,7 +533,7 @@ export default function LiveQLsDashboard() {
       'Owner Assigned On': r.ownerAssignedOn || '',
       'Opportunity Created On': r.oppCreatedOn || '',
       'Time: Opp Created -> QL Call': formatDurationBetween(r.oppCreatedOn, r.createdOn) || '',
-      'Time: Owner Assigned -> QL Call': formatDurationBetween(r.ownerAssignedOn, r.createdOn) || '',
+      'Time: Owner Assigned -> QL Call': formatOwnerAssignVsQl(r.ownerAssignedOn, r.createdOn) || '',
       'Misassigned Owner (Futwork/Futwork AI)': r.ownerName && MISASSIGNED_OWNER_NAMES.has(r.ownerName) ? 'Yes' : '',
     }
     visibleFields.forEach(f => { row[f.label] = r[f.key] || '' })
@@ -602,7 +623,8 @@ export default function LiveQLsDashboard() {
                       ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
-                      ['Opp Created → QL Call / Owner Assigned → QL Call', 'Elapsed time between the Opportunity being created (or its current owner being assigned) and this QL call, auto-scaled to seconds/minutes/hours/days.'],
+                      ['Opp Created → QL Call', 'Elapsed time between the Opportunity being created and this QL call, auto-scaled to seconds/minutes/hours/days.'],
+                      ['Owner Assigned → QL Call', 'Elapsed time between the current owner being assigned and this QL call. “Current Owner Assignment Time” is a live field, so it often reflects a REASSIGNMENT that happened AFTER the call (e.g. automatic post-QL routing), not the owner who actually made it -- shown as “X after” when that’s the case, rather than hiding the direction.'],
                       ['Misassigned owner', 'A row highlighted red means the Opportunity Owner is still “Futwork” or “Futwork AI” -- LeadSquared’s own bot/vendor placeholder accounts, not a real floor owner. Filter on Opportunity Owner is/is not to isolate these.'],
                       ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh. Any field that came back blank for every row in the current window is hidden from the table.'],
                       ['Filters', 'Build any number of field/operator/value conditions and combine them with ALL (AND) or ANY (OR). Narrows the Records table, the Distribution popup, and the QL KPI cards -- Queued counts are never affected.'],
@@ -680,6 +702,13 @@ export default function LiveQLsDashboard() {
                           const ownerLoading = owner === 'loading'
                           const ownerFailed = owner === 'error'
                           const ownerData = owner && typeof owner === 'object' ? owner : null
+                          // A dash used to mean either "no Opportunity ID on this row" or "the
+                          // lookup genuinely failed" -- indistinguishable to a reader. Split so
+                          // "no opportunity" (a real, meaningful data gap -- this QL call was
+                          // never linked to an Opportunity at all) reads differently from "—"
+                          // (a lookup that should have worked but didn't).
+                          const noOpp = !r.opportunityId
+                          const cellVal = val => ownerLoading ? '…' : noOpp ? 'no opportunity' : ownerFailed ? '—' : (val || '—')
                           // Futwork/Futwork AI are LeadSquared's own bot/vendor placeholder
                           // owners (see MISASSIGNED_OWNER_NAMES above) -- a lead still
                           // sitting under one of these instead of a real floor owner is a
@@ -712,15 +741,15 @@ export default function LiveQLsDashboard() {
                             </td>
                             <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', fontWeight: misassigned ? 700 : 400, color: misassigned ? '#DC2626' : C.text }}
                               title={misassigned ? 'Still owned by a bot/vendor placeholder, not a real floor owner -- likely a missed assignment.' : undefined}>
-                              {ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerName) || '—'}{misassigned ? ' ⚠' : ''}
+                              {cellVal(ownerData && ownerData.ownerName)}{misassigned ? ' ⚠' : ''}
                             </td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerAssignedOn) || '—'}</td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.createdOn) || '—'}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.ownerAssignedOn)}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.createdOn)}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the Opportunity's own creation and this QL call.">
-                              {ownerLoading ? '…' : ownerFailed ? '—' : formatDurationBetween(ownerData && ownerData.createdOn, r.createdOn) || '—'}
+                              {cellVal(formatDurationBetween(ownerData && ownerData.createdOn, r.createdOn))}
                             </td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the current owner assignment and this QL call.">
-                              {ownerLoading ? '…' : ownerFailed ? '—' : formatDurationBetween(ownerData && ownerData.ownerAssignedOn, r.createdOn) || '—'}
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the current owner assignment and this QL call. '... after' means the CURRENT owner was assigned after this call -- likely a later reassignment, not the owner who actually made this call.">
+                              {cellVal(formatOwnerAssignVsQl(ownerData && ownerData.ownerAssignedOn, r.createdOn))}
                             </td>
                             {visibleFields.map(f => (
                               <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
