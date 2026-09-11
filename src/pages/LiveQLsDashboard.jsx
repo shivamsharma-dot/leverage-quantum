@@ -53,6 +53,10 @@ const FULL_FIELDS = [
   { key: 'validPassport', label: 'Valid Passport' },
   { key: 'currentDegreeStatus', label: 'Current Degree Status' },
   { key: 'callDuration', label: 'Call Duration' },
+  // "Futwork Project" was AI-only until 2026-09-12 -- Human's own equivalent field
+  // (mx_Custom_36, confirmed live) had simply never been mapped before. Both channels'
+  // own real field number feeds this same shared key.
+  { key: 'futworkProject', label: 'Futwork Project' },
   { key: 'opportunityCateredBy', label: 'Catered By' },       // Human only
   { key: 'programPreference', label: 'Program Preference' },  // Human only
   { key: 'firstContactChannel', label: 'First Contact Channel' }, // AI only
@@ -60,7 +64,24 @@ const FULL_FIELDS = [
   { key: 'currentCity', label: 'Current City' },              // AI only
   { key: 'preferredMode', label: 'Preferred Mode' },          // AI only
   { key: 'preferredCourse', label: 'Preferred Course' },      // AI only
-  { key: 'futworkProject', label: 'Futwork Project' },        // AI only
+  // Genuinely separate from futworkProject above (mx_Custom_32 vs mx_Custom_24 on the
+  // AI activity schema) -- confirmed live 2026-09-12, no Human equivalent exists.
+  { key: 'futworkAiProject', label: 'Futwork Ai Project' },   // AI only
+]
+
+// The 8 Opportunity-level fields the user asked for on top of Owner/Assigned On/Created
+// On (already their own dedicated columns) -- all come from the same bulk lookup (see
+// fetchLiveQlOpportunityOwners in api/crm-leads.js), merged onto enrichedRows below.
+// A small registry like FULL_FIELDS so the header/body/export don't repeat this 8 times.
+const OPPORTUNITY_FIELDS = [
+  { key: 'stage', label: 'Opportunity Stage' },
+  { key: 'status', label: 'Opportunity Status' },
+  { key: 'openAge', label: 'Open Age' },
+  { key: 'firstCalledOn', label: 'First Called On' },
+  { key: 'lastCalledOn', label: 'Last Called On' },
+  { key: 'lastInteractedOn', label: 'Last Interacted On' },
+  { key: 'totalSpokenCalls', label: 'Total Spoken Calls' },
+  { key: 'totalEngagement', label: 'Total Engagement' },
 ]
 
 // Field registry for the Advanced Filter's Field dropdown only -- a superset of
@@ -69,7 +90,7 @@ const FULL_FIELDS = [
 // enrichedRows below), not one of the backend's own activity fields, so it's kept out
 // of FULL_FIELDS deliberately -- it already has its own dedicated table column and
 // shouldn't also get folded into the generic "every activity field" column set.
-const FILTERABLE_FIELDS = [{ key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }]
+const FILTERABLE_FIELDS = [{ key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }, ...OPPORTUNITY_FIELDS]
 
 // LeadSquared's own resolved display names for the two vendor/bot placeholder owners a
 // lead can be left sitting under instead of a real floor owner -- confirmed live
@@ -390,17 +411,32 @@ export default function LiveQLsDashboard() {
   // special-casing, so this is what makes "Opportunity Owner" filterable at all. Before a
   // given opportunityId's lookup resolves these are simply null/undefined on the row (an
   // owner-based filter won't match it yet, same as any other field with no value).
-  const enrichedRows = useMemo(() => allRows.map(r => {
-    const o = r.opportunityId ? ownerCache[r.opportunityId] : null
-    const od = o && typeof o === 'object' ? o : null
-    return {
-      ...r,
-      // Matches exactly what the table already displays ("Human"/"AI"), so the filter's
-      // value picker doesn't show the raw lowercase channel key instead.
-      channelLabel: r.channel === 'human' ? 'Human' : 'AI',
-      ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null,
-    }
-  }), [allRows, ownerCache])
+  const enrichedRows = useMemo(() => {
+    // Snapshot "now" once per recompute (a new date preset, Refresh, or owner data
+    // resolving) -- same freshness this page's own "Synced HH:MM:SS" already uses,
+    // not a live-ticking clock.
+    const now = Date.now()
+    return allRows.map(r => {
+      const o = r.opportunityId ? ownerCache[r.opportunityId] : null
+      const od = o && typeof o === 'object' ? o : null
+      // Only meaningful while the Opportunity is genuinely still Open -- a Won/Lost
+      // opportunity has a real closure, not an ongoing "age".
+      const openAge = (od && od.status === 'Open' && od.createdOn)
+        ? formatDurationSeconds(Math.abs((now - new Date(od.createdOn.replace(' ', 'T')).getTime()) / 1000))
+        : null
+      return {
+        ...r,
+        // Matches exactly what the table already displays ("Human"/"AI"), so the filter's
+        // value picker doesn't show the raw lowercase channel key instead.
+        channelLabel: r.channel === 'human' ? 'Human' : 'AI',
+        ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null,
+        stage: od ? od.stage : null, status: od ? od.status : null, openAge,
+        firstCalledOn: od ? od.firstCalledOn : null, lastCalledOn: od ? od.lastCalledOn : null,
+        lastInteractedOn: od ? od.lastInteractedOn : null,
+        totalSpokenCalls: od ? od.totalSpokenCalls : null, totalEngagement: od ? od.totalEngagement : null,
+      }
+    })
+  }, [allRows, ownerCache])
 
   // Fields where every fetched row for the ACTIVE date window came back blank are hidden
   // from the table entirely, per explicit request -- "if it came always blank, dont show
@@ -550,6 +586,7 @@ export default function LiveQLsDashboard() {
       'Time: QL Call -> Owner Assigned': formatCallToOwnerAssign(r.createdOn, r.ownerAssignedOn) || '',
       'Misassigned Owner (Futwork/Futwork AI)': r.ownerName && MISASSIGNED_OWNER_NAMES.has(r.ownerName) ? 'Yes' : '',
     }
+    OPPORTUNITY_FIELDS.forEach(f => { row[f.label] = r[f.key] || '' })
     visibleFields.forEach(f => { row[f.label] = r[f.key] || '' })
     return row
   })
@@ -639,6 +676,7 @@ export default function LiveQLsDashboard() {
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
                       ['Opp Created → QL Call', 'Elapsed time between the Opportunity being created and this QL call, auto-scaled to seconds/minutes/hours/days.'],
                       ['QL Call → Owner Assigned', 'Elapsed time from this QL call to the current owner being assigned. “Current Owner Assignment Time” is a live field, so it often reflects a REASSIGNMENT that happens AFTER the call (e.g. automatic post-QL routing), not the owner who actually made it -- shown as “X before” on the rarer, opposite case where the owner was already assigned before this call.'],
+                      ['Opportunity fields', 'Stage, Status, Open Age, First/Last Called On, Last Interacted On, Total Spoken Calls, and Total Engagement all come from the linked Opportunity, same as Owner -- so they load per page, then in the background for the rest of the window, same as the Owner columns. Open Age only shows a value while Status is “Open”.'],
                       ['Misassigned owner', 'A row highlighted red means the Opportunity Owner is still “Futwork” or “Futwork AI” -- LeadSquared’s own bot/vendor placeholder accounts, not a real floor owner. Filter on Opportunity Owner is/is not to isolate these.'],
                       ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh. Any field that came back blank for every row in the current window is hidden from the table.'],
                       ['Filters', 'Build any number of field/operator/value conditions and combine them with ALL (AND) or ANY (OR). Narrows the Records table, the Distribution popup, and the QL KPI cards -- Queued counts are never affected.'],
@@ -695,7 +733,7 @@ export default function LiveQLsDashboard() {
                     horizontally inside its own card rather than wrapping text and
                     producing uneven row heights. */}
                 <Card title="Records" sub={
-                  `${fmtN(filteredRows.length)} rows -- ${visibleFields.length + 9} columns` +
+                  `${fmtN(filteredRows.length)} rows -- ${(visibleFields.length + OPPORTUNITY_FIELDS.length + 9)} columns` +
                   (ownerWarmStats.total > 0 && ownerWarmStats.resolved < ownerWarmStats.total
                     ? ` -- loading owner data for export: ${fmtN(ownerWarmStats.resolved)} of ${fmtN(ownerWarmStats.total)}${ownerWarmStats.capped ? ' (capped)' : ''}`
                     : '')
@@ -705,7 +743,7 @@ export default function LiveQLsDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...visibleFields.map(f => f.label)].map(h => (
+                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...OPPORTUNITY_FIELDS.map(f => f.label), ...visibleFields.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -765,6 +803,12 @@ export default function LiveQLsDashboard() {
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time from this QL call to the current owner assignment. '... before' means the CURRENT owner was already assigned before this call, rather than assigned as a result of it.">
                               {cellVal(formatCallToOwnerAssign(r.createdOn, ownerData && ownerData.ownerAssignedOn))}
                             </td>
+                            {OPPORTUNITY_FIELDS.map(f => (
+                              <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}
+                                title={f.key === 'openAge' ? 'Only shown while the Opportunity is still Open -- blank once it\'s Won/Lost.' : undefined}>
+                                {cellVal(r[f.key])}
+                              </td>
+                            ))}
                             {visibleFields.map(f => (
                               <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
                             ))}
@@ -772,7 +816,7 @@ export default function LiveQLsDashboard() {
                           )
                         })}
                         {pageRows.length === 0 && (
-                          <tr><td colSpan={visibleFields.length + 9} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
+                          <tr><td colSpan={(visibleFields.length + OPPORTUNITY_FIELDS.length + 9)} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
                         )}
                       </tbody>
                     </table>

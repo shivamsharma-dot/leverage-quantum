@@ -610,6 +610,9 @@ const LIVE_QL_CHANNELS = {
       firstCampaignName: 'mx_Custom_37', validPassport: 'mx_Custom_51',
       currentDegreeStatus: 'mx_Custom_53', firstChannelSource: 'mx_Custom_63',
       programPreference: 'mx_Custom_64',
+      // "Futwork Project" (mx_Custom_36) per GetActivitySetting -- confirmed live
+      // 2026-09-12, was never mapped before despite being a real, populated field.
+      futworkProject: 'mx_Custom_36',
       // "Relevant Opportunity ID" per GetActivitySetting -- distinct from
       // RelatedProspectId (the Contact), this points at the University Admission
       // Opportunity this QL call is for.
@@ -631,6 +634,10 @@ const LIVE_QL_CHANNELS = {
       preferredDegree: 'mx_Custom_22', preferredCourse: 'mx_Custom_23',
       futworkProject: 'mx_Custom_24', dispositionReason: 'mx_Custom_26',
       currentDegreeStatus: 'mx_Custom_28',
+      // A GENUINELY SEPARATE field from futworkProject (mx_Custom_24, "Futwork
+      // Project/Campaign") above -- confirmed live 2026-09-12 via GetActivitySetting.
+      // Was never mapped before.
+      futworkAiProject: 'mx_Custom_32',
       // "Opportunity ID" per GetActivitySetting -- same University Admission
       // Opportunity concept as Human's mx_Custom_55 above, different field number.
       opportunityId: 'mx_Custom_7',
@@ -768,7 +775,7 @@ async function fetchLiveQlMetrics(creds, { date }) {
       firstChannelSource: 'First Channel Source', programPreference: 'Program Preference',
       firstContactChannel: 'First Contact Channel', callStatus: 'Call Status',
       currentCity: 'Current City', preferredMode: 'Preferred Mode', preferredCourse: 'Preferred Course',
-      futworkProject: 'Futwork Project', opportunityId: 'Opportunity ID',
+      futworkProject: 'Futwork Project', futworkAiProject: 'Futwork Ai Project', opportunityId: 'Opportunity ID',
     },
   }
 }
@@ -817,7 +824,11 @@ async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
       AdvancedSearch: advancedSearch,
       Paging: { PageIndex: 1, PageSize: 1000 },
       Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-      Columns: { Include_CSV: 'Owner,CreatedOn,mx_Custom_94' },
+      // Status/mx_Custom_2 (Stage) are the Opportunity's own pipeline state -- distinct
+      // from the Activity's own Disposition/Call Status. mx_Custom_12/13/15/16/56 all
+      // confirmed live 2026-09-12 against a real, populated opportunity (values matched
+      // an earlier direct GetOpportunityDetails call for the same record exactly).
+      Columns: { Include_CSV: 'Owner,CreatedOn,mx_Custom_94,Status,mx_Custom_2,mx_Custom_12,mx_Custom_13,mx_Custom_15,mx_Custom_16,mx_Custom_56' },
     }),
   ])
   const byId = {}
@@ -831,6 +842,13 @@ async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
       createdOn: r.CreatedOn || null,
       ownerAssignedOn: r.mx_Custom_94 || null,
       ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
+      status: r.Status || null,
+      stage: r.mx_Custom_2 || null,
+      totalEngagement: r.mx_Custom_12 || null,
+      totalSpokenCalls: r.mx_Custom_13 || null,
+      lastCalledOn: r.mx_Custom_15 || null,
+      lastInteractedOn: r.mx_Custom_16 || null,
+      firstCalledOn: r.mx_Custom_56 || null,
     }
   })
 }
