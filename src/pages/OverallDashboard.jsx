@@ -3309,20 +3309,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const monthStart = dayKey(monthStartDate)
     const until = dayKey(yesterdayDate)
     const daysDone = yesterdayDate.getDate()
-    // Previous full calendar month's own range -- fetched alongside the MTD range so
-    // the V9 report can show a "run-rate vs last month" trend line (2026-09-10, asked
-    // for directly). new Date(y, m, 0) rolls back to the last day of month m-1, so
-    // prevMonthEnd.getDate() IS the day count -- no separate lookup needed.
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
-    const daysInPrevMonth = prevMonthEnd.getDate()
     Promise.all([
       retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
       fetchAppsCountSince(monthStart, until).catch(() => null),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
-      retryFetch(() => fetchOverallBqAggRows({ since: dayKey(prevMonthStart), until: dayKey(prevMonthEnd), sources: [] })).catch(() => null),
-    ]).then(([raw, appsCount, qlSplitRaw, prefsResp, prevRaw]) => {
+    ]).then(([raw, appsCount, qlSplitRaw, prefsResp]) => {
       if (dead) return
       // Real bug found live (2026-09-10): this report's Spend was short by exactly
       // Affiliate's manual monthly entry (affiliate_spend_manual) -- Affiliate's real
@@ -3403,23 +3395,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const totalApps = typeof appsCount === 'number' ? appsCount : null
       const dailyRunRate = daysDone > 0 ? overallRow.totalQL / daysDone : null
 
-      // Previous month's Overall-only totals for V9's trend line -- same Affiliate
-      // synthetic-merge as the current month, same "Overall" scope (no Paid/Organic/
-      // Referral split needed here, unlike the current-month buckets above).
-      let prevMonthDailyRunRate = null, prevMonthLeadToQlPct = null
-      if (Array.isArray(prevRaw)) {
-        const prevSyntheticAffiliate = buildSyntheticAffiliateRows(affiliateManualMap)
-          .filter(r => r.date >= prevMonthStart && r.date <= prevMonthEnd)
-        const prevRows = prevRaw.map(mapRow).concat(prevSyntheticAffiliate)
-        const prevTotals = prevRows.reduce((a, r) => ({
-          totalQL: a.totalQL + r.totalQL, humanQL: a.humanQL + r.humanQL, futworkAiQl: a.futworkAiQl + r.futworkAiQl,
-          futworkHumanQ: a.futworkHumanQ + r.futworkHumanQ, futworkAiQ: a.futworkAiQ + r.futworkAiQ,
-        }), { totalQL: 0, humanQL: 0, futworkAiQl: 0, futworkHumanQ: 0, futworkAiQ: 0 })
-        prevMonthDailyRunRate = daysInPrevMonth > 0 ? prevTotals.totalQL / daysInPrevMonth : null
-        const prevFutworkQueued = prevTotals.futworkHumanQ + prevTotals.futworkAiQ
-        prevMonthLeadToQlPct = prevFutworkQueued > 0 ? ((prevTotals.humanQL + prevTotals.futworkAiQl) / prevFutworkQueued) * 100 : null
-      }
-
       setMtdScorecard({
         ready: true,
         monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
@@ -3428,8 +3403,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         totalQL: overallRow.totalQL, totalApps, dailyRunRate, daysDone,
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
         qlSplitAvailable: Array.isArray(qlSplitRaw),
-        prevMonthLabel: prevMonthStart.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
-        prevMonthDailyRunRate, prevMonthLeadToQlPct,
       })
     }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message }) })
     return () => { dead = true }

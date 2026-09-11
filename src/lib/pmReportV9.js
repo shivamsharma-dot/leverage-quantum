@@ -1,24 +1,17 @@
 // Slack PM report -- V9 builder: same two tables as V8 (Marketing Efficiency /
-// Sales Efficiency), plus one addition asked for directly (2026-09-10): a
-// trend line under each headline comparing this month's run so far against
-// last month, so the report reads at a glance instead of needing the reader
-// to remember last month's numbers themselves.
+// Sales Efficiency), with a reshaped Sales Efficiency table (see outcomesTable's
+// own comment below for the full spec/history).
 //
-// Per this app's own existing MTD Dashboard convention (documented in
-// CLAUDE.md): a VOLUME metric (Total QL) trends on per-day running-average vs
-// the previous month's own per-day average -- comparing raw totals would
-// unfairly penalize an early-month read against a full previous month. A
-// RATIO metric (Lead to QL %) trends on total vs total, since a rate does not
-// need a run-rate adjustment the way a volume count does.
+// V9 briefly carried a "run-rate vs last month" trend line under message 1's
+// headline (2026-09-10) -- removed 2026-09-11 per direct instruction ("remove
+// this line from v9 asap"). The previous-month fetch that fed it was removed
+// from OverallDashboard.jsx's mtdScorecard effect too, so nothing here still
+// pays for that extra BigQuery query.
 //
 // Everything else -- the table columns, the SR/AC split, the Organic/Referral
 // dash rule, the "complete days only" window, AC Sales living in Overall's own
 // panel -- is unchanged from V8. See pmReportV8.js's own header comment for
 // the full history of how those were arrived at; not repeated here.
-//
-// Slack's real table block only supports bold per cell (no cell color), so
-// the "make it look better" ask was answered within what Slack can actually
-// render: the trend line below, not a colored cell.
 
 const DASH = '—'
 const pctText = n => (n == null ? DASH : n.toFixed(1) + '%')
@@ -107,22 +100,6 @@ function outcomesTable(s, fmtN) {
   return t
 }
 
-// Volume metric: per-day run-rate vs last month's own per-day average.
-function runRateTrendText(s, fmtN) {
-  if (s.prevMonthDailyRunRate == null || s.dailyRunRate == null || s.prevMonthDailyRunRate <= 0) return null
-  const pct = ((s.dailyRunRate - s.prevMonthDailyRunRate) / s.prevMonthDailyRunRate) * 100
-  const arrow = pct >= 0 ? '▲' : '▼'
-  return arrow + Math.abs(pct).toFixed(0) + '% run-rate vs ' + s.prevMonthLabel + ' (' + fmtN(Math.round(s.dailyRunRate)) + '/day vs ' + fmtN(Math.round(s.prevMonthDailyRunRate)) + '/day)'
-}
-
-// Ratio metric: total vs total, no run-rate adjustment needed.
-function leadToQlTrendText(s, leadToQlPct) {
-  if (s.prevMonthLeadToQlPct == null || leadToQlPct == null) return null
-  const ptDelta = leadToQlPct - s.prevMonthLeadToQlPct
-  const arrow = ptDelta >= 0 ? '▲' : '▼'
-  return arrow + Math.abs(ptDelta).toFixed(1) + 'pp Lead to QL vs ' + s.prevMonthLabel + ' (' + s.prevMonthLeadToQlPct.toFixed(1) + '%)'
-}
-
 export function buildV9(ctx) {
   const s = ctx.mtdScorecard
   const fmtINR = ctx.fmtINR || (v => String(Math.round(v || 0)))
@@ -141,20 +118,10 @@ export function buildV9(ctx) {
   const msgs = []
   const table1 = scoreTable(s.rows, fmtINR, fmtN)
   const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
-  // Overall's own Lead to QL % (Quantum's narrow, app-wide definition -- Futwork
-  // Human + AI QL over Total Queued on Futwork), recomputed here rather than
-  // trusting a separately-stored field, so it can never drift from table1's own
-  // Overall row.
-  const overallBucket = (s.rows || []).find(r => r.label === 'Overall')
-  const overallFutworkQueued = overallBucket ? overallBucket.futworkHumanQ + overallBucket.futworkAiQ : 0
-  const leadToQlPct = overallBucket && overallFutworkQueued > 0
-    ? ((overallBucket.humanQL + overallBucket.futworkAiQl) / overallFutworkQueued) * 100 : null
-  const trendBits = [runRateTrendText(s, fmtN), leadToQlTrendText(s, leadToQlPct)].filter(Boolean)
   const one = [
     testLine(ctx),
     '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
     dateLine,
-    trendBits.length ? trendBits.join('  ·  ') : null,
   ]
   msgs.push({
     key: 'scorecard', label: 'Marketing Efficiency',
