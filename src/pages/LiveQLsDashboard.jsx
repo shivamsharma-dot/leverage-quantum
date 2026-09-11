@@ -402,13 +402,60 @@ export default function LiveQLsDashboard() {
       })
   }, [pageRows]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Owner/Owner Assigned On/Opportunity Created On are deliberately NOT included here --
-  // they're fetched lazily per visible page (see the effect above), so most rows in a
-  // multi-page export would never have been looked up and would export blank, which would
-  // read as real "no owner" data rather than "never fetched." The table itself is the
-  // right place to see them; export stays scoped to data the backend returns in full.
+  // Background warm-up covering the WHOLE filtered set (not just the visible page), so
+  // Export actually has Owner/Owner Assigned On/Opportunity Created On to include instead
+  // of exporting blanks for every row nobody happened to page through. Runs sequentially in
+  // chunks of 100 (LIVE_QL_OWNER_LOOKUP_MAX on the backend) rather than all at once, to stay
+  // gentle on LeadSquared's own rate limits for a wide window -- capped at 2,000 distinct
+  // opportunities as a hard ceiling (a realistic window is far smaller than this; the cap
+  // exists for the rare case of a very wide date range with thousands of QLs). Cancelled and
+  // restarted whenever the filtered set changes (a new date preset or filter condition).
+  const LIVE_QL_OWNER_WARM_CAP = 2000
+  useEffect(() => {
+    let cancelled = false
+    const allIds = [...new Set(filteredRows.map(r => r.opportunityId).filter(Boolean))]
+    const toFetch = allIds.filter(id => !ownerCache[id]).slice(0, LIVE_QL_OWNER_WARM_CAP)
+    if (!toFetch.length) return
+    ;(async () => {
+      for (let i = 0; i < toFetch.length; i += 100) {
+        if (cancelled) return
+        const chunk = toFetch.slice(i, i + 100)
+        setOwnerCache(prev => { const next = { ...prev }; chunk.forEach(id => { if (!next[id]) next[id] = 'loading' }); return next })
+        try {
+          const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_opportunity_owners&ids=${chunk.map(encodeURIComponent).join(',')}`)
+          if (cancelled) return
+          setOwnerCache(prev => {
+            const next = { ...prev }
+            ;(d.rows || []).forEach(r => { next[r.opportunityId] = r.error ? 'error' : r })
+            return next
+          })
+        } catch {
+          if (cancelled) return
+          setOwnerCache(prev => { const next = { ...prev }; chunk.forEach(id => { next[id] = 'error' }); return next })
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [filteredRows]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Used to show export-readiness right next to the button, and to decide whether the
+  // export itself should warn that some rows' owner data hadn't finished loading yet.
+  const ownerWarmStats = useMemo(() => {
+    const ids = [...new Set(filteredRows.map(r => r.opportunityId).filter(Boolean))]
+    const resolved = ids.filter(id => ownerCache[id] && ownerCache[id] !== 'loading').length
+    return { total: ids.length, resolved, capped: ids.length > LIVE_QL_OWNER_WARM_CAP }
+  }, [filteredRows, ownerCache])
+
   const exportRows = filteredRows.map(r => {
-    const row = { Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn, 'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '' }
+    const owner = r.opportunityId ? ownerCache[r.opportunityId] : null
+    const ownerData = owner && typeof owner === 'object' ? owner : null
+    const row = {
+      Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn,
+      'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '',
+      'Opportunity Owner': (ownerData && ownerData.ownerName) || '',
+      'Owner Assigned On': (ownerData && ownerData.ownerAssignedOn) || '',
+      'Opportunity Created On': (ownerData && ownerData.createdOn) || '',
+    }
     visibleFields.forEach(f => { row[f.label] = r[f.key] || '' })
     return row
   })
@@ -494,7 +541,7 @@ export default function LiveQLsDashboard() {
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
                       ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filters, same as the Queued cards.'],
                       ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
-                      ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself -- fetched only for whichever rows are on the page you’re viewing, so they may show … briefly while loading. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
+                      ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the rest of the filtered rows in the background (see the Records card’s subtitle for progress) so Export includes them too -- may show … briefly while loading. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
                       ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh. Any field that came back blank for every row in the current window is hidden from the table.'],
                       ['Filters', 'Build any number of field/operator/value conditions and combine them with ALL (AND) or ANY (OR). Narrows the Records table, the Distribution popup, and the QL KPI cards -- Queued counts are never affected.'],
                     ].map(([m, d]) => (
@@ -549,7 +596,12 @@ export default function LiveQLsDashboard() {
                     meant to be scanned, not read paragraph-style, so it scrolls
                     horizontally inside its own card rather than wrapping text and
                     producing uneven row heights. */}
-                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${visibleFields.length + 7} columns`}
+                <Card title="Records" sub={
+                  `${fmtN(filteredRows.length)} rows -- ${visibleFields.length + 7} columns` +
+                  (ownerWarmStats.total > 0 && ownerWarmStats.resolved < ownerWarmStats.total
+                    ? ` -- loading owner data for export: ${fmtN(ownerWarmStats.resolved)} of ${fmtN(ownerWarmStats.total)}${ownerWarmStats.capped ? ' (capped)' : ''}`
+                    : '')
+                }
                   action={totalPages > 1 ? <PaginationControl page={safePage} totalPages={totalPages} onPrev={() => setPage(safePage - 1)} onNext={() => setPage(safePage + 1)} /> : null}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
