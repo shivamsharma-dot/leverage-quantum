@@ -476,13 +476,15 @@ export default function LiveQLsDashboard() {
   // Owner actually has something to match against -- if this only ever warmed the
   // filtered set, an Owner condition could never see data for the very rows it needs to
   // decide on, since they'd be excluded from "filtered" until the filter already matched
-  // them (a bootstrap problem). Runs sequentially in chunks of 100
-  // (LIVE_QL_OWNER_LOOKUP_MAX on the backend) rather than all at once, to stay gentle on
-  // LeadSquared's own rate limits for a wide window -- capped at 2,000 distinct
-  // opportunities as a hard ceiling (a realistic window is far smaller than this; the cap
-  // exists for the rare case of a very wide date range with thousands of QLs). Cancelled
+  // them (a bootstrap problem). The backend now resolves a whole chunk in ONE bulk
+  // LeadSquared search (see fetchLiveQlOpportunityOwners in api/crm-leads.js -- switched
+  // off a per-opportunity API call, which was the actual rate-limit risk) rather than one
+  // LeadSquared call per id, so a 500-id chunk costs the SAME single request as a 5-id
+  // one -- capped at 10,000 distinct opportunities as a hard ceiling (a realistic window
+  // is far smaller than this; still cheap even here, at most 20 requests total). Cancelled
   // and restarted whenever the loaded window itself changes (a new date preset/Refresh).
-  const LIVE_QL_OWNER_WARM_CAP = 2000
+  const LIVE_QL_OWNER_WARM_CAP = 10000
+  const LIVE_QL_OWNER_CHUNK_SIZE = 500 // matches LIVE_QL_OWNER_BULK_MAX on the backend
   useEffect(() => {
     let cancelled = false
     const allIds = [...new Set(allRows.map(r => r.opportunityId).filter(Boolean))]
@@ -495,9 +497,9 @@ export default function LiveQLsDashboard() {
     // actively misleading about why not everything had a real value yet.
     setOwnerCache(prev => { const next = { ...prev }; toFetch.forEach(id => { if (!next[id]) next[id] = 'loading' }); return next })
     ;(async () => {
-      for (let i = 0; i < toFetch.length; i += 100) {
+      for (let i = 0; i < toFetch.length; i += LIVE_QL_OWNER_CHUNK_SIZE) {
         if (cancelled) return
-        const chunk = toFetch.slice(i, i + 100)
+        const chunk = toFetch.slice(i, i + LIVE_QL_OWNER_CHUNK_SIZE)
         try {
           const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_opportunity_owners&ids=${chunk.map(encodeURIComponent).join(',')}`)
           if (cancelled) return

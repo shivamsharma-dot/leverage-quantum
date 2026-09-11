@@ -773,43 +773,66 @@ async function fetchLiveQlMetrics(creds, { date }) {
   }
 }
 
-// Enriches a small batch of Live QL rows with their linked Opportunity's Owner, real
-// Created On, and current owner-assignment timestamp -- none of these live on the
-// Activity object itself (they're Opportunity-level fields), and GetOpportunityDetails
-// is a per-record endpoint with no "many IDs" mode, so this is deliberately called for
-// only the CURRENTLY VISIBLE PAGE of the Records table (25 rows), not the whole
-// date-window's worth -- same "lazy per-page enrichment" pattern already used for Meta
-// Ads Creatives' thumbnails, keeping this well within LeadSquared's rate limits.
+// Enriches Live QL rows with their linked Opportunity's Owner, real Created On, and
+// current owner-assignment timestamp -- none of these live on the Activity object
+// itself (they're Opportunity-level fields).
+//
+// v1 of this called GetOpportunityDetails once PER opportunityId -- a genuine N+1
+// pattern, rate-limit risk on any wide date window (thousands of distinct QLs). Fixed
+// by switching to Opportunity/Retrieve/BySearchParameter -- the SAME bulk search
+// endpoint fetchLeadSquaredOpportunities (the Opportunities tab) already uses -- with
+// one OR'd RowCondition per id (LSO 'ProspectActivityId', confirmed live 2026-09-11 to
+// be this endpoint's own alias for the Opportunity's own ID despite the confusing
+// name -- 'OpportunityId'/'Id' as the LSO both silently returned zero rows). This
+// resolves an entire batch (confirmed live: 275 ids, one request, 740ms) instead of
+// one LeadSquared call per opportunity -- no per-record rate-limit exposure at all.
+// Include_CSV pulls Owner/CreatedOn/mx_Custom_94 directly on the bulk rows -- verified
+// to return byte-identical values to the old per-record GetOpportunityDetails call for
+// the same ids. LIVE_QL_OWNER_BULK_MAX bounds one request's OR-chain size (payload
+// stays well under typical request-size limits even at several hundred ids); a caller
+// needing more should call this again with the next batch, same as before.
 //
 // Confirmed live (2026-09-11, 15 real opportunities sampled across both channels) which
 // of the account's own "assignment" fields are actually populated: "First assigned to" /
 // "First assigned on" (the fields literally named "first") are unused on this account --
-// 0 of 15 had any value. "Current Owner Assignment Time" was populated on 15 of 15, so
-// that's what's surfaced here (clearly labeled as "current", not misrepresented as
-// "first") -- for a lead that's only ever been assigned once, the two are the same
-// moment anyway. Owner/Created On were both populated on 15 of 15.
-const LIVE_QL_OWNER_LOOKUP_MAX = 100
+// 0 of 15 had any value. "Current Owner Assignment Time" (mx_Custom_94) was populated on
+// 15 of 15, so that's what's surfaced here (clearly labeled as "current", not
+// misrepresented as "first").
+const LIVE_QL_OWNER_BULK_MAX = 500
 async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
-  const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_LOOKUP_MAX)
-  const [ownerMap, details] = await Promise.all([
+  const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_BULK_MAX)
+  if (!ids.length) return []
+  const conds = [{ Type: 'Activity', ConOp: 'and', RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+  ], IsFilterCondition: true }]
+  ids.forEach(id => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+    { SubConOp: 'And', LSO: 'ProspectActivityId', LSO_Type: 'String', Operator: 'eq', RSO: id },
+  ] }))
+  const advancedSearch = JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
+  const [ownerMap, data] = await Promise.all([
     fetchLeadSquaredUsersMap(creds),
-    Promise.all(ids.map(async id => {
-      try {
-        const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityDetails', creds, { OpportunityId: id })
-        const byName = {}
-        ;(Array.isArray(data && data.Fields) ? data.Fields : []).forEach(f => { byName[f.DisplayName] = f.Value })
-        return {
-          opportunityId: id,
-          ownerId: byName['Owner'] || null,
-          createdOn: byName['Created On'] || null,
-          ownerAssignedOn: byName['Current Owner Assignment Time'] || null,
-        }
-      } catch (e) {
-        return { opportunityId: id, error: e.message }
-      }
-    })),
+    leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
+      OpportunityEventCode: 12003,
+      AdvancedSearch: advancedSearch,
+      Paging: { PageIndex: 1, PageSize: 1000 },
+      Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+      Columns: { Include_CSV: 'Owner,CreatedOn,mx_Custom_94' },
+    }),
   ])
-  return details.map(d => d.error ? d : { ...d, ownerName: d.ownerId ? resolveOwnerName(ownerMap, d.ownerId) : null })
+  const byId = {}
+  ;(Array.isArray(data && data.List) ? data.List : []).forEach(r => { if (r.OpportunityId) byId[r.OpportunityId] = r })
+  return ids.map(id => {
+    const r = byId[id]
+    if (!r) return { opportunityId: id, error: 'not found' }
+    return {
+      opportunityId: id,
+      ownerId: r.Owner || null,
+      createdOn: r.CreatedOn || null,
+      ownerAssignedOn: r.mx_Custom_94 || null,
+      ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
+    }
+  })
 }
 
 // ActivityTypes.Get -- lists every activity type configured on this account (code + real
