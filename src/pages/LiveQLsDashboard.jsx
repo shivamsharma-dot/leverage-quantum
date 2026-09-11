@@ -488,11 +488,16 @@ export default function LiveQLsDashboard() {
     const allIds = [...new Set(allRows.map(r => r.opportunityId).filter(Boolean))]
     const toFetch = allIds.filter(id => !ownerCache[id]).slice(0, LIVE_QL_OWNER_WARM_CAP)
     if (!toFetch.length) return
+    // Mark EVERY queued id as 'loading' up front, not just the current chunk -- previously
+    // an id still waiting its turn had no cache entry at all, which rendered as a plain "—"
+    // (looking identical to "resolved, no data") instead of "…" (still queued). On a wide
+    // window this loop can take a while to reach the back of the queue, so that dash was
+    // actively misleading about why not everything had a real value yet.
+    setOwnerCache(prev => { const next = { ...prev }; toFetch.forEach(id => { if (!next[id]) next[id] = 'loading' }); return next })
     ;(async () => {
       for (let i = 0; i < toFetch.length; i += 100) {
         if (cancelled) return
         const chunk = toFetch.slice(i, i + 100)
-        setOwnerCache(prev => { const next = { ...prev }; chunk.forEach(id => { if (!next[id]) next[id] = 'loading' }); return next })
         try {
           const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_opportunity_owners&ids=${chunk.map(encodeURIComponent).join(',')}`)
           if (cancelled) return
