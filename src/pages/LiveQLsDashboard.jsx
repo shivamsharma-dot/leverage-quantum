@@ -63,6 +63,39 @@ const FULL_FIELDS = [
   { key: 'futworkProject', label: 'Futwork Project' },        // AI only
 ]
 
+// Field registry for the Advanced Filter's Field dropdown only -- a superset of
+// FULL_FIELDS (which also drives the table columns/export/distribution). Opportunity
+// Owner is a derived field merged onto each row from the async owner lookup (see
+// enrichedRows below), not one of the backend's own activity fields, so it's kept out
+// of FULL_FIELDS deliberately -- it already has its own dedicated table column and
+// shouldn't also get folded into the generic "every activity field" column set.
+const FILTERABLE_FIELDS = [...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }]
+
+// LeadSquared's own resolved display names for the two vendor/bot placeholder owners a
+// lead can be left sitting under instead of a real floor owner -- confirmed live
+// (2026-09-11) against this account's real Users.Get data. A third, "Superbot", exists
+// too but wasn't named in the request, so it's deliberately left out of this flag.
+const MISASSIGNED_OWNER_NAMES = new Set(['Futwork', 'Futwork AI'])
+
+// Absolute elapsed time between two LeadSquared date strings ("YYYY-MM-DD HH:MM:SS",
+// no timezone suffix), auto-scaled to the largest unit that reads naturally -- seconds
+// under a minute, minutes under an hour, hours under a day, days beyond that. Both
+// inputs come from the same source (LeadSquared, India Standard Time) so a naive
+// same-assumption parse is safe for a DIFFERENCE even without an explicit TZ.
+function formatDurationBetween(aStr, bStr) {
+  if (!aStr || !bStr) return null
+  const a = new Date(aStr.replace(' ', 'T'))
+  const b = new Date(bStr.replace(' ', 'T'))
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return null
+  const diffSec = Math.abs((a.getTime() - b.getTime()) / 1000)
+  if (diffSec < 60) return Math.round(diffSec) + 's'
+  const diffMin = diffSec / 60
+  if (diffMin < 60) return Math.round(diffMin) + 'm'
+  const diffHr = diffMin / 60
+  if (diffHr < 24) return diffHr.toFixed(1) + 'h'
+  return (diffHr / 24).toFixed(1) + 'd'
+}
+
 // ---- Advanced filter: a small condition builder (field / operator / value), any
 // number of conditions combined by one shared AND/OR toggle -- not a full nested
 // expression tree, since a single combinator covers the vast majority of real use
@@ -144,7 +177,7 @@ function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, onCha
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <Dropdown value={cond.field} onChange={v => onChange({ field: v, value: '' })} minWidth={150}
-        options={FULL_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
+        options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
       <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: '' })} minWidth={130}
         options={OPERATORS.map(o => ({ value: o.key, label: o.label }))} />
       {op.value === 'text' && (
@@ -249,7 +282,7 @@ function DistributionModal({ field, onFieldChange, rows, datePreset, onClose }) 
           </button>
         </div>
         <Dropdown label="Group by" value={field} onChange={onFieldChange} minWidth={220}
-          options={FULL_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
+          options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
         <div style={{ marginTop: 16 }}>
           {breakdown.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No data for this selection.</div>
@@ -329,6 +362,18 @@ export default function LiveQLsDashboard() {
     return [...h, ...a]
   }, [data])
 
+  // allRows + whatever's currently resolved in ownerCache, merged so 'ownerName' /
+  // 'ownerAssignedOn' / 'oppCreatedOn' behave like any other field on the row -- the
+  // Advanced Filter's generic matchesCondition(row, cond) reads row[cond.field] with no
+  // special-casing, so this is what makes "Opportunity Owner" filterable at all. Before a
+  // given opportunityId's lookup resolves these are simply null/undefined on the row (an
+  // owner-based filter won't match it yet, same as any other field with no value).
+  const enrichedRows = useMemo(() => allRows.map(r => {
+    const o = r.opportunityId ? ownerCache[r.opportunityId] : null
+    const od = o && typeof o === 'object' ? o : null
+    return { ...r, ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null }
+  }), [allRows, ownerCache])
+
   // Fields where every fetched row for the ACTIVE date window came back blank are hidden
   // from the table entirely, per explicit request -- "if it came always blank, dont show
   // it." Scoped to allRows (the whole window, not just the visible page) so this is an
@@ -340,24 +385,26 @@ export default function LiveQLsDashboard() {
   ), [allRows])
 
   // Distinct observed values per field, for the 'is'/'is not' operators' value picker.
+  // Reads enrichedRows (not allRows) so "Opportunity Owner" gets real options as owner
+  // data resolves in the background, rather than staying permanently empty.
   const filterOptions = useMemo(() => {
     const out = {}
-    FULL_FIELDS.forEach(f => {
+    FILTERABLE_FIELDS.forEach(f => {
       const seen = new Set()
-      allRows.forEach(r => { const v = r[f.key]; if (v) seen.add(v) })
+      enrichedRows.forEach(r => { const v = r[f.key]; if (v) seen.add(v) })
       out[f.key] = Array.from(seen).sort()
     })
     return out
-  }, [allRows])
+  }, [enrichedRows])
 
   const activeConditions = useMemo(() => conditions.filter(isConditionComplete), [conditions])
 
   const filteredRows = useMemo(() => {
-    if (!activeConditions.length) return allRows
-    return allRows.filter(r => combinator === 'AND'
+    if (!activeConditions.length) return enrichedRows
+    return enrichedRows.filter(r => combinator === 'AND'
       ? activeConditions.every(c => matchesCondition(r, c))
       : activeConditions.some(c => matchesCondition(r, c)))
-  }, [allRows, activeConditions, combinator])
+  }, [enrichedRows, activeConditions, combinator])
 
   const humanQL = filteredRows.filter(r => r.channel === 'human').length
   const aiQL = filteredRows.filter(r => r.channel === 'ai').length
@@ -402,18 +449,22 @@ export default function LiveQLsDashboard() {
       })
   }, [pageRows]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Background warm-up covering the WHOLE filtered set (not just the visible page), so
-  // Export actually has Owner/Owner Assigned On/Opportunity Created On to include instead
-  // of exporting blanks for every row nobody happened to page through. Runs sequentially in
-  // chunks of 100 (LIVE_QL_OWNER_LOOKUP_MAX on the backend) rather than all at once, to stay
-  // gentle on LeadSquared's own rate limits for a wide window -- capped at 2,000 distinct
+  // Background warm-up covering the WHOLE loaded window (allRows, not filteredRows), so
+  // (a) Export has real Owner/Owner Assigned On/Opportunity Created On data instead of
+  // blanks for rows nobody happened to page through, and (b) filtering BY Opportunity
+  // Owner actually has something to match against -- if this only ever warmed the
+  // filtered set, an Owner condition could never see data for the very rows it needs to
+  // decide on, since they'd be excluded from "filtered" until the filter already matched
+  // them (a bootstrap problem). Runs sequentially in chunks of 100
+  // (LIVE_QL_OWNER_LOOKUP_MAX on the backend) rather than all at once, to stay gentle on
+  // LeadSquared's own rate limits for a wide window -- capped at 2,000 distinct
   // opportunities as a hard ceiling (a realistic window is far smaller than this; the cap
-  // exists for the rare case of a very wide date range with thousands of QLs). Cancelled and
-  // restarted whenever the filtered set changes (a new date preset or filter condition).
+  // exists for the rare case of a very wide date range with thousands of QLs). Cancelled
+  // and restarted whenever the loaded window itself changes (a new date preset/Refresh).
   const LIVE_QL_OWNER_WARM_CAP = 2000
   useEffect(() => {
     let cancelled = false
-    const allIds = [...new Set(filteredRows.map(r => r.opportunityId).filter(Boolean))]
+    const allIds = [...new Set(allRows.map(r => r.opportunityId).filter(Boolean))]
     const toFetch = allIds.filter(id => !ownerCache[id]).slice(0, LIVE_QL_OWNER_WARM_CAP)
     if (!toFetch.length) return
     ;(async () => {
@@ -436,25 +487,33 @@ export default function LiveQLsDashboard() {
       }
     })()
     return () => { cancelled = true }
-  }, [filteredRows]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allRows]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Used to show export-readiness right next to the button, and to decide whether the
-  // export itself should warn that some rows' owner data hadn't finished loading yet.
+  // Progress shown right next to Export -- deliberately measured against filteredRows
+  // (what will actually be exported / is currently on screen), not the broader allRows
+  // the fetch loop above warms, so this reads as "how ready is what I'm looking at."
   const ownerWarmStats = useMemo(() => {
     const ids = [...new Set(filteredRows.map(r => r.opportunityId).filter(Boolean))]
     const resolved = ids.filter(id => ownerCache[id] && ownerCache[id] !== 'loading').length
     return { total: ids.length, resolved, capped: ids.length > LIVE_QL_OWNER_WARM_CAP }
   }, [filteredRows, ownerCache])
 
+  // r.ownerName/ownerAssignedOn/oppCreatedOn already live on the row via enrichedRows --
+  // filteredRows is derived from it, so no separate ownerCache lookup is needed here.
   const exportRows = filteredRows.map(r => {
-    const owner = r.opportunityId ? ownerCache[r.opportunityId] : null
-    const ownerData = owner && typeof owner === 'object' ? owner : null
     const row = {
-      Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn,
+      Channel: r.channel === 'human' ? 'Human' : 'AI',
+      // "Activity Created On" -- when the QL call/qualification activity itself was
+      // logged in LeadSquared, distinct from "Opportunity Created On" below (when the
+      // Opportunity record the call is FOR was first created, usually well earlier).
+      'Activity Created On': r.createdOn,
       'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '',
-      'Opportunity Owner': (ownerData && ownerData.ownerName) || '',
-      'Owner Assigned On': (ownerData && ownerData.ownerAssignedOn) || '',
-      'Opportunity Created On': (ownerData && ownerData.createdOn) || '',
+      'Opportunity Owner': r.ownerName || '',
+      'Owner Assigned On': r.ownerAssignedOn || '',
+      'Opportunity Created On': r.oppCreatedOn || '',
+      'Time: Opp Created -> QL Call': formatDurationBetween(r.oppCreatedOn, r.createdOn) || '',
+      'Time: Owner Assigned -> QL Call': formatDurationBetween(r.ownerAssignedOn, r.createdOn) || '',
+      'Misassigned Owner (Futwork/Futwork AI)': r.ownerName && MISASSIGNED_OWNER_NAMES.has(r.ownerName) ? 'Yes' : '',
     }
     visibleFields.forEach(f => { row[f.label] = r[f.key] || '' })
     return row
@@ -541,7 +600,10 @@ export default function LiveQLsDashboard() {
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
                       ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filters, same as the Queued cards.'],
                       ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
-                      ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the rest of the filtered rows in the background (see the Records card’s subtitle for progress) so Export includes them too -- may show … briefly while loading. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
+                      ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
+                      ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
+                      ['Opp Created → QL Call / Owner Assigned → QL Call', 'Elapsed time between the Opportunity being created (or its current owner being assigned) and this QL call, auto-scaled to seconds/minutes/hours/days.'],
+                      ['Misassigned owner', 'A row highlighted red means the Opportunity Owner is still “Futwork” or “Futwork AI” -- LeadSquared’s own bot/vendor placeholder accounts, not a real floor owner. Filter on Opportunity Owner is/is not to isolate these.'],
                       ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh. Any field that came back blank for every row in the current window is hidden from the table.'],
                       ['Filters', 'Build any number of field/operator/value conditions and combine them with ALL (AND) or ANY (OR). Narrows the Records table, the Distribution popup, and the QL KPI cards -- Queued counts are never affected.'],
                     ].map(([m, d]) => (
@@ -597,7 +659,7 @@ export default function LiveQLsDashboard() {
                     horizontally inside its own card rather than wrapping text and
                     producing uneven row heights. */}
                 <Card title="Records" sub={
-                  `${fmtN(filteredRows.length)} rows -- ${visibleFields.length + 7} columns` +
+                  `${fmtN(filteredRows.length)} rows -- ${visibleFields.length + 9} columns` +
                   (ownerWarmStats.total > 0 && ownerWarmStats.resolved < ownerWarmStats.total
                     ? ` -- loading owner data for export: ${fmtN(ownerWarmStats.resolved)} of ${fmtN(ownerWarmStats.total)}${ownerWarmStats.capped ? ' (capped)' : ''}`
                     : '')
@@ -607,7 +669,7 @@ export default function LiveQLsDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', ...visibleFields.map(f => f.label)].map(h => (
+                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'Owner Assigned → QL Call', ...visibleFields.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -618,8 +680,20 @@ export default function LiveQLsDashboard() {
                           const ownerLoading = owner === 'loading'
                           const ownerFailed = owner === 'error'
                           const ownerData = owner && typeof owner === 'object' ? owner : null
+                          // Futwork/Futwork AI are LeadSquared's own bot/vendor placeholder
+                          // owners (see MISASSIGNED_OWNER_NAMES above) -- a lead still
+                          // sitting under one of these instead of a real floor owner is a
+                          // genuine operational miss, flagged red per explicit request. A
+                          // deliberate, narrowly-scoped exception to the brand-colors-only
+                          // rule, same precedent already used for AI QL Detail's "In
+                          // Progress" row highlight.
+                          const misassigned = ownerData && MISASSIGNED_OWNER_NAMES.has(ownerData.ownerName)
                           return (
-                          <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border }}>
+                          <tr key={r.id} style={{
+                            borderBottom: '1px solid ' + C.border,
+                            background: misassigned ? '#FEF2F2' : undefined,
+                            borderLeft: misassigned ? '3px solid #DC2626' : '3px solid transparent',
+                          }}>
                             <td style={{ padding: '7px 10px', fontWeight: 700, color: r.channel === 'human' ? C.blue : C.cyan, whiteSpace: 'nowrap' }}>{r.channel === 'human' ? 'Human' : 'AI'}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.createdOn}</td>
                             <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
@@ -636,9 +710,18 @@ export default function LiveQLsDashboard() {
                                   style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
                               ) : '—'}
                             </td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerName) || '—'}</td>
+                            <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', fontWeight: misassigned ? 700 : 400, color: misassigned ? '#DC2626' : C.text }}
+                              title={misassigned ? 'Still owned by a bot/vendor placeholder, not a real floor owner -- likely a missed assignment.' : undefined}>
+                              {ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerName) || '—'}{misassigned ? ' ⚠' : ''}
+                            </td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.ownerAssignedOn) || '—'}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{ownerLoading ? '…' : ownerFailed ? '—' : (ownerData && ownerData.createdOn) || '—'}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the Opportunity's own creation and this QL call.">
+                              {ownerLoading ? '…' : ownerFailed ? '—' : formatDurationBetween(ownerData && ownerData.createdOn, r.createdOn) || '—'}
+                            </td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the current owner assignment and this QL call.">
+                              {ownerLoading ? '…' : ownerFailed ? '—' : formatDurationBetween(ownerData && ownerData.ownerAssignedOn, r.createdOn) || '—'}
+                            </td>
                             {visibleFields.map(f => (
                               <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
                             ))}
@@ -646,7 +729,7 @@ export default function LiveQLsDashboard() {
                           )
                         })}
                         {pageRows.length === 0 && (
-                          <tr><td colSpan={visibleFields.length + 7} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
+                          <tr><td colSpan={visibleFields.length + 9} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
                         )}
                       </tbody>
                     </table>
