@@ -536,6 +536,26 @@ export default function LiveQLsDashboard() {
 
   useEffect(() => { load(false) }, [datePreset]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Distinct Queued -- counts by real Opportunity ID (a lead queued to BOTH Human and AI
+  // counts once, not twice; see api/crm-leads.js's fetchLiveQlDistinctQueued for the full
+  // reasoning). Deliberately a SEPARATE, lazy fetch fired independently of `load` above --
+  // it has to pull every queued ROW (not the cheap RecordCount the headline Queued cards
+  // use), so it's slower on a wide window, and it must never hold up the page's normal,
+  // already-fast render. Not session-cached like `data` above -- it's cheap enough to just
+  // re-fetch on every date change, and doing so avoids a second cache-shape bug to get right.
+  const [distinctQueued, setDistinctQueued] = useState(null)
+  const [distinctQueuedLoading, setDistinctQueuedLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    setDistinctQueued(null)
+    setDistinctQueuedLoading(true)
+    fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_distinct_queued&date=${datePreset}`)
+      .then(d => { if (!cancelled) setDistinctQueued(d) })
+      .catch(() => { if (!cancelled) setDistinctQueued(null) })
+      .finally(() => { if (!cancelled) setDistinctQueuedLoading(false) })
+    return () => { cancelled = true }
+  }, [datePreset])
+
   // Human + AI rows unified into one list, each tagged with its own channel -- every row
   // already carries the SAME field keys (country/intake/budget/...) regardless of channel,
   // since the backend maps each channel's own mx_Custom_N numbering onto one shared key set.
@@ -627,6 +647,15 @@ export default function LiveQLsDashboard() {
   // so a filter can't quietly change what this ratio means.
   const totalQlUnfiltered = data ? data.human.qlCount + data.ai.qlCount : 0
   const queuedToQlPct = totalQueued > 0 ? (totalQlUnfiltered / totalQueued) * 100 : null
+
+  // Distinct Queued-to-QL % -- same QL numerator as the plain ratio above, but divided by
+  // the DISTINCT-opportunity Queued total instead of the raw (possibly double-counted)
+  // one. Shown side by side with the plain ratio, deliberately, so the gap between the two
+  // IS the visible size of the double-counting effect -- not hidden behind one "corrected"
+  // number replacing the old one.
+  const distinctTotalQueued = distinctQueued ? distinctQueued.totalDistinct : null
+  const distinctQueuedToQlPct = distinctTotalQueued > 0 ? (totalQlUnfiltered / distinctTotalQueued) * 100 : null
+  const distinctQueuedTruncated = distinctQueued ? (distinctQueued.human.truncated || distinctQueued.ai.truncated) : false
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
   // Clamped rather than reset-via-effect: a filter change can shrink the result set out
@@ -831,6 +860,7 @@ export default function LiveQLsDashboard() {
                       ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
                       ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filters, same as the Queued cards.'],
+                      ['Distinct Queued', 'Same leads as the Queued cards, but counted by real Opportunity ID instead of by raw queued-call count -- so a lead queued to BOTH Human and AI (a real, confirmed pattern, e.g. re-routed after no pickup) counts once here instead of twice. Loads a few seconds after the page, since it needs every queued row, not just a fast total. Human + AI won’t always add up to Total here -- the gap is exactly how many leads were queued to both, shown on the Total card’s own sub-line. A queued row with no Opportunity ID recorded (confirmed via a live check to still be a real lead/Opportunity, just not stamped on that log entry) counts as its own distinct lead rather than being merged or dropped. For a wide window this may be based on a capped fetch -- a banner says so when that happens.'],
                       ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
@@ -873,6 +903,19 @@ export default function LiveQLsDashboard() {
                   Totals and the Records table below reflect only the fetched rows -- narrow the date range for a complete view.
                 </div>
               )}
+              {distinctQueuedTruncated && (
+                <div style={{
+                  margin: '20px 28px 0', padding: '10px 16px', borderRadius: 10,
+                  background: C.navyBg, border: '0.5px solid ' + C.navy, color: C.navy,
+                  fontSize: 12, fontWeight: 600, fontFamily: FONT,
+                }}>
+                  This window has more Queued leads than the Distinct Queued cards can currently fetch in full
+                  ({distinctQueued.human.truncated ? `Human capped at ${fmtN(distinctQueued.human.rowsFetched)} of ${fmtN(distinctQueued.human.recordCount)}` : ''}
+                  {distinctQueued.human.truncated && distinctQueued.ai.truncated ? ' -- ' : ''}
+                  {distinctQueued.ai.truncated ? `AI capped at ${fmtN(distinctQueued.ai.rowsFetched)} of ${fmtN(distinctQueued.ai.recordCount)}` : ''}).
+                  Distinct Queued and Distinct Queued to QL % below reflect only the fetched rows -- narrow the date range for a complete view.
+                </div>
+              )}
               <div className="lq-kpi-grid" style={{ ...KPI_CARD_ROW, marginTop: 20 }}>
                 <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
                 <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.agent} />
@@ -882,6 +925,19 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label="Queued to QL %" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
                 <PremKPI label="QLs This Period" value={fmtN(totalQlUnfiltered)} sub="Human + AI, for the date range -- ignores the Filters above" accent={C.green} icon={KPI_ICONS.total} />
+                <PremKPI label="Distinct Total Queued"
+                  value={distinctQueuedLoading ? '…' : (distinctTotalQueued == null ? '—' : fmtN(distinctTotalQueued))}
+                  sub={distinctQueued ? `${fmtN(distinctQueued.overlapCount)} queued to both, counted once` : 'by Opportunity ID'}
+                  accent={C.green} icon={KPI_ICONS.total} />
+                <PremKPI label="Distinct Human Queued"
+                  value={distinctQueuedLoading ? '…' : (distinctQueued ? fmtN(distinctQueued.human.distinctCount) : '—')}
+                  sub="by Opportunity ID, this channel" accent={C.green} icon={KPI_ICONS.agent} />
+                <PremKPI label="Distinct AI Queued"
+                  value={distinctQueuedLoading ? '…' : (distinctQueued ? fmtN(distinctQueued.ai.distinctCount) : '—')}
+                  sub="by Opportunity ID, this channel" accent={C.green} icon={KPI_ICONS.bot} />
+                <PremKPI label="Distinct Queued to QL %"
+                  value={distinctQueuedLoading ? '…' : (distinctQueuedToQlPct == null ? '—' : `${distinctQueuedToQlPct.toFixed(1)}%`)}
+                  sub="Total QLs / Distinct Total Queued" accent={C.navy} icon={KPI_ICONS.total} />
               </div>
 
               <div style={{ padding: '16px 28px 28px' }}>
