@@ -35,9 +35,15 @@ const testLine = ctx => (ctx.isTest ? ':test_tube: *Test post* -- sent to the te
 
 function scoreTable(rows, fmtINR, fmtN) {
   const t = { columns: ['', 'Marketing Spend', 'Total Leads', 'Total QLs', 'SR', 'AC', 'CPL', 'CPQL', 'Lead to QL %'], rows: [], strongRows: [] }
-  rows.forEach(r => {
-    const blankCost = r.label === 'Organic' || r.label === 'Referral'
-    const noQl = r.label === 'Referral'
+  // Referral dropped from this table entirely (2026-09-12, asked for directly --
+  // "we're not sending that source to qualify"): every cell it ever showed besides
+  // Total Leads was already a dash for exactly that reason, so the row was never
+  // more than noise. Overall's own totals are untouched -- Referral's real leads
+  // still count there (it was always a genuine part of Overall, same as "Others"
+  // folding into Organic without a dedicated row of its own); only the display
+  // row for it is gone, not any underlying figure.
+  rows.filter(r => r.label !== 'Referral').forEach(r => {
+    const blankCost = r.label === 'Organic'
     const cpl = !blankCost && r.leads > 0 ? r.spend / r.leads : null
     const cpql = !blankCost && r.totalQL > 0 ? r.spend / r.totalQL : null
     const futworkQueued = r.futworkHumanQ + r.futworkAiQ
@@ -48,8 +54,8 @@ function scoreTable(rows, fmtINR, fmtN) {
     // what Lead to QL % actually divides by, rather than the two being two
     // different, independently-timestamped counts sitting side by side.
     t.rows.push([
-      r.label, blankCost ? DASH : moneyCompact(r.spend), noQl ? DASH : fmtN(futworkQueued), noQl ? DASH : fmtN(r.totalQL),
-      noQl || r.srQl == null ? DASH : fmtN(r.srQl), noQl || r.acQl == null ? DASH : fmtN(r.acQl),
+      r.label, blankCost ? DASH : moneyCompact(r.spend), fmtN(futworkQueued), fmtN(r.totalQL),
+      r.srQl == null ? DASH : fmtN(r.srQl), r.acQl == null ? DASH : fmtN(r.acQl),
       cpl == null ? DASH : fmtINR(cpl), cpql == null ? DASH : fmtINR(cpql),
       pctText(leadToQl),
     ])
