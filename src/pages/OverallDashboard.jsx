@@ -3291,19 +3291,32 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   //
   // Cleared on every real Refresh (bqNonce bump) so a reopened panel re-fetches
   // rather than serving an increasingly stale snapshot for the rest of the session.
+  //
+  // Real bug found live (2026-09-12): clearing this ONLY on bqNonce meant a panel
+  // opened once on day N and left un-refreshed (a pinned/already-open browser tab is
+  // the common case -- "I open it daily in the morning" often means switching back to
+  // a tab, not a fresh page load) kept re-showing day N's own frozen "yesterday"
+  // window forever after, since `mtdScorecard` stays truthy and the effect below
+  // short-circuited on that alone. Fixed by stamping `computedForDay` (today's own
+  // date, not yesterday) onto every state this effect sets, and checking that instead
+  // of a plain truthiness check -- still skips a redundant refetch within the same
+  // day, but now genuinely refetches once the calendar date has actually moved on,
+  // with no need to click Refresh or reload the page.
   const [mtdScorecard, setMtdScorecard] = useState(null)
   useEffect(() => { setMtdScorecard(null) }, [bqNonce])
   useEffect(() => {
-    if (!slackPanelOpen || mtdScorecard) return
-    let dead = false
+    if (!slackPanelOpen) return
     const now = new Date()
+    const todayKey = dayKey(now)
+    if (mtdScorecard && mtdScorecard.computedForDay === todayKey) return
+    let dead = false
     const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
     const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
     // Today being the 1st of the month means yesterday falls in the PREVIOUS month --
     // there are zero complete days to report yet. Surface that honestly rather than
     // firing a since>until query or dividing by a zero day count.
     if (yesterdayDate < monthStartDate) {
-      setMtdScorecard({ ready: true, noCompleteDays: true, monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) })
+      setMtdScorecard({ ready: true, noCompleteDays: true, monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }), computedForDay: todayKey })
       return
     }
     const monthStart = dayKey(monthStartDate)
@@ -3403,8 +3416,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         totalQL: overallRow.totalQL, totalApps, dailyRunRate, daysDone,
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
         qlSplitAvailable: Array.isArray(qlSplitRaw),
+        computedForDay: todayKey,
       })
-    }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message }) })
+    }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message, computedForDay: todayKey }) })
     return () => { dead = true }
   }, [slackPanelOpen, mtdScorecard])
 
