@@ -175,6 +175,30 @@ input:focus, textarea:focus {
 }
 
 
+/* ── Tab bar (TabBar.jsx / tabsContext.jsx) ──────────────────────────────── */
+
+/* Desktop/tablet only -- mobile already has its own hamburger topbar + drawer
+   nav (below), and real browser-tab-style switching between open dashboards is
+   a desktop workflow. Same mechanism as the mobile topbar's own padding-top
+   trick: every page's outer .lq-page-shell already sets height:100vh with the
+   global box-sizing:border-box reset, so adding padding-top here shrinks the
+   CONTENT box by exactly the tab bar's height without any page ever overflowing
+   or getting clipped -- confirmed against every page in the app, zero per-page
+   changes needed. */
+@media (min-width: 769px) {
+  .lq-page-shell {
+    padding-top: 36px;
+  }
+}
+@media (max-width: 768px) {
+  .lq-tabbar {
+    display: none !important;
+  }
+}
+.lq-tabbar::-webkit-scrollbar {
+  height: 0;
+}
+
 /* ── Responsive / Mobile ─────────────────────────────────────────────────── */
 
 /* Tables: always horizontally scrollable on small screens */

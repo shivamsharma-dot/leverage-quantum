@@ -9,6 +9,9 @@ import { COMPONENT_IMPORTS, prefetchAllRoutes } from './lib/routePrefetch'
 import { canAccessDashboard } from '../shared/access.mjs'
 import { PresentationProvider } from './lib/presentationContext.jsx'
 import { PAGE_LIST } from './lib/pageList'
+import { PAGE_TITLES } from './lib/pageTitles'
+import { TabsProvider } from './lib/tabsContext'
+import TabBar from './components/TabBar'
 const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
 const OverallDashboard = lazy(COMPONENT_IMPORTS.OverallDashboard)
 const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
@@ -41,45 +44,8 @@ const MarketingReviewDashboard = lazy(COMPONENT_IMPORTS.MarketingReviewDashboard
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
-
-// Page title map — dynamic titles per route
-const PAGE_TITLES = {
-  '/': 'Summary',
-  '/dashboard/overall': 'Overall',
-  '/dashboard/overall-bigquery': 'Overall (BigQuery)',
-  '/dashboard/ceo-b2c-pnl': 'Daily P&L',
-  '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
-  '/dashboard/marketing-review': 'Marketing Review',
-  '/dashboard/meta-ads': 'Meta Ads',
-  '/dashboard/leverage-careers': 'Leverage Careers',
-  '/dashboard/apps': 'Apps',
-  '/dashboard/google-ads': 'Google Ads',
-  '/dashboard/roas': 'ROAS',
-  '/dashboard/mtd': 'MTD',
-  '/dashboard/revenue': 'Revenue',
-  '/dashboard/organic-social': 'Organic & Social',
-  '/dashboard/lq-ops': 'Daily QLs',
-  '/dashboard/lq-ops-monthly': 'Monthly QLs',
-  '/dashboard/lq-ops-detail': 'Human QL Detail',
-  '/dashboard/lq-ops-ai-detail': 'AI QL Detail',
-  '/dashboard/lq-ops-human-unassigned': 'Human Unassigned',
-  '/dashboard/lq-ops-ai-unassigned': 'AI Unassigned',
-  '/dashboard/futwork-errors': 'Futwork Errors',
-  '/dashboard/lq-field-schema': 'Field Schema',
-  '/dashboard/whatsapp': 'WhatsApp',
-  '/dashboard/referral': 'Referral',
-  '/dashboard/leads-assigned': 'Leads Assigned',
-  '/dashboard/leadsquared': 'LeadSquared',
-  '/dashboard/live-qls': 'Live QLs',
-  '/dashboard/team-mapping': 'Team Mapping',
-  '/dashboard/super-tracker': 'Super Tracker',
-  '/ask-ai': 'Ask AI',
-  '/dashboard/agents': 'Agents',
-  '/dashboard/marketing-performance': 'Marketing Performance',
-  '/settings': 'Settings',
-  '/settings/reports/email': 'Email Reports',
-  '/settings/reports/slack': 'Slack',
-}
+// Page title map (path -> label) now lives in ./lib/pageTitles.js, shared with
+// tabsContext.jsx's tab labels so the two can never drift apart.
 
 // ── Route fade transition ──────────────────────────────────────────────────────
 // .q-page-enter wraps EVERY page's whole render tree in ProtectedRoute below --
@@ -273,11 +239,20 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  // Only render the tab bar once signed in -- tabsContext itself also ignores
+  // '/login', but gating the mount here means it never even subscribes to
+  // location changes on the login screen.
+  const { user } = useAuth()
   return (
     <ErrorBoundary>
       <style>{FADE_STYLE}</style>
       <CommandPalette />
       <ToastHost />
+      {user && (
+        <TabsProvider>
+          <TabBar />
+        </TabsProvider>
+      )}
       <PresentationProvider>
       <Suspense fallback={<PageLoader />}>
         <Routes>
