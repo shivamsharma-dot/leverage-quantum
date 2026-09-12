@@ -15,6 +15,7 @@ import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } fr
 import { SlackIcon } from '../components/icons/BrandIcons'
 import { channelHandle } from '../../shared/slackChannels.mjs'
 import { useAuth } from '../hooks/useAuth'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 // Line items exactly as the finance sheet names them, in sheet order. The
 // Daily P&L tab splits SR into Online/Offline (2026-08); Daily Cash Flow does
@@ -429,18 +430,33 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     return function () { alive = false }
   }, [])
 
-  useEffect(function () {
-    let alive = true
+  // Shared by BOTH /dashboard/ceo-b2c-pnl and /dashboard/ceo-b2c-cashflow -- they're
+  // the same component with a different `statement` prop, reading two halves of the
+  // SAME payload, so one cache entry covers switching between them too. A plain
+  // mount (including navigating back from another dashboard) reuses whatever this
+  // session already fetched (see sessionLoad.js); only the Refresh button (added
+  // alongside this, since none existed before) bypasses it.
+  const fetchB2C = useCallback(function (force, alive) {
+    if (!force) {
+      const cached = getSession('ceo_b2c_v1')
+      if (cached) { setData(cached.data); setLoading(false); setErr(''); return }
+    }
+    setLoading(true); setErr('')
     fetch('/api/crm-leads?source=b2c', { credentials: 'include' })
       .then(function (r) { return r.json() })
       .then(function (j) {
-        if (!alive) return
-        if (j && j.error) setErr(j.error); else setData(j)
+        if (alive && !alive.current) return
+        if (j && j.error) setErr(j.error); else { setData(j); setSession('ceo_b2c_v1', j) }
         setLoading(false)
       })
-      .catch(function (e) { if (alive) { setErr(String((e && e.message) || e)); setLoading(false) } })
-    return function () { alive = false }
+      .catch(function (e) { if (!alive || alive.current) { setErr(String((e && e.message) || e)); setLoading(false) } })
   }, [])
+
+  useEffect(function () {
+    const alive = { current: true }
+    fetchB2C(false, alive)
+    return function () { alive.current = false }
+  }, [fetchB2C])
 
   // House rule for every CEO-facing surface: the current day is excluded, the
   // page always stops at D-1. The sheet is filled a day late anyway.
@@ -973,6 +989,15 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
             {/* CEO_BRIEF_VERSIONS/B2C_REPORT_VERSIONS/B2C_LEDGER_VERSIONS hardcode
                 "Revenue"/"Cost" wording throughout, so they stay P&L-only. Cash
                 Flow gets its own single native-table version instead. */}
+            <Button size="sm" variant="secondary" onClick={function () { fetchB2C(true) }} disabled={loading}
+              icon={
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                  style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}>
+                  <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+              }>
+              {loading ? 'Refreshing' : 'Refresh'}
+            </Button>
             {ready ? (
               <Button size="sm" variant="secondary" onClick={function () { setSlackOpen(true) }}
                 icon={<SlackIcon size={13} />}>
