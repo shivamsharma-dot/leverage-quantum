@@ -6,6 +6,7 @@ import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import { ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts'
 import { C, FONT, Card, PremKPI, fmtN, pct, brandColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 // ---------------------------------------------------------------------------
 // Organic & Social -- tracks the same metrics the "IPO Tracker" sheet's
@@ -353,7 +354,23 @@ export default function OrganicSocialDashboard() {
     })
   }, [])
 
-  const load = useCallback(() => {
+  // force=true only for an explicit Refresh click -- a plain mount (including
+  // navigating back from another dashboard) reuses whatever this session already
+  // fetched for THIS SAME granularity+date-window (see sessionLoad.js), instead of
+  // re-running the whole IG/YouTube/GA4 fetch fan-out every single visit.
+  const load = useCallback((force) => {
+    const cacheKey = 'organic_social_v1:' + granularity + ':' + customFrom + ':' + customTo
+    if (force !== true) {
+      const cached = getSession(cacheKey)
+      if (cached) {
+        setIgAccounts(cached.data.igAccounts); setYt(cached.data.yt)
+        setYtRange(cached.data.ytRange); setYtRangeErr(cached.data.ytRangeErr)
+        setGa4(cached.data.ga4); setGa4Err(cached.data.ga4Err)
+        setPrefs(cached.data.prefs)
+        setLoading(false)
+        return
+      }
+    }
     setLoading(true)
     const p = periodsForGranularity(granularity, customFrom, customTo)
     const curSince = fmtISO(p.curSince), curUntil = fmtISO(p.curUntil)
@@ -376,25 +393,32 @@ export default function OrganicSocialDashboard() {
       const keys = (accountsRes && Array.isArray(accountsRes.accounts) && accountsRes.accounts.length)
         ? accountsRes.accounts.map(a => a.key)
         : [null] // no accounts endpoint / none configured -- fall back to the single legacy account so "not connected" still renders one card, not zero
-      Promise.all(keys.map(k => loadIgAccount(k, periods))).then(setIgAccounts)
+      Promise.all(keys.map(k => loadIgAccount(k, periods))).then(igAccounts => {
+        setIgAccounts(igAccounts)
 
-      if (ytStatsRes && ytStatsRes.configured && ytStatsRes.stats) setYt(ytStatsRes.stats)
-      else setYt(null)
+        let yt = null
+        if (ytStatsRes && ytStatsRes.configured && ytStatsRes.stats) yt = ytStatsRes.stats
+        setYt(yt)
 
-      if (ytCurRes && ytCurRes.configured && ytCurRes.range) {
-        setYtRange({ cur: ytCurRes.range, prior: (ytPriorRes && ytPriorRes.configured && ytPriorRes.range) || null })
-        setYtRangeErr(null)
-      } else if (ytCurRes && ytCurRes.configured === false) { setYtRange(null); setYtRangeErr('not_configured') }
-      else { setYtRange(null); setYtRangeErr((ytCurRes && ytCurRes.detail) || 'Blocked') }
+        let ytRange = null, ytRangeErr = null
+        if (ytCurRes && ytCurRes.configured && ytCurRes.range) {
+          ytRange = { cur: ytCurRes.range, prior: (ytPriorRes && ytPriorRes.configured && ytPriorRes.range) || null }
+        } else if (ytCurRes && ytCurRes.configured === false) { ytRangeErr = 'not_configured' }
+        else { ytRangeErr = (ytCurRes && ytCurRes.detail) || 'Blocked' }
+        setYtRange(ytRange); setYtRangeErr(ytRangeErr)
 
-      if (ga4CurRes && ga4CurRes.configured && ga4CurRes.range) {
-        setGa4({ cur: ga4CurRes.range, prior: (ga4PriorRes && ga4PriorRes.configured && ga4PriorRes.range) || null })
-        setGa4Err(null)
-      } else if (ga4CurRes && ga4CurRes.configured === false) { setGa4(null); setGa4Err('not_configured') }
-      else { setGa4(null); setGa4Err((ga4CurRes && ga4CurRes.detail) || 'Blocked') }
+        let ga4 = null, ga4Err = null
+        if (ga4CurRes && ga4CurRes.configured && ga4CurRes.range) {
+          ga4 = { cur: ga4CurRes.range, prior: (ga4PriorRes && ga4PriorRes.configured && ga4PriorRes.range) || null }
+        } else if (ga4CurRes && ga4CurRes.configured === false) { ga4Err = 'not_configured' }
+        else { ga4Err = (ga4CurRes && ga4CurRes.detail) || 'Blocked' }
+        setGa4(ga4); setGa4Err(ga4Err)
 
-      setPrefs((prefsRes && prefsRes.prefs) || {})
-      setLoading(false)
+        const prefs = (prefsRes && prefsRes.prefs) || {}
+        setPrefs(prefs)
+        setSession(cacheKey, { igAccounts, yt, ytRange, ytRangeErr, ga4, ga4Err, prefs })
+        setLoading(false)
+      })
     })
   }, [granularity, customFrom, customTo, loadIgAccount])
 
@@ -512,7 +536,7 @@ export default function OrganicSocialDashboard() {
                 </>
               )}
             </div>
-            <Button size="sm" variant="secondary" icon={REFRESH_ICON} onClick={load} title="Refetch every source">Refresh</Button>
+            <Button size="sm" variant="secondary" icon={REFRESH_ICON} onClick={() => load(true)} title="Refetch every source">Refresh</Button>
           </div>
         </div>
 
