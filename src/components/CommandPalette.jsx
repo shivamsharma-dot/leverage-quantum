@@ -19,8 +19,6 @@ const NAV_ITEMS = [
   { label: 'Google Ads',         path: '/dashboard/google-ads',   keywords: 'search pmax keywords clicks' },
   { label: 'ROAS',               path: '/dashboard/roas',         keywords: 'return ad spend revenue' },
   { label: 'MTD',                path: '/dashboard/mtd',          keywords: 'month to date cpl cpql' },
-  { label: 'Lead Quality',       path: '/dashboard/lead-quality', keywords: 'funnel conversion source' },
-  { label: 'Channel Mix',        path: '/dashboard/channel-mix',  keywords: 'allocation paid organic affiliate' },
   { label: 'Revenue',            path: '/dashboard/revenue',      keywords: 'ac vas collected projected' },
   { label: 'QL Ops',             path: '/dashboard/lq-ops',       keywords: 'lead qualification futwork superbot' },
   { label: 'Referral',           path: '/dashboard/referral',     keywords: 'employee student offers applications' },

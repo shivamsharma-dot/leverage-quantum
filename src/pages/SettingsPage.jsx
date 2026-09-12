@@ -1975,9 +1975,9 @@ export default function SettingsPage() {
   // is no second permission concept to keep in sync with allowed_users.
   const ACCESS_TEMPLATES = [
     { id: 'marketing', label: 'Marketing analyst', desc: 'Ad platforms, ROAS, channel mix',
-      ids: ['overall', 'meta_ads', 'google_ads', 'bing_ads', 'roas', 'channel_mix', 'mtd', 'marketing_performance'] },
+      ids: ['overall', 'meta_ads', 'google_ads', 'roas', 'mtd', 'marketing_performance'] },
     { id: 'lqops', label: 'QL Ops floor', desc: 'Lead quality and the QL Ops set',
-      ids: ['lead_quality', 'lq_ops', 'lq_ops_monthly', 'lq_ops_detail', 'lq_ops_ai_detail', 'lq_ops_human_unassigned', 'lq_ops_ai_unassigned', 'leads_assigned', 'futwork_errors'] },
+      ids: ['lq_ops', 'lq_ops_monthly', 'lq_ops_detail', 'lq_ops_ai_detail', 'lq_ops_human_unassigned', 'lq_ops_ai_unassigned', 'leads_assigned', 'futwork_errors'] },
     { id: 'exec', label: 'Exec read-only', desc: 'Top-line revenue, P&L and cashflow',
       ids: ['home', 'overall', 'revenue', 'mtd', 'roas', 'marketing_performance', 'ceo_b2c_pnl', 'ceo_b2c_cashflow'] },
   ]

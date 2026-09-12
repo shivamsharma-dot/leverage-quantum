@@ -755,6 +755,91 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
 }
 
+// TEMPORARY, one-off investigation -- NOT a shipped feature, remove once used. Follow-up to
+// the Queued cross-channel duplicate check: ~7% of AI-queued Activity rows have no value in
+// their own opportunityId custom field (mx_Custom_7). That does NOT necessarily mean the
+// prospect has no real Opportunity -- it could just mean this specific "queued" log entry
+// was never stamped with one. This checks directly: for a sample of AI-queued rows missing
+// that field, look up their RelatedProspectId (a base system field, always present) against
+// LeadSquared's real Opportunity data to see if a real Opportunity genuinely exists for them.
+//
+// Includes a POSITIVE CONTROL: a few Human-queued rows that DO have a populated
+// opportunityId already (so we know for certain they have a real Opportunity) are checked
+// through the exact same search -- if those don't resolve either, the search itself (an
+// unverified guess: LSO 'RelatedProspectId' on the Opportunity endpoint) is the problem, not
+// the AI data.
+async function fetchLiveQlMissingOppIdCheckDebug(creds, { date, sampleSize }) {
+  const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.last_week
+  const aiCh = LIVE_QL_CHANNELS.ai
+  const humanCh = LIVE_QL_CHANNELS.human
+
+  const [aiResult, humanResult] = await Promise.all([
+    runActivityAdvancedSearchAll(creds, aiCh.code, buildQueuedAdvancedSearch(aiCh.code, dateKeyword, aiCh.queuedNote),
+      ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', aiCh.fields.opportunityId].join(','), LIVE_QL_MAX_PAGES),
+    runActivityAdvancedSearchAll(creds, humanCh.code, buildQueuedAdvancedSearch(humanCh.code, dateKeyword, humanCh.queuedNote),
+      ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', humanCh.fields.opportunityId].join(','), LIVE_QL_MAX_PAGES),
+  ])
+
+  const missingRows = aiResult.rows.filter(r => !r[aiCh.fields.opportunityId])
+  const sample = missingRows.slice(0, sampleSize || 30)
+  const testProspectIds = [...new Set(sample.map(r => r.RelatedProspectId).filter(Boolean))]
+
+  const positiveControls = humanResult.rows.filter(r => r[humanCh.fields.opportunityId]).slice(0, 3)
+  const controlProspectIds = [...new Set(positiveControls.map(r => r.RelatedProspectId).filter(Boolean))]
+
+  const allIds = [...new Set([...testProspectIds, ...controlProspectIds])]
+  let oppRows = []
+  let searchError = null
+  if (allIds.length) {
+    const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
+      { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+    ] }]
+    allIds.forEach(id => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+      { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+      { SubConOp: 'And', LSO: 'RelatedProspectId', LSO_Type: 'String', Operator: 'eq', RSO: id },
+    ] }))
+    const advancedSearch = JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
+    try {
+      const oppData = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
+        OpportunityEventCode: 12003,
+        AdvancedSearch: advancedSearch,
+        Paging: { PageIndex: 1, PageSize: 1000 },
+        Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+        Columns: { Include_CSV: 'OpportunityId,RelatedProspectId,CreatedOn,Status' },
+      })
+      oppRows = Array.isArray(oppData && oppData.List) ? oppData.List : []
+    } catch (e) {
+      searchError = (e && e.message) || 'failed'
+    }
+  }
+
+  const byProspect = {}
+  oppRows.forEach(r => { if (r.RelatedProspectId) (byProspect[r.RelatedProspectId] = byProspect[r.RelatedProspectId] || []).push(r) })
+  const withCount = id => ({ prospectId: id, opportunitiesFound: (byProspect[id] || []).length })
+
+  const controlResults = controlProspectIds.map(withCount)
+  const testResults = testProspectIds.map(withCount)
+
+  return {
+    date: date || 'last_week',
+    searchError,
+    totalOpportunityRowsReturned: oppRows.length,
+    positiveControls: {
+      count: controlProspectIds.length,
+      resolvedCorrectly: controlResults.filter(r => r.opportunitiesFound > 0).length,
+      details: controlResults,
+    },
+    missingOppIdSample: {
+      aiTotalQueuedRows: aiResult.rows.length,
+      aiRowsMissingOppId: missingRows.length,
+      sampled: testProspectIds.length,
+      prospectsWithARealOpportunity: testResults.filter(r => r.opportunitiesFound > 0).length,
+      prospectsWithNoOpportunityFound: testResults.filter(r => r.opportunitiesFound === 0).length,
+      details: testResults,
+    },
+  }
+}
+
 async function fetchLiveQlMetrics(creds, { date }) {
   const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
   const [human, ai] = await Promise.all([
@@ -2937,6 +3022,8 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
+    // TEMPORARY diagnostic -- see fetchLiveQlMissingOppIdCheckDebug's own comment. Remove once used.
+    if (mode === 'live_ql_missing_oppid_check_debug') return res.status(200).json(await fetchLiveQlMissingOppIdCheckDebug(creds, { date: req.query.date, sampleSize: Number(req.query.sampleSize) || 30 }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))

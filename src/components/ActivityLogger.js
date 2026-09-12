@@ -93,8 +93,6 @@ const PAGE_LABELS = {
   '/dashboard/google-ads': 'Google Ads',
   '/dashboard/roas': 'ROAS',
   '/dashboard/mtd': 'MTD',
-  '/dashboard/lead-quality': 'Lead Quality',
-  '/dashboard/channel-mix': 'Channel Mix',
   '/dashboard/revenue': 'Revenue',
   '/dashboard/lq-ops': 'QL Ops',
   '/dashboard/whatsapp': 'WhatsApp',

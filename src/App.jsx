@@ -12,8 +12,6 @@ import { PAGE_LIST } from './lib/pageList'
 const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
 const OverallDashboard = lazy(COMPONENT_IMPORTS.OverallDashboard)
 const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
-const LeadQualityDashboard = lazy(COMPONENT_IMPORTS.LeadQualityDashboard)
-const ChannelMixDashboard = lazy(COMPONENT_IMPORTS.ChannelMixDashboard)
 const RevenueDashboard = lazy(COMPONENT_IMPORTS.RevenueDashboard)
 const OrganicSocialDashboard = lazy(COMPONENT_IMPORTS.OrganicSocialDashboard)
 const LeadQualificationDashboard = lazy(COMPONENT_IMPORTS.LeadQualificationDashboard)
@@ -26,11 +24,9 @@ const LeadQualificationSchemaDashboard = lazy(COMPONENT_IMPORTS.LeadQualificatio
 const WhatsAppDashboard = lazy(COMPONENT_IMPORTS.WhatsAppDashboard)
 const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
 const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
-const CreativeDownloaderDashboard = lazy(COMPONENT_IMPORTS.CreativeDownloaderDashboard)
 const LeverageCareersDashboard = lazy(COMPONENT_IMPORTS.LeverageCareersDashboard)
 const AppsDashboard = lazy(COMPONENT_IMPORTS.AppsDashboard)
 const GoogleAdsDashboard = lazy(COMPONENT_IMPORTS.GoogleAdsDashboard)
-const BingAdsDashboard = lazy(COMPONENT_IMPORTS.BingAdsDashboard)
 const ReferralDashboard = lazy(COMPONENT_IMPORTS.ReferralDashboard)
 const LeadsAssignedDashboard = lazy(COMPONENT_IMPORTS.LeadsAssignedDashboard)
 const LeadSquaredDashboard = lazy(COMPONENT_IMPORTS.LeadSquaredDashboard)
@@ -55,15 +51,11 @@ const PAGE_TITLES = {
   '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
   '/dashboard/marketing-review': 'Marketing Review',
   '/dashboard/meta-ads': 'Meta Ads',
-  '/dashboard/creative-downloader': 'Creative Downloader',
   '/dashboard/leverage-careers': 'Leverage Careers',
   '/dashboard/apps': 'Apps',
   '/dashboard/google-ads': 'Google Ads',
-  '/dashboard/bing-ads': 'Bing Ads',
   '/dashboard/roas': 'ROAS',
   '/dashboard/mtd': 'MTD',
-  '/dashboard/lead-quality': 'Lead Quality',
-  '/dashboard/channel-mix': 'Channel Mix',
   '/dashboard/revenue': 'Revenue',
   '/dashboard/organic-social': 'Organic & Social',
   '/dashboard/lq-ops': 'Daily QLs',
@@ -299,8 +291,6 @@ export default function App() {
           <Route path="/dashboard/marketing-review" element={<ProtectedRoute dashboardId="marketing_review"> <MarketingReviewDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard/channel-mix" element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/revenue" element={<ProtectedRoute dashboardId="revenue"> <RevenueDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/organic-social" element={<ProtectedRoute dashboardId="organic_social"><OrganicSocialDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops" element={<ProtectedRoute dashboardId="lq_ops"> <LeadQualificationDashboard forcedView="daily" /></ProtectedRoute>} />
@@ -319,11 +309,9 @@ export default function App() {
           <Route path="/dashboard/super-tracker" element={<ProtectedRoute dashboardId="super_tracker"><SuperTrackerDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard/creative-downloader" element={<ProtectedRoute dashboardId="creative_downloader"> <CreativeDownloaderDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leverage-careers" element={<ProtectedRoute dashboardId="leverage_careers"> <LeverageCareersDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/apps" element={<ProtectedRoute dashboardId="apps"> <AppsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/google-ads" element={<ProtectedRoute dashboardId="google_ads"> <GoogleAdsDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard/bing-ads" element={<ProtectedRoute dashboardId="bing_ads"> <BingAdsDashboard /></ProtectedRoute>} />
           <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />
           <Route path="/dashboard/agents" element={<ProtectedRoute dashboardId="agents"> <AgentsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/marketing-performance" element={<ProtectedRoute dashboardId="marketing_performance"> <MarketingPerformanceReport /></ProtectedRoute>} />

@@ -26,8 +26,6 @@ const PAGE_NAMES = {
   '/': 'Home',
   '/dashboard/mtd': 'MTD',
   '/dashboard/roas': 'ROAS',
-  '/dashboard/lead-quality': 'Lead-Quality',
-  '/dashboard/channel-mix': 'Channel-Mix',
   '/dashboard/revenue': 'Revenue',
   '/dashboard/lq-ops': 'QL-Ops',
   '/dashboard/referral': 'Referral',
