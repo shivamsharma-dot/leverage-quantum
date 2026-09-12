@@ -11,7 +11,7 @@ import Dropdown from '../components/Dropdown'
 import DateRangePicker from '../components/DateRangePicker'
 import { fetchCSV } from '../lib/sheetCache'
 import { getSession, setSession, getPersisted } from '../lib/sessionLoad'
-import { classifyCorridor, corridorLabel, CORRIDORS, classifyCampaignTypeFromName, isGoogleSource } from '../lib/corridors'
+import { classifyCorridor, corridorLabel, classifyCampaignTypeFromName, isGoogleSource } from '../lib/corridors'
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 import { resolveSheetUrl } from '../lib/dataSources'
@@ -78,8 +78,233 @@ function parseCSV(csv) {
     highest_qual:    (r[h('highest_qualification')] || '').trim(),
     count:           1,  // one row = one qualified lead
     corridorId:      classifyCorridor(r[h('opp_first_campaign_name')] || ''),
+    // Derived once here (not re-derived per-render) so the generic Advanced Filter
+    // matcher can read row.corridorLabel directly like any other plain field.
+    corridorLabel:   corridorLabel(classifyCorridor(r[h('opp_first_campaign_name')] || '')),
     category:        isGoogleSource(r[h('source')] || '') ? classifyCampaignTypeFromName(r[h('opp_first_campaign_name')] || '') : null,
   }))
+}
+
+// ---- Advanced filter (Daily QLs) -- ports the condition-builder pattern already
+// shipped and iterated on Live QLs/Overall: any number of field/operator/value
+// conditions, combined by one shared ALL(AND)/ANY(OR) toggle rather than a full
+// nested expression tree (covers the vast majority of real use). Deliberately no
+// numeric operators here -- unlike Live QLs' "Opp Created -> QL Call (days)", this
+// sheet has no duration-like numeric field, so every operator is text-based.
+const QL_FILTERABLE_FIELDS = [
+  { key: 'provider', label: 'Provider' },
+  { key: 'source', label: 'Source' },
+  { key: 'sub_source', label: 'Sub Source' },
+  { key: 'campaign', label: 'Campaign' },
+  { key: 'corridorLabel', label: 'Corridor' },
+  { key: 'category', label: 'Category' },
+  { key: 'country', label: 'Country' },
+  { key: 'degree_type', label: 'Degree Type' },
+  { key: 'disposition', label: 'Disposition' },
+  { key: 'futwork_project', label: 'Futwork Project' },
+  { key: 'budget', label: 'Budget' },
+  { key: 'valid_passport', label: 'Valid Passport' },
+  { key: 'preferred_intake', label: 'Preferred Intake' },
+  { key: 'highest_qual', label: 'Highest Qualification' },
+]
+
+const QL_OPERATORS = [
+  { key: 'is', label: 'is', value: 'select' },
+  { key: 'is_not', label: 'is not', value: 'select' },
+  { key: 'contains', label: 'contains', value: 'text' },
+  { key: 'not_contains', label: 'does not contain', value: 'text' },
+  { key: 'like', label: 'like', value: 'text' },
+  { key: 'not_like', label: 'not like', value: 'text' },
+  { key: 'starts_with', label: 'starts with', value: 'text' },
+  { key: 'ends_with', label: 'ends with', value: 'text' },
+  { key: 'defined', label: 'is defined', value: 'none' },
+  { key: 'not_defined', label: 'is not defined', value: 'none' },
+]
+const QL_OPERATOR_MAP = Object.fromEntries(QL_OPERATORS.map(o => [o.key, o]))
+
+function qlIsConditionComplete(c) {
+  const op = QL_OPERATOR_MAP[c.operator]
+  if (!c.field || !op) return false
+  if (op.value === 'none') return true
+  return (c.value || '').trim() !== ''
+}
+
+function qlMatchesCondition(row, cond) {
+  const raw = row[cond.field]
+  if (cond.operator === 'defined') return raw != null && String(raw).trim() !== ''
+  if (cond.operator === 'not_defined') return raw == null || String(raw).trim() === ''
+  const v = raw == null ? '' : String(raw)
+  const hay = v.toLowerCase()
+  const needle = (cond.value || '').toLowerCase()
+  switch (cond.operator) {
+    case 'is': return hay === needle
+    case 'is_not': return hay !== needle
+    case 'contains': case 'like': return hay.includes(needle)
+    case 'not_contains': case 'not_like': return !hay.includes(needle)
+    case 'starts_with': return hay.startsWith(needle)
+    case 'ends_with': return hay.endsWith(needle)
+    default: return true
+  }
+}
+
+let qlConditionIdCounter = 0
+function qlNewCondition() { qlConditionIdCounter += 1; return { id: 'qlc' + qlConditionIdCounter, field: 'country', operator: 'contains', value: '' } }
+
+// Small searched single-select popover for the 'is'/'is not' operators -- picks from
+// real observed values for that field (see filterOptions below).
+function QLValueSelectPopover({ options, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 220, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search values…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+          {shown.map(o => (
+            <button key={o} type="button" onClick={() => onPick(o)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              {o}
+            </button>
+          ))}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No values</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// Same searched-list pattern, for picking the FIELD itself -- matches LeadSquared's
+// own "Configure Fields" step (a searchable list, not a plain dropdown), ported here
+// the same way it was on Live QLs.
+function QLFieldSelectPopover({ options, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.label.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 230, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search fields…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          {shown.map(o => (
+            <button key={o.value} type="button" onClick={() => onPick(o.value)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              {o.label}
+            </button>
+          ))}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No fields</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// Renders one condition as a plain-English chip, e.g. "Country is Germany" -- shown
+// directly in the toolbar for every applied filter (LeadSquared-style "pinned
+// filters"), so nothing is hidden behind a popover you have to reopen to check.
+function qlConditionSummary(c) {
+  const f = QL_FILTERABLE_FIELDS.find(x => x.key === c.field)
+  const op = QL_OPERATOR_MAP[c.operator]
+  if (!f || !op) return ''
+  if (op.value === 'none') return `${f.label} ${op.label}`
+  return `${f.label} ${op.label} "${c.value}"`
+}
+
+function QLConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, fieldPickerOpen, onOpenFieldPicker, onChange, onRemove }) {
+  const op = QL_OPERATOR_MAP[cond.operator]
+  const fieldDef = QL_FILTERABLE_FIELDS.find(f => f.key === cond.field)
+  const fieldLabel = (fieldDef || {}).label || cond.field
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative', minWidth: 150, flexShrink: 0 }}>
+        <button type="button" onClick={onOpenFieldPicker}
+          style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: FONT, background: 'var(--bg3)', color: C.text, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {fieldLabel}
+        </button>
+        {fieldPickerOpen && (
+          <QLFieldSelectPopover options={QL_FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))}
+            onPick={v => { onChange({ field: v, operator: 'contains', value: '' }); onOpenFieldPicker() }}
+            onClose={onOpenFieldPicker} />
+        )}
+      </div>
+      <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: '' })} minWidth={130}
+        options={QL_OPERATORS.map(o => ({ value: o.key, label: o.label }))} />
+      {op.value === 'text' && (
+        <input type="text" value={cond.value} onChange={e => onChange({ value: e.target.value })} placeholder="Value…"
+          style={{ flex: 1, minWidth: 90, boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', background: 'var(--bg3)', color: C.text }} />
+      )}
+      {op.value === 'select' && (
+        <div style={{ position: 'relative', flex: 1, minWidth: 90 }}>
+          <button type="button" onClick={onOpenValuePicker}
+            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, background: 'var(--bg3)', color: cond.value ? C.text : C.muted, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {cond.value || 'Select value…'}
+          </button>
+          {valuePickerOpen && (
+            <QLValueSelectPopover options={options} onPick={v => { onChange({ value: v }); onOpenValuePicker() }} onClose={onOpenValuePicker} />
+          )}
+        </div>
+      )}
+      {op.value === 'none' && <div style={{ flex: 1, minWidth: 90, fontSize: 11.5, color: C.muted, fontStyle: 'italic' }}>no value needed</div>}
+      <button type="button" onClick={onRemove} title="Remove filter" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', padding: 4, flexShrink: 0 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+      </button>
+    </div>
+  )
+}
+
+function QLFilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
+  const [openValueRowId, setOpenValueRowId] = useState(null)
+  const [openFieldRowId, setOpenFieldRowId] = useState(null)
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 'min(480px, 92vw)', background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 12 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8 }}>Filters</div>
+        {/* No maxHeight/overflowY on this list -- a scrollable ancestor clips any
+            position:absolute descendant (the Field/Operator dropdown, the value
+            picker) to its own box regardless of z-index, which is exactly the bug
+            this pattern hit on Live QLs before that constraint was removed there. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {conditions.map(c => (
+            <QLConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
+              valuePickerOpen={openValueRowId === c.id}
+              onOpenValuePicker={() => setOpenValueRowId(v => v === c.id ? null : c.id)}
+              fieldPickerOpen={openFieldRowId === c.id}
+              onOpenFieldPicker={() => setOpenFieldRowId(v => v === c.id ? null : c.id)}
+              onChange={patch => onUpdate(c.id, patch)} onRemove={() => onRemove(c.id)} />
+          ))}
+        </div>
+        <button type="button" onClick={onAdd}
+          style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          Add Filter
+        </button>
+        {conditions.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '0.5px solid ' + C.border, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>Match</span>
+            <div style={{ display: 'flex', background: 'var(--bg3)', borderRadius: 8, padding: 2 }}>
+              {['AND', 'OR'].map(op => (
+                <button key={op} type="button" onClick={() => onSetCombinator(op)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: combinator === op ? C.navy : 'transparent', color: combinator === op ? '#fff' : C.muted }}>
+                  {op === 'AND' ? 'ALL' : 'ANY'}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 11.5, color: C.muted }}>of the conditions above</span>
+          </div>
+        )}
+        {conditions.length > 0 && (
+          <button type="button" onClick={onClearAll} style={{ marginTop: 10, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
+        )}
+      </div>
+    </>
+  )
 }
 
 /* -- Shared UI components ---------------------------------------------- */
@@ -342,10 +567,12 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [selPeriod, setSelPeriod]   = useState('all')
   const [months, setMonths]         = useState([])
   const [selMonth, setSelMonth]     = useState('')
-  const [selProvider, setSelProvider] = useState('All')
-  const [selSource, setSelSource]   = useState('All')
-  const [selCorridor, setSelCorridor] = useState('All')
-  const [selCountry, setSelCountry] = useState('All')
+  // Replaced the plain Provider/Source/Corridor/Country dropdowns with a real
+  // Advanced Filter condition builder (field/operator/value, any number of
+  // conditions, one shared ALL/ANY combinator) -- see QL_FILTERABLE_FIELDS etc. above.
+  const [advConditions, setAdvConditions] = useState([])
+  const [advCombinator, setAdvCombinator] = useState('AND')
+  const [advFilterOpen, setAdvFilterOpen] = useState(false)
   const { user } = useAuth()
   const activeUsers = usePresence(user)
   const [loading, setLoading]       = useState(true)
@@ -527,18 +754,31 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     })
   }, [rows, dateWindow, selMonth])
 
-  // 3. Derived lists from dateFilteredRows
-  const providers = useMemo(() =>
-    ['All', ...[...new Set(dateFilteredRows.map(r => r.provider))].filter(Boolean).sort()]
-  , [dateFilteredRows])
+  // 3. Distinct observed values per field, for the Advanced Filter's 'is'/'is not'
+  // value picker -- scoped to dateFilteredRows, same as the old Provider/Source/
+  // Corridor/Country dropdown option lists this replaces.
+  const advFilterOptions = useMemo(() => {
+    const out = {}
+    QL_FILTERABLE_FIELDS.forEach(f => {
+      const seen = new Set()
+      dateFilteredRows.forEach(r => { const v = r[f.key]; if (v) seen.add(v) })
+      out[f.key] = Array.from(seen).sort()
+    })
+    return out
+  }, [dateFilteredRows])
 
-  const sources = useMemo(() =>
-    ['All', ...[...new Set(dateFilteredRows.map(r => r.source))].filter(Boolean).sort()]
-  , [dateFilteredRows])
+  const activeAdvConditions = useMemo(() => advConditions.filter(qlIsConditionComplete), [advConditions])
+  const matchesAdvancedRow = useCallback(r => {
+    if (!activeAdvConditions.length) return true
+    return advCombinator === 'AND'
+      ? activeAdvConditions.every(c => qlMatchesCondition(r, c))
+      : activeAdvConditions.some(c => qlMatchesCondition(r, c))
+  }, [activeAdvConditions, advCombinator])
 
-  const countries = useMemo(() =>
-    ['All', ...[...new Set(dateFilteredRows.map(r => r.country))].filter(Boolean).sort()]
-  , [dateFilteredRows])
+  function addAdvCondition() { setAdvConditions(prev => [...prev, qlNewCondition()]); setPage(0) }
+  function updateAdvCondition(id, patch) { setAdvConditions(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c)); setPage(0) }
+  function removeAdvCondition(id) { setAdvConditions(prev => prev.filter(c => c.id !== id)); setPage(0) }
+  function clearAdvConditions() { setAdvConditions([]); setPage(0) }
 
   // ===== MONTHLY VIEW (Monthly QLs sheet) =====
   const MQ_METRICS = useMemo(() => ([
@@ -741,13 +981,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     futwork_ai_q_to_ql_pct: convNum(r.futwork_ai_qualified, r.futwork_ai_queued),
   })), [monthlyByPeriodScoped])
 
-  // 4. Apply provider + source dropdowns
-  const filtered = useMemo(() => dateFilteredRows.filter(r =>
-    (selProvider === 'All' || r.provider === selProvider) &&
-    (selSource === 'All' || r.source === selSource) &&
-    (selCorridor === 'All' || corridorLabel(r.corridorId) === selCorridor) &&
-    (selCountry === 'All' || r.country === selCountry)
-  ), [dateFilteredRows, selProvider, selSource, selCorridor, selCountry]);
+  // 4. Apply the Advanced Filter conditions
+  const filtered = useMemo(() => dateFilteredRows.filter(matchesAdvancedRow), [dateFilteredRows, matchesAdvancedRow]);
 
   // Day-on-day breakdown: group filtered rows by normalized qualified_date (YYYY-MM-DD)
   const dayOnDay = useMemo(() => {
@@ -775,10 +1010,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     const total = fw + fwai + sb
     // MoM delta: compare filtered selection against same provider/source in previous month
     const prevM    = months[months.indexOf(selMonth) - 1]
-    const prevBase = prevM ? rows.filter(r => r.month === prevM
-      && (selProvider === 'All' || r.provider === selProvider)
-      && (selSource   === 'All' || r.source   === selSource)
-    ) : []
+    const prevBase = prevM ? rows.filter(r => r.month === prevM && matchesAdvancedRow(r)) : []
     const prevFw   = prevBase.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
     const prevFwai = prevBase.filter(r => r.provider === 'Futwork AI').reduce((s, r) => s + r.count, 0)
     const prevSb   = prevBase.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
@@ -790,7 +1022,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
       fwaiDelta:  prevFwai > 0 ? ((fwai - prevFwai) / prevFwai * 100) : null,
       sbDelta:    prevSb  > 0 ? ((sb    - prevSb)   / prevSb  * 100) : null,
     }
-  }, [filtered, rows, months, selMonth, selProvider, selSource])
+  }, [filtered, rows, months, selMonth, matchesAdvancedRow])
 
 
   const sourceBar = useMemo(() => {
@@ -916,14 +1148,10 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     const prevM = months[months.indexOf(selMonth) - 1]
     if (!prevM) return null
     const prevCount = rows
-      .filter(r => r.month === prevM
-        && (selProvider === 'All' || r.provider === selProvider)
-        && (selSource === 'All' || r.source === selSource)
-        && (selCorridor === 'All' || corridorLabel(r.corridorId) === selCorridor)
-        && r.country === top.country)
+      .filter(r => r.month === prevM && matchesAdvancedRow(r) && r.country === top.country)
       .reduce((s, r) => s + r.count, 0)
     return prevCount > 0 ? ((top.count - prevCount) / prevCount * 100) : null
-  }, [topCountries, rows, months, selMonth, selProvider, selSource, selCorridor])
+  }, [topCountries, rows, months, selMonth, matchesAdvancedRow])
 
   const tableRows = useMemo(() => {
     const q = search.toLowerCase()
@@ -1259,10 +1487,39 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </div>
               <Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
               </>}
-              {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
-            <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
-            <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={selCorridor} minWidth={140} onChange={v => { setSelCorridor(v); setPage(0) }} />
-            <Dropdown label="Country" options={countries} value={selCountry} minWidth={140} onChange={v => { setSelCountry(v); setPage(0) }} /></>}
+              {view === 'daily' && <>
+                <div style={{ position: 'relative' }}>
+                  <button type="button" onClick={() => setAdvFilterOpen(v => !v)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, color: C.sub, whiteSpace: 'nowrap' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                    Filters
+                  </button>
+                  {advFilterOpen && (
+                    <QLFilterBuilderPopover conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions}
+                      onAdd={addAdvCondition} onUpdate={updateAdvCondition} onRemove={removeAdvCondition}
+                      onSetCombinator={setAdvCombinator} onClearAll={clearAdvConditions}
+                      onClose={() => setAdvFilterOpen(false)} />
+                  )}
+                </div>
+                {/* Every applied filter shown as its own chip, right in the toolbar --
+                    LeadSquared's own Advanced Filters keep frequently-used ("pinned")
+                    filters visible next to the Add Filter icon rather than hiding them
+                    inside a popover. Click a chip to reopen the popover and edit it; the
+                    × removes it directly. */}
+                {activeAdvConditions.map(c => (
+                  <span key={c.id} onClick={() => setAdvFilterOpen(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 6px 5px 10px', borderRadius: 999, background: C.navyBg, color: C.navy, fontSize: 11.5, fontWeight: 700, fontFamily: FONT, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                    {qlConditionSummary(c)}
+                    <button type="button" onClick={e => { e.stopPropagation(); removeAdvCondition(c.id) }} title="Remove this filter"
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.navy, display: 'flex', alignItems: 'center', padding: 2, borderRadius: '50%' }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </span>
+                ))}
+                {activeAdvConditions.length > 0 && (
+                  <button onClick={clearAdvConditions} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
+                )}
+              </>}
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
             <Button size="sm" variant="secondary" onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
               icon={
@@ -1565,7 +1822,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               {/* -- ROW 7: LEAD RECORDS TABLE -- */}
               <Card
                 title="Lead records"
-                sub={`${tableRows.length.toLocaleString()} leads - ${selMonth}${selProvider !== 'All' ? ' - ' + selProvider : ''}${selSource !== 'All' ? ' - ' + selSource : ''}${selCorridor !== 'All' ? ' - ' + selCorridor : ''}${selCountry !== 'All' ? ' - ' + selCountry : ''}`}
+                sub={`${tableRows.length.toLocaleString()} leads - ${selMonth}${activeAdvConditions.length ? ` - ${activeAdvConditions.length} filter${activeAdvConditions.length > 1 ? 's' : ''} applied` : ''}`}
                 action={
                   <div style={{ position: 'relative' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
