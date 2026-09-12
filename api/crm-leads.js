@@ -778,11 +778,21 @@ async function fetchLiveQlDistinctQueued(creds, { date }) {
   const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
   const perChannel = {}
   const oppIdSets = {}
-  for (const key of ['human', 'ai']) {
+  // Both channels' paginated row-fetches run in PARALLEL (Promise.all), same as
+  // fetchLiveQlMetrics/fetchLiveQlChannel already do -- a first version of this ran them
+  // sequentially in a plain for-loop, which measured live at ~44s for "Today" alone (roughly
+  // double the ~20-25s either channel takes on its own), a genuinely bad experience for a
+  // fetch this page's own commit message called "a few seconds." Caught by directly timing
+  // the real deployed endpoint before trusting the "lazy background load" framing.
+  const results = await Promise.all(['human', 'ai'].map(async key => {
     const ch = LIVE_QL_CHANNELS[key]
     const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
     const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ch.fields.opportunityId].join(',')
     const result = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_DISTINCT_QUEUED_MAX_PAGES)
+    return { key, result }
+  }))
+  results.forEach(({ key, result }) => {
+    const ch = LIVE_QL_CHANNELS[key]
     const withId = result.rows.filter(r => r[ch.fields.opportunityId])
     const missingOpportunityId = result.rows.length - withId.length
     const distinctIds = new Set(withId.map(r => r[ch.fields.opportunityId]))
@@ -794,7 +804,7 @@ async function fetchLiveQlDistinctQueued(creds, { date }) {
       truncated: result.recordCount > result.rows.length,
       missingOpportunityId,
     }
-  }
+  })
   const overlap = [...oppIdSets.human].filter(id => oppIdSets.ai.has(id))
   const totalDistinct = new Set([...oppIdSets.human, ...oppIdSets.ai]).size
     + perChannel.human.missingOpportunityId + perChannel.ai.missingOpportunityId
