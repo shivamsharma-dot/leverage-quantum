@@ -1,12 +1,16 @@
 name: Overall Funnel Cache Sync
 
+# Used to request hourly via GitHub's own `schedule:` trigger, but that was never a
+# real freshness guarantee: GitHub heavily throttles scheduled workflows on a
+# low-activity repo, and observed run spacing was 2-3.5 hours (e.g. 18:49, 20:43,
+# 22:18, 00:11, 03:37, 06:40 UTC on 2026-07-27/28) -- in practice indistinguishable
+# from the once/twice-daily cadence every other dashboard sync in this repo already
+# uses. Moved to cron-job.org -> workflow_dispatch instead (2026-09-12), retimed onto
+# the same fixed 10:00 AM IST checkpoint Overall BQ sync's own second daily run
+# already uses, per the user's own request to have every dashboard-updating sync land
+# on a small, predictable set of shared times instead of scattered/unreliable ones.
+
 on:
-  schedule:
-    # Requests hourly, but do NOT rely on that as a freshness guarantee: GitHub heavily
-    # throttles scheduled workflows on low-activity repos, and observed run spacing here
-    # is 2-3.5 hours (e.g. 18:49, 20:43, 22:18, 00:11, 03:37, 06:40 UTC on 2026-07-27/28).
-    # Also note cron is UTC -- ':15' is :45 IST, not :15 IST.
-    - cron: '15 * * * *'
   workflow_dispatch:
 
 jobs:

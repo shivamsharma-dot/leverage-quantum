@@ -15,18 +15,22 @@ name: Leverage Careers BigQuery Cache Sync
 # scan (this table isn't partitioned in a way the query can prune -- see the
 # comment on careersLeadsSql in api/crm-leads.js) for identical results --
 # exactly the pattern that produced the Aug 2026 BigQuery cost spikes this
-# cache exists to fix. Times below are picked ~15-30min after each real
-# refresh so the sync isn't racing a still-updating export.
+# cache exists to fix.
 #
 # Requires the CRON_SECRET repository Actions secret (already used by the
 # daily/weekly/monthly report workflows) and the BIGQUERY_*/SUPABASE_* env
 # vars already set in Vercel -- nothing new to configure there.
-
+#
+# Triggered by cron-job.org -> workflow_dispatch (2026-09-12) -- NOT GitHub's
+# own `schedule:` trigger, which this repo has repeatedly found fires
+# unpredictably on a low-activity repo. Retimed onto the same fixed daily
+# checkpoints every other dashboard-updating sync now uses, per the user's
+# own request: 9:30 AM (was 9:45 -- merges into the same slot Monthly QLs and
+# Apps sync already use, since 9:30 is genuinely when this source data
+# refreshes anyway), 2:00 PM (was 2:15), 10:00 PM (was 9:30 PM -- merges into
+# Overall BQ sync's own existing 10 PM slot instead of sitting 30 minutes
+# apart from it for no reason).
 on:
-  schedule:
-    - cron: '15 4 * * *'   # 9:45 AM IST
-    - cron: '45 8 * * *'   # 2:15 PM IST
-    - cron: '0 16 * * *'   # 9:30 PM IST
   workflow_dispatch:
 
 concurrency:

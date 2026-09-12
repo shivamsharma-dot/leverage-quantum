@@ -9,15 +9,21 @@ name: Apps BigQuery Cache Sync
 # bigquery_jobs automatically the same way any other BigQuery call does.
 #
 # Once/day only, per explicit instruction ("no real time refresh") -- not
-# 3x/day like Leverage Careers. 9:00 AM IST = 3:30 UTC.
+# 3x/day like Leverage Careers.
 #
 # Requires the CRON_SECRET repository Actions secret (already used by the
 # report workflows and the Leverage Careers sync) and the BIGQUERY_*/
 # SUPABASE_* env vars already set in Vercel -- nothing new to configure there.
-
+#
+# Triggered by cron-job.org -> workflow_dispatch, 9:30 AM IST (2026-09-12) --
+# NOT GitHub's own `schedule:` trigger, which this repo has repeatedly found
+# fires unpredictably on a low-activity repo (silently dropped runs, multi-
+# hour delays -- see overall-bq-sync.yml's and overall-funnel-sync.yml's own
+# history). 9:30 sits right after Overall BQ sync's own 9:00 run and
+# alongside Monthly QLs sync, per the user's own request to have every
+# dashboard-updating sync land on the same handful of fixed daily checkpoints
+# (9:00 / 9:30 / 10:00 / 10:30 IST) instead of scattered, unreliable times.
 on:
-  schedule:
-    - cron: '30 3 * * *'   # 9:00 AM IST
   workflow_dispatch:
 
 concurrency:
