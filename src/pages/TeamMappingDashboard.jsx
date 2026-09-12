@@ -9,6 +9,7 @@ import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 import { classifyDidRegion, FRAPP_TEAM_NAME } from '../../shared/didRegion.mjs'
 import { classifyFutworkProject, countrySuggestionsFor, autoFillCountry, liveCountryFor, COUNTRY_LIST_AC, COUNTRY_LIST_SR } from '../../shared/futworkProject.mjs'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 // Real-time roster (LeadSquared UserManagement.svc/Users.Get, one call, no cache) +
 // group membership (reconstructed from that same roster -- LeadSquared has no
@@ -2168,10 +2169,20 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
     }).catch(() => {})
   }, [])
 
-  const load = useCallback(() => {
+  // force=true bypasses the session cache and always refetches for real -- used
+  // by the header's Refresh button and by every "something just changed on the
+  // server" event below (import/create-users finished, bulk edit saved), since
+  // those must never be satisfied by a possibly-stale cache hit. A plain mount
+  // (including navigating back from another dashboard) reuses whatever this
+  // session already fetched (see sessionLoad.js).
+  const load = useCallback((force) => {
+    if (!force) {
+      const cached = getSession('team_roster_v1')
+      if (cached) { setData(cached.data); setLoading(false); setError(''); return }
+    }
     setLoading(true); setError('')
     fetchJson(API + '&mode=team_users')
-      .then(d => setData(d))
+      .then(d => { setData(d); setSession('team_roster_v1', d) })
       .catch(e => setError(String(e.message || e)))
       .finally(() => setLoading(false))
   }, [])
@@ -2179,7 +2190,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   useEffect(() => { load() }, [load])
   // Refresh now lives in the page header (not this tab's own filter toolbar),
   // so the header's one button needs a way to reach whichever tab is active.
-  useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
+  useEffect(() => { registerRefresh(() => load(true)) }, [registerRefresh, load])
   // A background import finishing (possibly after this tab's modal was already
   // closed) should refresh the "Manually Mapped" count and table without the
   // admin having to remember to hit Refresh themselves. Guarded on a true->false
@@ -2188,7 +2199,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   // started -- and double up the initial load above for no reason.
   const wasImporting = useRef(false)
   useEffect(() => {
-    if (wasImporting.current && !importRunning) load()
+    if (wasImporting.current && !importRunning) load(true)
     wasImporting.current = importRunning
   }, [importRunning, load])
   // Same reasoning as wasImporting above -- a finished bulk create-users run
@@ -2196,7 +2207,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   // Refresh click, guarded the same true->false way.
   const wasCreatingUsers = useRef(false)
   useEffect(() => {
-    if (wasCreatingUsers.current && !createUsersRunning) load()
+    if (wasCreatingUsers.current && !createUsersRunning) load(true)
     wasCreatingUsers.current = createUsersRunning
   }, [createUsersRunning, load])
 
@@ -2612,7 +2623,14 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
           srCountries={srCountries}
           onClose={() => setEditUser(null)}
           onSaved={saved => {
-            setData(d => ({ ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }))
+            // Keep the session cache in sync with this optimistic update too --
+            // otherwise navigating away and back within the same session would
+            // silently restore the pre-edit snapshot until the next Refresh click.
+            setData(d => {
+              const next = { ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }
+              setSession('team_roster_v1', next)
+              return next
+            })
             setEditUser(null)
           }}
         />
@@ -2632,7 +2650,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
           acCountries={acCountries}
           srCountries={srCountries}
           onClose={() => setShowBulkEdit(false)}
-          onDone={() => { setShowBulkEdit(false); setSelected(new Set()); load() }}
+          onDone={() => { setShowBulkEdit(false); setSelected(new Set()); load(true) }}
         />
       )}
     </div>
@@ -2723,15 +2741,22 @@ function GroupsTab({ isAdmin, registerRefresh }) {
   const [search, setSearch] = useState('')
   const [showCountryLists, setShowCountryLists] = useState(false)
 
-  const load = useCallback(() => {
+  // force=true bypasses the session cache -- used by the header Refresh button.
+  // A plain mount (including navigating back from another dashboard) reuses
+  // whatever this session already fetched (see sessionLoad.js).
+  const load = useCallback((force) => {
+    if (!force) {
+      const cached = getSession('team_groups_v1')
+      if (cached) { setGroups(cached.data); setLoading(false); setError(''); return }
+    }
     setLoading(true); setError('')
     fetchJson(API + '&mode=team_groups')
-      .then(d => setGroups(d.groups || []))
+      .then(d => { const g = d.groups || []; setGroups(g); setSession('team_groups_v1', g) })
       .catch(e => setError(String(e.message || e)))
       .finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
-  useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
+  useEffect(() => { registerRefresh(() => load(true)) }, [registerRefresh, load])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -3315,8 +3340,15 @@ function OrgChartTab({ registerRefresh, isAdmin }) {
   const [watchers, setWatchers] = useState([])
   const [watchModalNode, setWatchModalNode] = useState(null)
 
-  const load = useCallback(() => {
-    fetchJson(API + '&mode=team_users').then(setData).catch(e => setError(String(e.message || e)))
+  // Same underlying endpoint (and same cache key) as RosterTab's own load() --
+  // both read the full team_users roster, so a cache warmed by either tab (or by
+  // navigating back from another dashboard) hydrates the other instantly too.
+  const load = useCallback((force) => {
+    if (!force) {
+      const cached = getSession('team_roster_v1')
+      if (cached) { setData(cached.data); return }
+    }
+    fetchJson(API + '&mode=team_users').then(d => { setData(d); setSession('team_roster_v1', d) }).catch(e => setError(String(e.message || e)))
   }, [])
   const loadWatchers = useCallback(() => {
     if (!isAdmin) return
@@ -3324,7 +3356,7 @@ function OrgChartTab({ registerRefresh, isAdmin }) {
   }, [isAdmin])
   useEffect(() => { load() }, [load])
   useEffect(() => { loadWatchers() }, [loadWatchers])
-  useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
+  useEffect(() => { registerRefresh(() => load(true)) }, [registerRefresh, load])
   const watchedKeys = useMemo(() => new Set(watchers.map(w => w.node_key)), [watchers])
 
   const { tree, unmatched, unmappedCount } = useMemo(() => {
