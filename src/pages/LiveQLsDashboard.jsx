@@ -90,7 +90,13 @@ const OPPORTUNITY_FIELDS = [
 // enrichedRows below), not one of the backend's own activity fields, so it's kept out
 // of FULL_FIELDS deliberately -- it already has its own dedicated table column and
 // shouldn't also get folded into the generic "every activity field" column set.
-const FILTERABLE_FIELDS = [{ key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }, ...OPPORTUNITY_FIELDS]
+const FILTERABLE_FIELDS = [
+  { key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }, ...OPPORTUNITY_FIELDS,
+  // The one numeric field in this registry -- a raw, unrounded day-count shadowing the
+  // existing display-only "Opp Created -> QL Call" column, so it can be filtered with
+  // real "more than N days" comparisons instead of only shown as a formatted string.
+  { key: 'oppToQlDays', label: 'Opp Created → QL Call (days)', type: 'number', unit: 'days' },
+]
 
 // LeadSquared's own resolved display names for the two vendor/bot placeholder owners a
 // lead can be left sitting under instead of a real floor owner -- confirmed live
@@ -117,6 +123,18 @@ function formatDurationBetween(aStr, bStr) {
   const b = new Date(bStr.replace(' ', 'T'))
   if (isNaN(a.getTime()) || isNaN(b.getTime())) return null
   return formatDurationSeconds(Math.abs((a.getTime() - b.getTime()) / 1000))
+}
+
+// Signed elapsed days (toStr - fromStr), as a plain float -- not the auto-scaled
+// "7.8d"/"3h" display string above. Feeds the numeric "more than N days" filter on
+// Opp Created -> QL Call below; kept unrounded so "more than 5 days" genuinely
+// excludes a 5.0-5.4 day gap rather than rounding it up into matching.
+function diffDaysSigned(fromStr, toStr) {
+  if (!fromStr || !toStr) return null
+  const a = new Date(fromStr.replace(' ', 'T'))
+  const b = new Date(toStr.replace(' ', 'T'))
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return null
+  return (b.getTime() - a.getTime()) / 86400000
 }
 
 // "Owner Assigned On" is LeadSquared's "Current Owner Assignment Time" -- a live,
@@ -147,31 +165,59 @@ function formatCallToOwnerAssign(qlCallStr, ownerAssignedOnStr) {
 // observed values for that field (via filterOptions below); 'text'-type operators
 // take free text, matched case-insensitively; 'none'-type operators need no value.
 const OPERATORS = [
-  { key: 'is', label: 'is', value: 'select' },
-  { key: 'is_not', label: 'is not', value: 'select' },
-  { key: 'contains', label: 'contains', value: 'text' },
-  { key: 'not_contains', label: 'does not contain', value: 'text' },
-  { key: 'like', label: 'like', value: 'text' },
-  { key: 'not_like', label: 'not like', value: 'text' },
-  { key: 'starts_with', label: 'starts with', value: 'text' },
-  { key: 'ends_with', label: 'ends with', value: 'text' },
-  { key: 'defined', label: 'is defined', value: 'none' },
-  { key: 'not_defined', label: 'is not defined', value: 'none' },
+  { key: 'is', label: 'is', value: 'select', types: ['text'] },
+  { key: 'is_not', label: 'is not', value: 'select', types: ['text'] },
+  { key: 'contains', label: 'contains', value: 'text', types: ['text'] },
+  { key: 'not_contains', label: 'does not contain', value: 'text', types: ['text'] },
+  { key: 'like', label: 'like', value: 'text', types: ['text'] },
+  { key: 'not_like', label: 'not like', value: 'text', types: ['text'] },
+  { key: 'starts_with', label: 'starts with', value: 'text', types: ['text'] },
+  { key: 'ends_with', label: 'ends with', value: 'text', types: ['text'] },
+  // Numeric comparison operators -- only offered for a 'number'-typed field (currently
+  // just "Opp Created -> QL Call (days)"), so this genuinely adds duration-threshold
+  // filtering ("more than 5 days") rather than the string ops above pretending to.
+  { key: 'gt', label: 'more than', value: 'number', types: ['number'] },
+  { key: 'gte', label: 'at least', value: 'number', types: ['number'] },
+  { key: 'lt', label: 'fewer than', value: 'number', types: ['number'] },
+  { key: 'lte', label: 'at most', value: 'number', types: ['number'] },
+  { key: 'eq_num', label: 'exactly', value: 'number', types: ['number'] },
+  { key: 'defined', label: 'is defined', value: 'none', types: ['text', 'number'] },
+  { key: 'not_defined', label: 'is not defined', value: 'none', types: ['text', 'number'] },
 ]
 const OPERATOR_MAP = Object.fromEntries(OPERATORS.map(o => [o.key, o]))
+
+function fieldTypeOf(fieldKey) {
+  const f = FILTERABLE_FIELDS.find(x => x.key === fieldKey)
+  return (f && f.type) || 'text'
+}
 
 function isConditionComplete(c) {
   const op = OPERATOR_MAP[c.operator]
   if (!c.field || !op) return false
   if (op.value === 'none') return true
+  if (op.value === 'number') return (c.value || '').trim() !== '' && !isNaN(Number(c.value))
   return (c.value || '').trim() !== ''
 }
 
 function matchesCondition(row, cond) {
   const raw = row[cond.field]
+  if (cond.operator === 'defined') return raw != null && String(raw).trim() !== ''
+  if (cond.operator === 'not_defined') return raw == null || String(raw).trim() === ''
+  if (fieldTypeOf(cond.field) === 'number') {
+    if (raw == null || raw === '') return false
+    const num = Number(raw)
+    const target = Number(cond.value)
+    if (isNaN(num) || isNaN(target)) return false
+    switch (cond.operator) {
+      case 'gt': return num > target
+      case 'gte': return num >= target
+      case 'lt': return num < target
+      case 'lte': return num <= target
+      case 'eq_num': return num === target
+      default: return true
+    }
+  }
   const v = raw == null ? '' : String(raw)
-  if (cond.operator === 'defined') return v.trim() !== ''
-  if (cond.operator === 'not_defined') return v.trim() === ''
   const hay = v.toLowerCase()
   const needle = (cond.value || '').toLowerCase()
   switch (cond.operator) {
@@ -254,14 +300,24 @@ function conditionSummary(c) {
   const f = FILTERABLE_FIELDS.find(x => x.key === c.field)
   const op = OPERATOR_MAP[c.operator]
   if (!f || !op) return ''
-  return op.value === 'none' ? `${f.label} ${op.label}` : `${f.label} ${op.label} "${c.value}"`
+  if (op.value === 'none') return `${f.label} ${op.label}`
+  if (op.value === 'number') return `${f.label} ${op.label} ${c.value}${f.unit ? ' ' + f.unit : ''}`
+  return `${f.label} ${op.label} "${c.value}"`
 }
+
+// Quick-pick day thresholds shown under a numeric condition's value input -- named
+// directly after the ones the user actually asked to see counts for (5/6/7/8 days),
+// plus a couple of neighbors, so the common case is one click instead of typing.
+const DAY_THRESHOLD_PRESETS = [3, 5, 6, 7, 8, 10]
 
 function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, fieldPickerOpen, onOpenFieldPicker, onChange, onRemove }) {
   const op = OPERATOR_MAP[cond.operator]
-  const fieldLabel = (FILTERABLE_FIELDS.find(f => f.key === cond.field) || {}).label || cond.field
+  const fieldDef = FILTERABLE_FIELDS.find(f => f.key === cond.field)
+  const fieldLabel = (fieldDef || {}).label || cond.field
+  const fieldType = (fieldDef && fieldDef.type) || 'text'
+  const applicableOps = OPERATORS.filter(o => o.types.includes(fieldType))
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       <div style={{ position: 'relative', minWidth: 150, flexShrink: 0 }}>
         <button type="button" onClick={onOpenFieldPicker}
           style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: FONT, background: 'var(--bg3)', color: C.text, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -269,14 +325,36 @@ function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, field
         </button>
         {fieldPickerOpen && (
           <FieldSelectPopover options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))}
-            onPick={v => { onChange({ field: v, value: '' }); onOpenFieldPicker() }} onClose={onOpenFieldPicker} />
+            onPick={v => {
+              const t = fieldTypeOf(v)
+              // Switching field type resets the operator to something valid for it --
+              // a text operator carried over onto a numeric field (or vice versa) would
+              // silently stop matching anything, which reads as the filter "not working".
+              onChange({ field: v, operator: t === 'number' ? 'gt' : 'contains', value: '' })
+              onOpenFieldPicker()
+            }} onClose={onOpenFieldPicker} />
         )}
       </div>
       <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: '' })} minWidth={130}
-        options={OPERATORS.map(o => ({ value: o.key, label: o.label }))} />
+        options={applicableOps.map(o => ({ value: o.key, label: o.label }))} />
       {op.value === 'text' && (
         <input type="text" value={cond.value} onChange={e => onChange({ value: e.target.value })} placeholder="Value…"
           style={{ flex: 1, minWidth: 90, boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', background: 'var(--bg3)', color: C.text }} />
+      )}
+      {op.value === 'number' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200, flexWrap: 'wrap' }}>
+          <input type="number" step="0.1" min="0" value={cond.value} onChange={e => onChange({ value: e.target.value })} placeholder="Days…"
+            style={{ width: 74, flexShrink: 0, boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', background: 'var(--bg3)', color: C.text }} />
+          <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{fieldDef && fieldDef.unit}</span>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {DAY_THRESHOLD_PRESETS.map(n => (
+              <button key={n} type="button" onClick={() => onChange({ value: String(n) })}
+                style={{ padding: '3px 8px', borderRadius: 999, border: '0.5px solid ' + C.border, background: String(cond.value) === String(n) ? C.navy : 'var(--bg3)', color: String(cond.value) === String(n) ? '#fff' : C.muted, cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: FONT }}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       {op.value === 'select' && (
         <div style={{ position: 'relative', flex: 1, minWidth: 90 }}>
@@ -481,6 +559,10 @@ export default function LiveQLsDashboard() {
         // value picker doesn't show the raw lowercase channel key instead.
         channelLabel: r.channel === 'human' ? 'Human' : 'AI',
         ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null,
+        // Raw numeric shadow of the "Opp Created -> QL Call" display column -- lets the
+        // Advanced Filter do real "more than N days" comparisons (see OPERATORS' number
+        // ops above), rather than only ever showing a formatted "7.8d" string.
+        oppToQlDays: diffDaysSigned(od && od.createdOn, r.createdOn),
         stage: od ? od.stage : null, status: od ? od.status : null, openAge,
         firstCalledOn: od ? od.firstCalledOn : null, lastCalledOn: od ? od.lastCalledOn : null,
         lastInteractedOn: od ? od.lastInteractedOn : null,
