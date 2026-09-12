@@ -270,7 +270,7 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
   const load = (force) => {
     if (!force) {
       const cached = getSession('apps_feed_v1')
-      if (cached) { setRows(cached.rows); setSyncedAt(cached.syncedAt); setLoading(false); setError(''); return }
+      if (cached) { setRows(cached.data.rows); setSyncedAt(cached.data.syncedAt); setLoading(false); setError(''); return }
     }
     setLoading(true); setError('')
     Promise.all([fetchAppsCacheRows(), fetchAppsCacheSyncedAt()])

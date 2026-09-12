@@ -202,7 +202,7 @@ export default function FutworkErrorsDashboard() {
     // matters even on a cached revisit. A cold mount with nothing cached yet falls
     // back to the original full loading-spinner fetch.
     const cached = getSession('futwork_errors_v1')
-    if (cached) { setRows(cached.rows); setLastSync(cached.ts); setLoading(false) }
+    if (cached) { setRows(cached.data.rows); setLastSync(cached.data.ts); setLoading(false) }
     load(!!cached)
     pollRef.current = setInterval(() => load(true), REFRESH_MS)
     return () => clearInterval(pollRef.current)

@@ -48,7 +48,7 @@ function useSuperTracker() {
     const isRefresh = opts && opts.refresh
     if (!isRefresh) {
       const cached = getSession('super_tracker_v1')
-      if (cached) { setData(cached.data); setLastSync(cached.ts); setLoading(false); setError(null); return }
+      if (cached) { setData(cached.data.result); setLastSync(cached.data.ts); setLoading(false); setError(null); return }
     }
     if (isRefresh) setRefreshing(true); else setLoading(true)
     setError(null)
@@ -56,7 +56,7 @@ function useSuperTracker() {
       const d = await fetchSuperTrackerData()
       setData(d)
       const ts = new Date()
-      setSession('super_tracker_v1', { data: d, ts })
+      setSession('super_tracker_v1', { result: d, ts })
       setLastSync(ts)
     } catch (e) {
       setError(e.message || String(e))

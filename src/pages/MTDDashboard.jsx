@@ -193,9 +193,9 @@ export default function MTDDashboard(){
     if(!force){
       const cached=getSession('mtd_v1')
       if(cached){
-        setMonths(cached.months)
-        if(!hasSetInitial.current){setSel(cached.months.length-1);hasSetInitial.current=true}
-        setLastSync(cached.ts)
+        setMonths(cached.data.months)
+        if(!hasSetInitial.current){setSel(cached.data.months.length-1);hasSetInitial.current=true}
+        setLastSync(cached.data.ts)
         setLoading(false)
         setError(null)
         return

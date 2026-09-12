@@ -517,14 +517,14 @@ export default function LiveQLsDashboard() {
     const cacheKey = 'live_ql_metrics_v1:' + datePreset
     if (!force) {
       const cached = getSession(cacheKey)
-      if (cached) { setData(cached.data); setSyncedAt(cached.ts); setPage(0); setLoading(false); setError(null); return }
+      if (cached) { setData(cached.data.result); setSyncedAt(cached.data.ts); setPage(0); setLoading(false); setError(null); return }
     }
     setLoading(true); setError(null)
     try {
       const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_metrics&date=${datePreset}`)
       setData(d)
       const ts = new Date()
-      setSession(cacheKey, { data: d, ts })
+      setSession(cacheKey, { result: d, ts })
       setSyncedAt(ts)
       setPage(0)
     } catch (e) {
