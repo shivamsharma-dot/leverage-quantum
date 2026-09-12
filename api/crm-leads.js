@@ -755,6 +755,49 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
 }
 
+// TEMPORARY, one-off investigation -- NOT a shipped feature, remove once the question below
+// is answered. User's real business concern: a lead first queued to Human, then (if DNP/not
+// connected) re-routed and re-queued to Futwork AI, might get its Opportunity counted TWICE
+// in "Total Queued" -- once per channel -- which would understate Queued-to-QL% (denominator
+// inflated) if ever fixed to a distinct-opportunity count. This fetches real Queued ROWS (not
+// just the cheap RecordCount) with each channel's own opportunityId field, and reports
+// duplicate-opportunity counts both WITHIN each channel and ACROSS Human/AI, for real data,
+// with no fix applied -- purely diagnostic.
+async function fetchLiveQlQueuedDupesDebug(creds, { date }) {
+  const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
+  const perChannel = {}
+  const oppIdSets = {}
+  for (const key of ['human', 'ai']) {
+    const ch = LIVE_QL_CHANNELS[key]
+    const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
+    const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ch.fields.opportunityId].join(',')
+    const result = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_MAX_PAGES)
+    const oppIds = result.rows.map(r => r[ch.fields.opportunityId]).filter(Boolean)
+    const counts = {}
+    oppIds.forEach(id => { counts[id] = (counts[id] || 0) + 1 })
+    const distinct = Object.keys(counts)
+    const dupes = distinct.filter(id => counts[id] > 1)
+    oppIdSets[key] = new Set(distinct)
+    perChannel[key] = {
+      recordCount: result.recordCount,
+      rowsFetched: result.rows.length,
+      truncated: result.recordCount > result.rows.length,
+      rowsMissingOpportunityId: result.rows.length - oppIds.length,
+      distinctOpportunityIds: distinct.length,
+      duplicateOpportunityIdsWithinChannel: dupes.length,
+      sampleDuplicateOpportunityIds: dupes.slice(0, 5),
+    }
+  }
+  const crossOverlap = [...oppIdSets.human].filter(id => oppIdSets.ai.has(id))
+  return {
+    date: date || 'today',
+    human: perChannel.human,
+    ai: perChannel.ai,
+    crossChannelOverlapCount: crossOverlap.length,
+    sampleCrossChannelOverlapOpportunityIds: crossOverlap.slice(0, 5),
+  }
+}
+
 async function fetchLiveQlMetrics(creds, { date }) {
   const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
   const [human, ai] = await Promise.all([
@@ -2937,6 +2980,8 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
+    // TEMPORARY diagnostic -- see fetchLiveQlQueuedDupesDebug's own comment. Remove once used.
+    if (mode === 'live_ql_queued_dupes_debug') return res.status(200).json(await fetchLiveQlQueuedDupesDebug(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
