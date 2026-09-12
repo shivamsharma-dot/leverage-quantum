@@ -385,7 +385,16 @@ function buildB2CCashflowTable(ctx) {
   // hardcoded, so it never goes stale on its own each fiscal year.
   const headerLabels = (Array.isArray(cf.headerLabels) && cf.headerLabels.length === 3) ? cf.headerLabels : ['Particulars', 'MTD Amount (INR CR.)', 'YTD Amount (INR CR.)']
   const rows = [[cellBold(headerLabels[0]), cellBold(headerLabels[1]), cellBold(headerLabels[2])]]
-  dataRows.forEach(function (r) {
+  // A blank row, matching the sheet's own gap before -- and only before -- a
+  // section-total row (never after the very first data row), same rule the
+  // 'sheet image' version (CashflowStatementImage) already follows. Slack
+  // rejects a genuinely empty cell, so this uses a non-breaking space rather
+  // than '' -- reads as blank, isn't actually empty. Not a true gap the way
+  // the image has one (Slack still draws a border box around each of these
+  // cells), but closer to the sheet's grouping than no gap at all.
+  const spacerRow = function () { return [cellText(' '), cellText(' '), cellText(' ')] }
+  dataRows.forEach(function (r, i) {
+    if (r.bold && i > 0) rows.push(spacerRow())
     const f = r.bold ? cellBold : cellText
     rows.push([f(r.label), f(crAmt(r.mtd)), f(crAmt(r.ytd))])
   })
