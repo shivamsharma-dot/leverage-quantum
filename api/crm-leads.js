@@ -733,116 +733,26 @@ async function runActivityAdvancedSearchAll(creds, code, advancedSearchStr, incl
   return { recordCount, rows }
 }
 
-// "Attempted" answers a different question than QL: not "did this lead end in one of the 9
-// confirmed positive dispositions" but "has Futwork/Futwork AI actually WORKED this lead at
-// all yet" -- every real call attempt (regardless of outcome) logs its own Activity record
-// with Note=postNote ("Post call response from Futwork"/"...AI"), a field this file already
-// had mapped per-channel but had never actually queried until now. Counts TOTAL attempt
-// events (not distinct leads -- a lead genuinely can get called more than once), for the
-// SAME specific leads queued in the selected window, checked across all time (an attempt
-// can land after the window closes, e.g. queued late in "Today" and actually called
-// tomorrow) -- confirmed as the wanted definition via AskUserQuestion before building.
-//
-// Bulk-checked via one OR-chained Advanced Search per LIVE_QL_ATTEMPT_BULK_MAX-sized chunk
-// of prospect ids, count-only (PageSize 1, RecordCount summed across chunks) -- mirrors the
-// exact bulk pattern fetchLiveQlOpportunityOwners already uses successfully (many ids, one
-// request each, no per-record N+1 exposure), just on the Activity search endpoint instead of
-// the Opportunity one. LSO 'RelatedProspectId' is a base SYSTEM field on every Activity
-// record (confirmed elsewhere in this file: a raw search with no Include_CSV always returns
-// it), unlike a custom mx_Custom_N field -- the same category ActivityEvent/CreatedOn (both
-// already proven filterable here) belong to -- so it's the most defensible guess for a field
-// name to filter by, but this exact LSO has NOT been confirmed against live LeadSquared data
-// (this session's own direct-to-LeadSquared verification calls were all rejected outright,
-// even for byte-identical copies of already-proven-working shapes elsewhere in this file --
-// consistent with an IP-allowlist on LeadSquared's AdvancedSearch endpoints that only
-// permits Vercel's own egress IPs, not this sandbox's). Wrapped in try/catch specifically so
-// a wrong guess here degrades to an honest "couldn't be computed" (attemptedError) rather
-// than breaking the whole Live QLs page -- watch the real deployed page's Network tab if
-// Attempted ever shows a dash instead of a number.
-const LIVE_QL_ATTEMPT_BULK_MAX = 500
-// Matches the row-fetch cap below (LIVE_QL_ATTEMPT_COHORT_MAX_PAGES * 1000) -- there's never
-// more than this many distinct ids to check in the first place.
-const LIVE_QL_ATTEMPT_MAX_IDS = 3000
-// Deliberately much smaller than LIVE_QL_MAX_PAGES (20) -- this fetch exists ONLY to source
-// real prospect ids for the Attempted cross-check below, never to drive the headline Queued
-// KPI (which stays on the existing cheap, always-accurate count-only call), so there's no
-// reason to pay for thousands of pages just to throw most of the ids away downstream anyway.
-const LIVE_QL_ATTEMPT_COHORT_MAX_PAGES = 3
-
-function buildAttemptedBulkSearch(code, postNote, ids) {
-  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
-    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
-    { SubConOp: 'And', LSO: 'ActivityEvent_Note', LSO_Type: 'String', Operator: 'eq', RSO: postNote },
-  ] }]
-  ids.forEach(id => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
-    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
-    { SubConOp: 'And', LSO: 'ActivityEvent_Note', LSO_Type: 'String', Operator: 'eq', RSO: postNote },
-    { SubConOp: 'And', LSO: 'RelatedProspectId', LSO_Type: 'String', Operator: 'eq', RSO: id },
-    { SubConOp: 'And', LSO: 'ActivityTime', LSO_Type: 'DateTime', Operator: 'eq', RSO: 'opt-all-time' },
-  ] }))
-  return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
-}
-
-async function fetchLiveQlAttemptedCount(creds, code, postNote, prospectIds) {
-  const ids = [...new Set((prospectIds || []).filter(Boolean))].slice(0, LIVE_QL_ATTEMPT_MAX_IDS)
-  if (!ids.length) return 0
-  const chunks = []
-  for (let i = 0; i < ids.length; i += LIVE_QL_ATTEMPT_BULK_MAX) chunks.push(ids.slice(i, i + LIVE_QL_ATTEMPT_BULK_MAX))
-  const results = await Promise.all(chunks.map(chunk => leadsquaredPost('/v2/ProspectActivity.svc/Activity/Retrieve/BySearchParameter', creds, {
-    ActivityEvent: code,
-    AdvancedSearch: buildAttemptedBulkSearch(code, postNote, chunk),
-    Paging: { PageIndex: 1, PageSize: 1 },
-    Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-  })))
-  return results.reduce((sum, d) => sum + ((d && d.RecordCount) || 0), 0)
-}
-
 async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   const ch = LIVE_QL_CHANNELS[channelKey]
   if (!ch) throw new Error('Unknown channel: ' + channelKey)
   const qlSearch = buildQlAdvancedSearch(ch.code, ch.dispositionField, dateKeyword, ch.dispositionExact, null)
   const queuedSearch = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
   const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ...Object.values(ch.fields)].join(',')
-  const [qlResult, queuedCountResult, queuedRowsResult] = await Promise.all([
+  const [qlResult, queuedResult] = await Promise.all([
     runActivityAdvancedSearchAll(creds, ch.code, qlSearch, includeCsv, LIVE_QL_MAX_PAGES),
     // Queued is count-only (PageSize 1, we only ever read RecordCount) -- unaffected by the
-    // pagination bug above, since fetchLiveQlMetrics never reads its `rows`. Stays the ONLY
-    // source for the headline Queued KPI, deliberately untouched by the row-fetch below.
+    // pagination bug above, since fetchLiveQlMetrics never reads its `rows`.
     runActivityAdvancedSearch(creds, ch.code, queuedSearch, null, 1),
-    // A separate, deliberately-capped row fetch (see LIVE_QL_ATTEMPT_COHORT_MAX_PAGES) --
-    // only to source real prospect ids for the Attempted cross-check, never for the
-    // headline count above (which would reintroduce the exact "Last Month silently capped"
-    // bug already fixed for QL if this fetch's row count were ever trusted as a total).
-    runActivityAdvancedSearchAll(creds, ch.code, queuedSearch, 'ProspectActivityId,RelatedProspectId', LIVE_QL_ATTEMPT_COHORT_MAX_PAGES),
   ])
   const rows = qlResult.rows.map(r => {
     const mapped = { id: r.ProspectActivityId, prospectId: r.RelatedProspectId, createdOn: r.CreatedOn }
     Object.keys(ch.fields).forEach(k => { mapped[k] = r[ch.fields[k]] || null })
     return mapped
   })
-  const queuedProspectIds = queuedRowsResult.rows.map(r => r.RelatedProspectId).filter(Boolean)
-  let attemptedCount = null
-  let attemptedError = null
-  try {
-    attemptedCount = await fetchLiveQlAttemptedCount(creds, ch.code, ch.postNote, queuedProspectIds)
-  } catch (e) {
-    attemptedError = (e && e.message) || 'failed'
-  }
   // truncated: true means the QL count for this channel/window exceeded LIVE_QL_MAX_PAGES*1000
   // rows -- not expected at real volumes but surfaced honestly rather than silently dropped.
-  return {
-    qlCount: qlResult.recordCount,
-    queuedCount: queuedCountResult.recordCount,
-    rows,
-    truncated: qlResult.recordCount > rows.length,
-    attemptedCount,
-    attemptedError,
-    // true when the real queued total exceeds what the (capped) row-fetch above actually
-    // pulled -- i.e. the Attempted count only reflects the first ~3,000 queued leads for
-    // this window, not the true full cohort. Surfaced honestly rather than silently implied
-    // complete, same convention as `truncated` above.
-    attemptedTruncated: queuedCountResult.recordCount > queuedRowsResult.rows.length,
-  }
+  return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
 }
 
 async function fetchLiveQlMetrics(creds, { date }) {
@@ -851,17 +761,11 @@ async function fetchLiveQlMetrics(creds, { date }) {
     fetchLiveQlChannel(creds, 'human', dateKeyword),
     fetchLiveQlChannel(creds, 'ai', dateKeyword),
   ])
-  const attemptedError = human.attemptedError || ai.attemptedError || null
   return {
     date: date && LIVE_QL_DATE_KEYWORDS[date] ? date : 'today',
     human, ai,
     totalQL: human.qlCount + ai.qlCount,
     totalQueued: human.queuedCount + ai.queuedCount,
-    // null (not 0) whenever either channel's cross-check itself failed -- a real "couldn't
-    // compute this" is never allowed to silently render as a plausible-looking zero.
-    totalAttempted: attemptedError ? null : (human.attemptedCount || 0) + (ai.attemptedCount || 0),
-    attemptedError,
-    attemptedTruncated: human.attemptedTruncated || ai.attemptedTruncated,
     fieldLabels: {
       country: 'Country', preferredDegree: 'Preferred Degree', intake: 'Intake',
       disposition: 'Disposition', callDuration: 'Call Duration', dispositionReason: 'Disposition Reason',

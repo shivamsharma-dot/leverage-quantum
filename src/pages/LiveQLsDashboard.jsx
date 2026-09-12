@@ -628,15 +628,6 @@ export default function LiveQLsDashboard() {
   const totalQlUnfiltered = data ? data.human.qlCount + data.ai.qlCount : 0
   const queuedToQlPct = totalQueued > 0 ? (totalQlUnfiltered / totalQueued) * 100 : null
 
-  // Attempted = total post-call-response activity events (any outcome, not just a QL
-  // disposition) logged for the specific leads queued in this window -- a null value means
-  // the cross-check itself failed server-side (never rendered as a misleading 0). Also
-  // deliberately ignores the active Filters, same rule as Queued/QL-unfiltered above.
-  const humanAttempted = data ? data.human.attemptedCount : null
-  const aiAttempted = data ? data.ai.attemptedCount : null
-  const totalAttempted = data ? data.totalAttempted : null
-  const attemptedTruncated = data ? data.attemptedTruncated : false
-
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
   // Clamped rather than reset-via-effect: a filter change can shrink the result set out
   // from under whatever page was showing, and this way there's no dependency list to keep
@@ -839,7 +830,6 @@ export default function LiveQLsDashboard() {
                       ['QL', 'An activity counts as a QL when its Note = Post (call actually completed, not still queued), Disposition Status = Final, and Disposition is one of 9 confirmed values (e.g. Discover Future Intent, Interested in Call Back, Call Transferred To Counsellor).'],
                       ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
-                      ['Attempted', 'Total post-call activity events (Note = "Post call response", any outcome -- QL or not) logged for the specific leads queued in this window, checked as of now regardless of when the attempt itself happened (a lead queued late today may only get called tomorrow). Counts every attempt, so a lead called twice counts twice. Always shown unfiltered. For a wide window this only reflects the first ~3,000 queued leads per channel -- a banner above the cards says so when that cap is hit.'],
                       ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filters, same as the Queued cards.'],
                       ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
@@ -883,31 +873,10 @@ export default function LiveQLsDashboard() {
                   Totals and the Records table below reflect only the fetched rows -- narrow the date range for a complete view.
                 </div>
               )}
-              {data && data.attemptedError && (
-                <div style={{
-                  margin: '20px 28px 0', padding: '10px 16px', borderRadius: 10,
-                  background: '#FEF2F2', border: '0.5px solid #FCA5A5', color: '#991B1B',
-                  fontSize: 12, fontWeight: 600, fontFamily: FONT,
-                }}>
-                  Couldn't compute the Attempted count for this window ({data.attemptedError}) -- Attempted cards below show a dash rather than a wrong number.
-                </div>
-              )}
-              {data && !data.attemptedError && attemptedTruncated && (
-                <div style={{
-                  margin: '20px 28px 0', padding: '10px 16px', borderRadius: 10,
-                  background: C.navyBg, border: '0.5px solid ' + C.navy, color: C.navy,
-                  fontSize: 12, fontWeight: 600, fontFamily: FONT,
-                }}>
-                  This window has more queued leads than the Attempted check currently covers -- it reflects only the first ~3,000 queued leads per channel, not the full window. Narrow the date range for a complete Attempted figure.
-                </div>
-              )}
               <div className="lq-kpi-grid" style={{ ...KPI_CARD_ROW, marginTop: 20 }}>
                 <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
                 <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI Queued" value={fmtN(aiQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.bot} />
-                <PremKPI label="Total Attempted" value={totalAttempted == null ? '—' : fmtN(totalAttempted)} sub="post-call activity logged, any outcome" accent={C.navy} icon={KPI_ICONS.total} />
-                <PremKPI label="Human Attempted" value={humanAttempted == null ? '—' : fmtN(humanAttempted)} sub="on leads queued this period" accent={C.navy} icon={KPI_ICONS.agent} />
-                <PremKPI label="AI Attempted" value={aiAttempted == null ? '—' : fmtN(aiAttempted)} sub="on leads queued this period" accent={C.navy} icon={KPI_ICONS.bot} />
                 <PremKPI label="Total QLs" value={fmtN(totalQL)} sub="Human + AI" accent={C.navy} icon={KPI_ICONS.total} />
                 <PremKPI label="Human QLs" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
