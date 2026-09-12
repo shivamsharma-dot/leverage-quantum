@@ -5,8 +5,6 @@ import {
   LineChart, Line, Legend, Cell, PieChart, Pie, CartesianGrid} from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
-import KPICard from '../components/KPICard'
-import ExportButton from '../components/ExportButton'
 import { ExcelIcon } from '../components/icons/BrandIcons'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
@@ -202,10 +200,11 @@ const fmtShort = d => {
 }
 
 const DAILY_EXPORT_VIEWS = [
-  { key:'day',      label:'Day on day',     desc:'One row per date - provider - campaign' },
+  { key:'day',      label:'Day on day',     desc:'One row per date - provider - campaign (now includes country)' },
   { key:'month',    label:'Month on month',  desc:'Totals grouped by month + provider' },
   { key:'source',   label:'By source',       desc:'Totals grouped by source + provider' },
   { key:'campaign', label:'By campaign',     desc:'Campaigns ranked by qualified count' },
+  { key:'country',  label:'By country',      desc:'Totals grouped by country + provider, raw sheet values' },
 ]
 const MONTHLY_EXPORT_VIEWS = [
   { key:'day',    label:'Day on day',      desc:'One row per date - source, every queued/QL/SR-AC column' },
@@ -346,6 +345,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [selProvider, setSelProvider] = useState('All')
   const [selSource, setSelSource]   = useState('All')
   const [selCorridor, setSelCorridor] = useState('All')
+  const [selCountry, setSelCountry] = useState('All')
   const { user } = useAuth()
   const activeUsers = usePresence(user)
   const [loading, setLoading]       = useState(true)
@@ -534,6 +534,10 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
 
   const sources = useMemo(() =>
     ['All', ...[...new Set(dateFilteredRows.map(r => r.source))].filter(Boolean).sort()]
+  , [dateFilteredRows])
+
+  const countries = useMemo(() =>
+    ['All', ...[...new Set(dateFilteredRows.map(r => r.country))].filter(Boolean).sort()]
   , [dateFilteredRows])
 
   // ===== MONTHLY VIEW (Monthly QLs sheet) =====
@@ -741,8 +745,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const filtered = useMemo(() => dateFilteredRows.filter(r =>
     (selProvider === 'All' || r.provider === selProvider) &&
     (selSource === 'All' || r.source === selSource) &&
-    (selCorridor === 'All' || corridorLabel(r.corridorId) === selCorridor)
-  ), [dateFilteredRows, selProvider, selSource, selCorridor]);
+    (selCorridor === 'All' || corridorLabel(r.corridorId) === selCorridor) &&
+    (selCountry === 'All' || r.country === selCountry)
+  ), [dateFilteredRows, selProvider, selSource, selCorridor, selCountry]);
 
   // Day-on-day breakdown: group filtered rows by normalized qualified_date (YYYY-MM-DD)
   const dayOnDay = useMemo(() => {
@@ -829,7 +834,12 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const countryBar = useMemo(() => {
     const map = {}
     filtered.forEach(r => {
-      const k = (r.country || 'Unknown').replace(/ *\(.*\)/, '').trim() || 'Unknown'
+      // Verbatim off the sheet's own country_interested cell -- the
+      // parenthetical (e.g. 'Germany (Public)' vs 'Germany (Private)') is
+      // real signal (institution type), not decoration, so it used to get
+      // silently stripped here. Caught live 2026-09-12 from a screenshot of
+      // the raw sheet showing Public/Private as genuinely distinct values.
+      const k = (r.country || '').trim() || 'Unknown'
       if (!map[k]) map[k] = { country: k, count: 0 }
       map[k].count++
     })
@@ -896,10 +906,29 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
 
   const topCountries = useMemo(() => countryBar.slice(0, 5), [countryBar])
 
+  // MoM delta for the Top Country KPI card -- same country's own count this
+  // month vs last month (not "whichever country was #1 last month"), same
+  // convention as totals.fwDelta/fwaiDelta/sbDelta above: one metric,
+  // tracked against its own prior value, under the same active filters.
+  const topCountryDelta = useMemo(() => {
+    const top = topCountries[0]
+    if (!top) return null
+    const prevM = months[months.indexOf(selMonth) - 1]
+    if (!prevM) return null
+    const prevCount = rows
+      .filter(r => r.month === prevM
+        && (selProvider === 'All' || r.provider === selProvider)
+        && (selSource === 'All' || r.source === selSource)
+        && (selCorridor === 'All' || corridorLabel(r.corridorId) === selCorridor)
+        && r.country === top.country)
+      .reduce((s, r) => s + r.count, 0)
+    return prevCount > 0 ? ((top.count - prevCount) / prevCount * 100) : null
+  }, [topCountries, rows, months, selMonth, selProvider, selSource, selCorridor])
+
   const tableRows = useMemo(() => {
     const q = search.toLowerCase()
     return filtered
-      .filter(r => !q || r.campaign.toLowerCase().includes(q) || r.source.toLowerCase().includes(q) || r.provider.toLowerCase().includes(q))
+      .filter(r => !q || r.campaign.toLowerCase().includes(q) || r.source.toLowerCase().includes(q) || r.provider.toLowerCase().includes(q) || (r.country || '').toLowerCase().includes(q))
       .sort((a, b) => {
         const av = sortCol === 'count' ? a.count : a[sortCol] || ''
         const bv = sortCol === 'count' ? b.count : b[sortCol] || ''
@@ -929,6 +958,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
         source:         r.source,
         sub_source:     r.sub_source,
         campaign:       r.campaign,
+        country:        r.country,
         qualified_count: r.count,
       }))
     }
@@ -948,6 +978,18 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
       filtered.forEach(r => {
         const k = r.source + '||' + r.provider
         if (!map[k]) map[k] = { source: r.source, provider: r.provider, qualified_count: 0 }
+        map[k].qualified_count += r.count
+      })
+      return Object.values(map).sort((a,b) => b.qualified_count - a.qualified_count)
+    }
+    if (label === 'country') {
+      // Aggregate by country + provider -- the sheet's raw country_interested
+      // value, (Public)/(Private) suffix and all (not stripped for display).
+      const map = {}
+      filtered.forEach(r => {
+        const country = r.country || 'Unknown'
+        const k = country + '||' + r.provider
+        if (!map[k]) map[k] = { country, provider: r.provider, qualified_count: 0 }
         map[k].qualified_count += r.count
       })
       return Object.values(map).sort((a,b) => b.qualified_count - a.qualified_count)
@@ -1219,7 +1261,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </>}
               {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
             <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
-            <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={selCorridor} minWidth={140} onChange={v => { setSelCorridor(v); setPage(0) }} /></>}
+            <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={selCorridor} minWidth={140} onChange={v => { setSelCorridor(v); setPage(0) }} />
+            <Dropdown label="Country" options={countries} value={selCountry} minWidth={140} onChange={v => { setSelCountry(v); setPage(0) }} /></>}
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
             <Button size="sm" variant="secondary" onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
               icon={
@@ -1258,7 +1301,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                     ['Qualified lead', 'One row in the sheet = one qualified lead. Each row carries provider, source, country, degree, disposition, budget and intake.'],
                     ['Total Qualified', 'Count of qualified-lead rows across all providers and sources for the selected period.'],
                     ['Providers', 'Futwork (human agents), Futwork AI (automated voice agent), and Superbot (IVR bot). Each shown as count and share of total.'],
-                    ['Country / Degree', 'Qualified leads grouped by country interested and preferred degree type. Country labels are cleaned of parenthetical suffixes.'],
+                    ['Country / Degree', 'Qualified leads grouped by country interested and preferred degree type. Country is shown exactly as the sheet has it, including any (Public)/(Private) suffix -- that’s real institution-type data, not decoration.'],
                     ['Disposition', 'Call outcome classification (e.g. Discover Future Intent, Interested in Call Back, Call Transferred To Counsellor).'],
                     ['Budget / Intake', 'Student budget range preference and preferred start intake, distributed across qualified leads.'],
                     ['Passport', 'Share of qualified leads that already hold a valid passport at qualification time.'],
@@ -1293,7 +1336,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                 <PremKPI label="Futwork"          value={fmtN(totals.fw)}   sub={pct(totals.fw, totals.total) + ' share'}   delta={totals.fwDelta}    accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI"       value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' share'} delta={totals.fwaiDelta}  accent="#29B9C3" accentBg="#E4F8F9" icon={KPI_ICONS.ai} />
                 <PremKPI label="Superbot"         value={fmtN(totals.sb)}   sub={pct(totals.sb, totals.total) + ' share'}   delta={totals.sbDelta}    accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.bot} />
-                <PremKPI label="Top Country"      value={topCountries[0]?.country || '-'} sub={topCountries[0] ? fmtN(topCountries[0].count) + ' qualified' : 'no data'} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.globe} />
+                <PremKPI label="Top Country"      value={topCountries[0]?.country || '-'} sub={topCountries[0] ? fmtN(topCountries[0].count) + ' qualified' : 'no data'} delta={topCountryDelta} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.globe} />
               </div>
 
               {/* -- ROW 1: SOURCE STACKED BAR + PROVIDER DONUT -- */}
@@ -1522,7 +1565,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               {/* -- ROW 7: LEAD RECORDS TABLE -- */}
               <Card
                 title="Lead records"
-                sub={`${tableRows.length.toLocaleString()} leads - ${selMonth}${selProvider !== 'All' ? ' - ' + selProvider : ''}${selSource !== 'All' ? ' - ' + selSource : ''}`}
+                sub={`${tableRows.length.toLocaleString()} leads - ${selMonth}${selProvider !== 'All' ? ' - ' + selProvider : ''}${selSource !== 'All' ? ' - ' + selSource : ''}${selCorridor !== 'All' ? ' - ' + selCorridor : ''}${selCountry !== 'All' ? ' - ' + selCountry : ''}`}
                 action={
                   <div style={{ position: 'relative' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
@@ -1563,7 +1606,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                           </td>
                           <td style={{ padding: '9px 12px', color: C.sub, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.source || '-'}</td>
                           <td style={{ padding: '9px 12px', color: C.text, fontFamily: FONT, whiteSpace: 'nowrap' }}>
-                            {r.country ? <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country.replace(/ *\(.*\)/, '').trim()}</span> : '-'}
+                            {r.country ? <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country}</span> : '-'}
                           </td>
                           <td style={{ padding: '9px 12px', color: C.sub, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.degree_type || '-'}</td>
                           <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.disposition}>{r.disposition || '-'}</td>
