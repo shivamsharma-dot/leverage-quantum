@@ -2378,8 +2378,25 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // one-month window as if it were the full history. Fall back to the cache's own
       // known bounds (already fetched independently, same fields the Month dropdown and
       // trendAnchorDate use) so a real, full-history fetch actually fires.
+      //
+      // Explicitly gated on selMonth === 'All months' -- NOT just "mk resolved to
+      // nothing" -- because selMonth also reads '' (its own initial useState value)
+      // for one or more renders on every cold BQ-mode load, before the separate
+      // "default selMonth from bqBounds" effect has run. That '' also fails the
+      // monthKeyByLabel lookup, so this branch used to fire the SAME full-history
+      // fallback for that purely transient state as it does for a genuine "All
+      // months" pick -- a real, confirmed-live bug: a full ~1.5-year per-campaign
+      // query firing on every single BQ-mode page load, racing the correct narrow
+      // range that gets computed moments later. The existing AbortController below
+      // cancels it once that happens, but only after the browser has already sent
+      // it and the backend has already spent real time on it (confirmed live: this
+      // wide query alone returned a 503 after tying up the connection pool long
+      // enough to stall the correct, narrow request behind it for 20-30+ seconds).
+      // Skipping the push entirely for '' means bqRange has nothing to span, so the
+      // whole read effect below no-ops until selMonth genuinely resolves to either
+      // a real month or an explicit 'All months' -- no wide query ever fires at all.
       if (mk != null) pushMonth(mk)
-      else if (bqBounds?.min && bqBounds?.max) pushRange({ from: dateFromIso(bqBounds.min), to: dateFromIso(bqBounds.max) })
+      else if (selMonth === 'All months' && bqBounds?.min && bqBounds?.max) pushRange({ from: dateFromIso(bqBounds.min), to: dateFromIso(bqBounds.max) })
     }
     pushWindow(prevWindow)
     pushWindow(compareWindow)
