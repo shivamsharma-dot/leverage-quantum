@@ -479,14 +479,40 @@ jobs:
           # as literal characters and would silently make this a no-op. The
           # sync_id.is.null arm catches rows written before this column was stamped,
           # which a bare neq. would skip because NULL != x is not true in SQL.
+          # Real bug found live (2026-09-12): delete_with_retry's own final attempt
+          # RAISES on failure, and that raise used to propagate straight out of this
+          # script -- so a prune timeout on THIS table (a real, repeat occurrence
+          # under daytime load, see delete_with_retry's own comment) killed the
+          # entire sync before it ever reached the overall_bq_daily_agg section
+          # below. Concretely: run #260 upserted all 393,785 rows into this table
+          # successfully, then failed 6/6 prune retries and crashed -- so
+          # overall_bq_daily_agg (what the MTD Scorecard Slack report and the
+          # Overall dashboard's own Month-tab/agg-mode reads) stayed frozen on the
+          # PREVIOUS run's data, an hour stale, purely because of an unrelated
+          # prune hiccup on a completely different table. The real data upsert
+          # above already succeeded either way -- a failed prune only leaves some
+          # stale (previous-sync) rows lingering, which is a strictly smaller
+          # problem than silently skipping the agg table's refresh entirely, and
+          # self-heals the moment a later sync's prune succeeds. So this is now
+          # caught and logged, not allowed to abort the rest of the script.
           prune_url = (SB_URL + '/rest/v1/' + TABLE + '?or=(sync_id.neq.'
                        + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
-          delete_with_retry(prune_url, TABLE)
-          print('Pruned every row not stamped with this sync_id.')
+          pruned_ok = True
+          try:
+              delete_with_retry(prune_url, TABLE)
+              print('Pruned every row not stamped with this sync_id.')
+          except Exception as e:
+              pruned_ok = False
+              print('WARNING:', TABLE, 'prune failed after all retries -- some stale '
+                    'rows from a previous sync may linger until a later sync\'s prune '
+                    'succeeds. Continuing to the agg-table sync regardless, since the '
+                    'real data upsert above already landed. Error:', repr(e))
 
           # Final proof, server-side: the table must now hold exactly as many rows
           # as BigQuery returned. This is the cheap always-on version of the
-          # month-by-month fidelity check.
+          # month-by-month fidelity check. Only meaningful when the prune above
+          # actually ran -- if it didn't, a higher-than-expected count is exactly
+          # what a lingering stale row looks like, not a new bug to flag.
           req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1', 'GET',
                    None, {'Prefer': 'count=exact', 'Range': '0-0'})
           with urllib.request.urlopen(req, timeout=60) as r:
@@ -494,9 +520,12 @@ jobs:
               content_range = r.headers.get('Content-Range') or ''
           after = content_range.split('/')[-1]
           print('Rows in', TABLE, 'after sync:', after, '| expected:', len(records))
-          if after.isdigit() and int(after) != len(records):
+          if pruned_ok and after.isdigit() and int(after) != len(records):
               raise SystemExit('Post-sync row count mismatch: table holds %s, expected %d.'
                                % (after, len(records)))
+          elif not pruned_ok:
+              print('Skipping the exact row-count check for', TABLE, '-- prune did not '
+                    'complete this run, so a higher-than-expected count is expected, not an error.')
 
           # ---------------------------------------------------------------
           # Pre-aggregated day+source companion (overall_bq_daily_agg) --
@@ -583,10 +612,21 @@ jobs:
 
           # Same prune pattern as the raw table -- delete anything not
           # stamped with this sync's id, only after every batch has landed.
+          # Same resilience as the raw table's own prune above: caught rather
+          # than allowed to abort the rest of the script (the bigquery_jobs
+          # logging below, and a clean exit), for the same reason -- the real
+          # data upsert already landed either way.
           agg_prune_url = (SB_URL + '/rest/v1/' + AGG_TABLE + '?or=(sync_id.neq.'
                            + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
-          delete_with_retry(agg_prune_url, AGG_TABLE)
-          print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
+          agg_pruned_ok = True
+          try:
+              delete_with_retry(agg_prune_url, AGG_TABLE)
+              print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
+          except Exception as e:
+              agg_pruned_ok = False
+              print('WARNING:', AGG_TABLE, 'prune failed after all retries -- some stale '
+                    'rows from a previous sync may linger until a later sync\'s prune '
+                    'succeeds. Error:', repr(e))
 
           req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1', 'GET',
                    None, {'Prefer': 'count=exact', 'Range': '0-0'})
@@ -595,9 +635,12 @@ jobs:
               content_range = r.headers.get('Content-Range') or ''
           after_agg = content_range.split('/')[-1]
           print('Rows in', AGG_TABLE, 'after sync:', after_agg, '| expected:', len(agg_records))
-          if after_agg.isdigit() and int(after_agg) != len(agg_records):
+          if agg_pruned_ok and after_agg.isdigit() and int(after_agg) != len(agg_records):
               raise SystemExit('Post-sync row count mismatch in %s: table holds %s, expected %d.'
                                % (AGG_TABLE, after_agg, len(agg_records)))
+          elif not agg_pruned_ok:
+              print('Skipping the exact row-count check for', AGG_TABLE, '-- prune did not '
+                    'complete this run, so a higher-than-expected count is expected, not an error.')
 
           # Log this sync's own BigQuery job into bigquery_jobs, so Settings >
           # Data > BigQuery Usage reflects every real job Quantum triggers --
