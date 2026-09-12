@@ -371,7 +371,11 @@ function DailyPreviewTable({ table }) {
         <thead>
           <tr>
             {table.columns.map(function (c, i) {
-              return <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', background: 'var(--bg2)', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid var(--card-border)' }}>{c}</th>
+              // pre-line, not nowrap -- header labels can carry a real '\n'
+              // now (e.g. Cash Flow's 'MTD\nAmount (INR CR.)'), and this is
+              // the one place that needs to actually render it as a line
+              // break instead of collapsing it like plain whitespace.
+              return <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '5px 8px', background: 'var(--bg2)', fontWeight: 700, whiteSpace: 'pre-line', borderBottom: '1px solid var(--card-border)' }}>{c}</th>
             })}
           </tr>
         </thead>

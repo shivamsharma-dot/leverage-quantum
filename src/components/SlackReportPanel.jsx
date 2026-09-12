@@ -754,7 +754,11 @@ function TablePreview({ table }) {
         <thead>
           <tr style={{ background:'#F8FAFC' }}>
             {(table.columns || []).map((c, i) => (
-              <th key={i} style={{ ...cell(c, i, true), fontSize:10, letterSpacing:'0.03em', textTransform:'uppercase', color:C.muted, position:'sticky', top:0, background:'#F8FAFC' }}>{c}</th>
+              // pre-line, not the shared cell()'s nowrap -- a header label can
+              // carry a real '\n' now (e.g. Cash Flow's 'MTD\nAmount (INR
+              // CR.)'), which needs an actual line break here, not collapsed
+              // like plain whitespace.
+              <th key={i} style={{ ...cell(c, i, true), whiteSpace:'pre-line', fontSize:10, letterSpacing:'0.03em', textTransform:'uppercase', color:C.muted, position:'sticky', top:0, background:'#F8FAFC' }}>{c}</th>
             ))}
           </tr>
         </thead>

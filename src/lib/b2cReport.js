@@ -379,11 +379,26 @@ function buildB2CCashflowTable(ctx) {
   const c = ctx || {}
   const cf = c.cfStatement || {}
   const dataRows = Array.isArray(cf.rows) ? cf.rows : []
-  // Falls back to the sheet's own literal wording if the fetch ever comes
-  // back empty (e.g. the tab briefly renamed again) -- the YTD label is read
-  // live off the sheet's own header cell (see api/crm-leads.js) rather than
-  // hardcoded, so it never goes stale on its own each fiscal year.
-  const headerLabels = (Array.isArray(cf.headerLabels) && cf.headerLabels.length === 3) ? cf.headerLabels : ['Particulars', 'MTD Amount (INR CR.)', 'YTD Amount (INR CR.)']
+  // The MTD/YTD header used to be ONE joined line ('MTD Amount (INR CR.)') --
+  // Slack's table sizes a column to fit its widest UNWRAPPED line, so that
+  // single long string was forcing the whole column absurdly wide just to
+  // hold the header, even though every real value underneath it ('-64.43 Cr')
+  // is short (caught live 2026-09-12, screenshot showing huge blank space
+  // before the numbers). Two lines instead -- group label ('MTD'/'YTD (From
+  // 1/4/2026)') then the sub label ('Amount (INR CR.)') -- off the sheet's
+  // own two real header rows (api/crm-leads.js's groupHeader/subHeader,
+  // read live so the fiscal-year label never goes stale), joined with a
+  // literal newline. Needs is_wrapped:true on every column below or Slack
+  // has nothing to make the newline take effect -- NOT independently
+  // confirmed against Slack's own docs (silent on this), so verify against
+  // a real send before trusting the column narrows as expected.
+  const subHeader = (Array.isArray(cf.subHeader) && cf.subHeader.length === 3) ? cf.subHeader : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
+  const groupHeader = (Array.isArray(cf.groupHeader) && cf.groupHeader.length === 3) ? cf.groupHeader : ['', 'MTD', 'YTD']
+  const headerLabels = [
+    subHeader[0] || 'Particulars',
+    (groupHeader[1] || 'MTD') + '\n' + (subHeader[1] || 'Amount (INR CR.)'),
+    (groupHeader[2] || 'YTD') + '\n' + (subHeader[2] || 'Amount (INR CR.)'),
+  ]
   const rows = [[cellBold(headerLabels[0]), cellBold(headerLabels[1]), cellBold(headerLabels[2])]]
   // A blank row, matching the sheet's own gap before -- and only before -- a
   // section-total row (never after the very first data row), same rule the
@@ -398,7 +413,7 @@ function buildB2CCashflowTable(ctx) {
     const f = r.bold ? cellBold : cellText
     rows.push([f(r.label), f(crAmt(r.mtd)), f(crAmt(r.ytd))])
   })
-  const cols = [{ is_wrapped: true, align: 'left' }, { align: 'right' }, { align: 'right' }]
+  const cols = [{ is_wrapped: true, align: 'left' }, { is_wrapped: true, align: 'right' }, { is_wrapped: true, align: 'right' }]
   const L = []
   L.push(':bar_chart: *B2C - Daily Cashflow*')
   L.push('_Straight off the Cash Flow statement’s own MTD/YTD table -- Finance’s numbers, verbatim. No day-level figure exists in this source._')
