@@ -5,6 +5,7 @@ import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { resolveSheetUrl } from '../lib/dataSources'
+import { getSession, setSession } from '../lib/sessionLoad'
 import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN, BarGrad, barFill, BAR_RADIUS } from '../ui/dashboardKit'
 
 const CSV_AI = 'https://docs.google.com/spreadsheets/d/1hteIK1IQaI83S-HOOau4oPqtzcDOZVxSHxIbEwSwxqk/gviz/tq?tqx=out:csv&gid=1005911839'
@@ -184,16 +185,28 @@ export default function FutworkErrorsDashboard() {
     if (!silent) setLoading(true)
     else setRefreshing(true)
     fetchAllRows()
-      .then(r => { setRows(r); setLastSync(new Date()) })
+      .then(r => {
+        setRows(r)
+        const ts = new Date()
+        setLastSync(ts)
+        setSession('futwork_errors_v1', { rows: r, ts })
+      })
       .catch(() => {})
       .finally(() => { setLoading(false); setRefreshing(false) })
   }
 
   useEffect(() => {
-    load(false)
+    // Paint instantly from whatever this session already has (e.g. navigating back
+    // from another dashboard) instead of a full skeleton, then always revalidate in
+    // the background right away -- this page is an error monitor, so freshness still
+    // matters even on a cached revisit. A cold mount with nothing cached yet falls
+    // back to the original full loading-spinner fetch.
+    const cached = getSession('futwork_errors_v1')
+    if (cached) { setRows(cached.rows); setLastSync(cached.ts); setLoading(false) }
+    load(!!cached)
     pollRef.current = setInterval(() => load(true), REFRESH_MS)
     return () => clearInterval(pollRef.current)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const now = new Date()
   const todayKey = localDateKey(now)

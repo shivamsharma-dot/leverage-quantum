@@ -7,6 +7,7 @@ import ExportButton from '../components/ExportButton'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, GRID_STROKE, RankedBars } from '../ui/dashboardKit'
 import { fetchAppsCacheRows, fetchAppsCacheSyncedAt } from '../lib/appsCache'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 // ---------------------------------------------------------------------------
 // Apps -- one row per application (not a date-bucketed aggregate like
@@ -262,14 +263,22 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
 
-  const load = () => {
+  // force=true only for an explicit Refresh click -- a plain mount (including
+  // navigating back from another dashboard) reuses whatever this session already
+  // fetched (see sessionLoad.js) instead of re-downloading and re-parsing the whole
+  // ~7,000-row apps_feed cache every single time.
+  const load = (force) => {
+    if (!force) {
+      const cached = getSession('apps_feed_v1')
+      if (cached) { setRows(cached.rows); setSyncedAt(cached.syncedAt); setLoading(false); setError(''); return }
+    }
     setLoading(true); setError('')
     Promise.all([fetchAppsCacheRows(), fetchAppsCacheSyncedAt()])
-      .then(([r, s]) => { setRows(r); setSyncedAt(s) })
+      .then(([r, s]) => { setRows(r); setSyncedAt(s); setSession('apps_feed_v1', { rows: r, syncedAt: s }) })
       .catch(e => setError(String(e.message || e)))
       .finally(() => setLoading(false))
   }
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(false) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dateFrom = customFrom ? new Date(customFrom + 'T00:00:00') : null
   const dateTo = customTo ? new Date(customTo + 'T23:59:59') : null
@@ -479,7 +488,7 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
               )}
             </div>
             <button
-              onClick={load}
+              onClick={() => load(true)}
               style={{ fontSize: 12.5, fontWeight: 700, color: C.text, background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}
             >
               Refresh

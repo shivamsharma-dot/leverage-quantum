@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN } from '../ui/dashboardKit'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 // Backed by api/crm-leads.js's live_ql_metrics mode -- see the long comment there for why
 // this is fast (~10s for both channels combined) where the rest of this app's LeadSquared
@@ -508,12 +509,23 @@ export default function LiveQLsDashboard() {
   const [ownerCache, setOwnerCache] = useState({})
   const PAGE_SIZE = 25
 
-  async function load() {
+  // 'force' true only for an explicit Refresh click -- a plain mount (including
+  // navigating back from another dashboard) reuses whatever this session already
+  // fetched FOR THIS SAME datePreset (see sessionLoad.js), so switching between two
+  // pages and back shows the last-known data instantly instead of refetching.
+  async function load(force) {
+    const cacheKey = 'live_ql_metrics_v1:' + datePreset
+    if (!force) {
+      const cached = getSession(cacheKey)
+      if (cached) { setData(cached.data); setSyncedAt(cached.ts); setPage(0); setLoading(false); setError(null); return }
+    }
     setLoading(true); setError(null)
     try {
       const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_metrics&date=${datePreset}`)
       setData(d)
-      setSyncedAt(new Date())
+      const ts = new Date()
+      setSession(cacheKey, { data: d, ts })
+      setSyncedAt(ts)
       setPage(0)
     } catch (e) {
       setError(e.message || 'Failed to load')
@@ -522,7 +534,7 @@ export default function LiveQLsDashboard() {
     }
   }
 
-  useEffect(() => { load() }, [datePreset]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(false) }, [datePreset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Human + AI rows unified into one list, each tagged with its own channel -- every row
   // already carries the SAME field keys (country/intake/budget/...) regardless of channel,
@@ -795,7 +807,7 @@ export default function LiveQLsDashboard() {
               {syncedAt && !loading && (
                 <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {syncedAt.toLocaleTimeString()}</span>
               )}
-              <Button size="sm" variant="secondary" onClick={load} disabled={loading}
+              <Button size="sm" variant="secondary" onClick={() => load(true)} disabled={loading}
                 icon={
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
                     style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}>

@@ -8,6 +8,7 @@ import { SlackIcon } from '../components/icons/BrandIcons'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card } from '../ui/dashboardKit'
 import { SUPER_TRACKER_REPORT_VERSIONS } from '../lib/superTrackerReport'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 // Super Tracker -- a real PRIVATE Google Sheet (company-wide B2C/B2B/Fly
 // Finance/Fly Homes metrics), read server-side via lib/superTracker.mjs (a
@@ -39,14 +40,24 @@ function useSuperTracker() {
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
 
+  // 'refresh' true only for an explicit Refresh click -- a plain mount (including
+  // navigating back from another dashboard) reuses whatever this session already
+  // fetched (see sessionLoad.js), so switching between two pages and back shows the
+  // last-known data instantly instead of refetching.
   const load = useCallback(async (opts) => {
     const isRefresh = opts && opts.refresh
+    if (!isRefresh) {
+      const cached = getSession('super_tracker_v1')
+      if (cached) { setData(cached.data); setLastSync(cached.ts); setLoading(false); setError(null); return }
+    }
     if (isRefresh) setRefreshing(true); else setLoading(true)
     setError(null)
     try {
       const d = await fetchSuperTrackerData()
       setData(d)
-      setLastSync(new Date())
+      const ts = new Date()
+      setSession('super_tracker_v1', { data: d, ts })
+      setLastSync(ts)
     } catch (e) {
       setError(e.message || String(e))
     } finally {

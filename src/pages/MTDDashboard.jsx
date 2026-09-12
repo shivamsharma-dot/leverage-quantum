@@ -6,6 +6,7 @@ import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK, SOURCE_COLORS } from '../ui/dashboardKit'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
 
@@ -185,7 +186,21 @@ export default function MTDDashboard(){
   const [lastSync,setLastSync]=useState(null)
   const hasSetInitial=useRef(false)
 
-  const loadData=useCallback(async()=>{
+  // 'force' true only for an explicit Refresh click -- a plain mount reuses whatever
+  // this session already fetched (see sessionLoad.js), so navigating away to another
+  // dashboard and back shows the last-known data instantly instead of refetching.
+  const loadData=useCallback(async(force)=>{
+    if(!force){
+      const cached=getSession('mtd_v1')
+      if(cached){
+        setMonths(cached.months)
+        if(!hasSetInitial.current){setSel(cached.months.length-1);hasSetInitial.current=true}
+        setLastSync(cached.ts)
+        setLoading(false)
+        setError(null)
+        return
+      }
+    }
     setLoading(true)
     const _t0=Date.now()
     try{
@@ -194,13 +209,15 @@ export default function MTDDashboard(){
       const p=parseCSV(csv)
       setMonths(p)
       if(!hasSetInitial.current){setSel(p.length-1);hasSetInitial.current=true}
-      setLastSync(new Date())
+      const ts=new Date()
+      setSession('mtd_v1',{months:p, ts})
+      setLastSync(ts)
       setError(null)
     }catch(e){setError('Failed: '+e.message)}
     finally{const _w=Math.max(0,750-(Date.now()-_t0));setTimeout(()=>setLoading(false),_w)}
   },[])
 
-  useEffect(()=>{loadData()},[loadData])
+  useEffect(()=>{loadData(false)},[loadData])
 
   const month=months[sel]
   const prevMonth=months[sel-1]
@@ -253,7 +270,7 @@ export default function MTDDashboard(){
             minWidth={130}
           />}
           <div style={{fontSize:11,color:'#94A3B8',borderLeft:'0.5px solid #E5E7EB',paddingLeft:14}}>{lastSync?'Synced '+fmt.format(lastSync):''}</div>
-          <Button size='sm' variant='secondary' onClick={loadData} disabled={loading} className="lqRefreshBtn" icon={
+          <Button size='sm' variant='secondary' onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn" icon={
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>
           }>
             {loading?'Refreshing':'Refresh'}
