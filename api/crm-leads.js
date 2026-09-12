@@ -82,7 +82,7 @@ function leadsquaredCreds() {
   return { accessKey, secretKey, host }
 }
 
-async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, body, extraQuery) {
+async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, body, extraQuery, retriesLeft) {
   const qs = new URLSearchParams({ accessKey, secretKey, ...(extraQuery || {}) })
   const url = host.replace(/\/$/, '') + path + '?' + qs.toString()
   const r = await fetch(url, method === 'GET' ? undefined : {
@@ -97,6 +97,18 @@ async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, 
     // LeadSquared's 401 on a wrong regional host names the right one in the body --
     // surface that verbatim instead of a generic "unauthorized" so it's actionable.
     const msg = (data && (data.ExceptionMessage || data.Message)) || (typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300))
+    // A real, observed LeadSquared rate limit ("API calls exceeded the limit of 72 in 5
+    // second(s)") -- confirmed live 2026-09-13 while parallelizing the Distinct Queued
+    // fetch: several KPI fetches on the same page load (main metrics, Distinct Queued,
+    // Owner enrichment) can legitimately burst past it together, not just from a runaway
+    // loop. Retried with backoff (matches this file's own established pattern for
+    // LeadSquared/BigQuery rate-limit errors elsewhere) rather than surfaced immediately.
+    const left = retriesLeft == null ? 3 : retriesLeft
+    if (r.status === 429 && left > 0) {
+      const wait = (4 - left) * 1500 + 1000
+      await new Promise(res => setTimeout(res, wait))
+      return leadsquaredRequest(method, path, { accessKey, secretKey, host }, body, extraQuery, left - 1)
+    }
     throw new Error(`LeadSquared ${r.status}: ${msg}`)
   }
   return data

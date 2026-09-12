@@ -546,6 +546,13 @@ export default function LiveQLsDashboard() {
   const [distinctQueued, setDistinctQueued] = useState(null)
   const [distinctQueuedLoading, setDistinctQueuedLoading] = useState(true)
   useEffect(() => {
+    // Waits for the main (faster, cheap) load to actually finish for THIS SAME window --
+    // `data.date` mirrors back the datePreset fetchLiveQlMetrics was called with, so this
+    // only fires once, right after the main cards have real data, not the moment
+    // datePreset changes (which would fire both fetches at once). Confirmed live this
+    // mattered for real: firing both simultaneously tripped LeadSquared's own rate limit
+    // ("API calls exceeded the limit of 72 in 5 seconds") on a real page load.
+    if (!data || data.date !== datePreset) return
     let cancelled = false
     setDistinctQueued(null)
     setDistinctQueuedLoading(true)
@@ -554,7 +561,7 @@ export default function LiveQLsDashboard() {
       .catch(() => { if (!cancelled) setDistinctQueued(null) })
       .finally(() => { if (!cancelled) setDistinctQueuedLoading(false) })
     return () => { cancelled = true }
-  }, [datePreset])
+  }, [datePreset, data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Human + AI rows unified into one list, each tagged with its own channel -- every row
   // already carries the SAME field keys (country/intake/budget/...) regardless of channel,
