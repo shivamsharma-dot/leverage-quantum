@@ -4,6 +4,7 @@ import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN } from '../ui/dashboardKit'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 const API_BASE = '/api/crm-leads?source=leadsquared'
 
@@ -30,8 +31,21 @@ function useSchema() {
   const [lastSync, setLastSync] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // 'refresh' true only for an explicit Refresh click -- a plain mount (including
+  // navigating back from another dashboard) reuses whatever this session already
+  // fetched (see sessionLoad.js), so switching between two pages and back shows the
+  // last-known schema instantly instead of re-hitting LeadSquared's schema API.
   const load = async (opts) => {
     const bypass = opts && opts.refresh
+    if (!bypass) {
+      const cached = getSession('lq_field_schema_v1')
+      if (cached) {
+        setTypes(cached.data.types); setSchemas(cached.data.schemas)
+        setOppSchema(cached.data.oppSchema); setLeadSchema(cached.data.leadSchema)
+        setLastSync(cached.data.ts); setLoading(false); setError(null)
+        return
+      }
+    }
     if (!bypass) setLoading(true); else setRefreshing(true)
     setError(null)
     try {
@@ -50,7 +64,9 @@ function useSchema() {
       setSchemas(map)
       setOppSchema(oppData)
       setLeadSchema(leadData)
-      setLastSync(new Date())
+      const ts = new Date()
+      setSession('lq_field_schema_v1', { types: futworkTypes, schemas: map, oppSchema: oppData, leadSchema: leadData, ts })
+      setLastSync(ts)
     } catch (e) {
       setError(e.message)
     } finally {

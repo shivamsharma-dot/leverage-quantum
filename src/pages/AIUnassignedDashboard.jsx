@@ -5,6 +5,7 @@ import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { resolveSheetUrl } from '../lib/dataSources'
+import { getSession, setSession } from '../lib/sessionLoad'
 import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=AI_unassigned'
@@ -167,16 +168,33 @@ export default function AIUnassignedDashboard() {
   const [lastSync, setLastSync] = useState(null)
   const [showInfo, setShowInfo] = useState(false)
 
+  // A plain mount (including navigating back from another dashboard) reuses whatever
+  // this session already fetched (see sessionLoad.js) instead of re-fetching the
+  // sheet. Only the explicit Refresh button (reload()) bypasses this.
   useEffect(() => {
     let cancelled = false
+    const cached = getSession('ai_unassigned_v1')
+    if (cached) { setRows(cached.data.rows); setLastSync(cached.data.ts); setLoading(false); return }
     setLoading(true)
-    fetchRows().then(r => { if (!cancelled) { setRows(r); setLoading(false); setLastSync(new Date()) } }).catch(() => { if (!cancelled) setLoading(false) })
+    fetchRows().then(r => {
+      if (!cancelled) {
+        setRows(r)
+        const ts = new Date()
+        setSession('ai_unassigned_v1', { rows: r, ts })
+        setLastSync(ts); setLoading(false)
+      }
+    }).catch(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
   const reload = () => {
     setLoading(true)
-    fetchRows().then(r => { setRows(r); setLoading(false); setLastSync(new Date()) }).catch(() => setLoading(false))
+    fetchRows().then(r => {
+      setRows(r)
+      const ts = new Date()
+      setSession('ai_unassigned_v1', { rows: r, ts })
+      setLastSync(ts); setLoading(false)
+    }).catch(() => setLoading(false))
   }
 
   const sendNow = async () => {

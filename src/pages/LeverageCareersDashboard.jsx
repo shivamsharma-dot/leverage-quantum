@@ -16,6 +16,7 @@ import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RAD
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
+import { getSession, setSession } from '../lib/sessionLoad'
 import styles from './LeverageCareersDashboard.module.css'
 
 // Separate ad account -- "Leverage Careers" -- distinct from the main Meta Ads
@@ -560,8 +561,17 @@ export default function LeverageCareersDashboard() {
     })()
   }, [])
 
-  const load = useCallback(async () => {
+  // force=true only for an explicit Refresh click -- a plain mount (including
+  // navigating back from another dashboard) reuses whatever this session already
+  // fetched for THIS SAME date window (see sessionLoad.js), instead of re-running
+  // the Meta Graph API pull + CRM-cache read every single visit.
+  const load = useCallback(async (force) => {
     if (!token) return
+    const cacheKey = 'careers_v1:' + activeWindow.from + ':' + activeWindow.to
+    if (!force) {
+      const cached = getSession(cacheKey)
+      if (cached) { setDayRows(cached.data.rows); setSynced(cached.data.synced); setLoading(false); setError(''); return }
+    }
     setLoading(true); setError('')
     try {
       const rows = await fetchGranular(token, activeWindow.from, activeWindow.to)
@@ -572,7 +582,9 @@ export default function LeverageCareersDashboard() {
       // not just when this tab happened to fetch it -- or the tag would
       // understate how stale the CRM figures can briefly get right before the
       // next scheduled sync. Falls back to the fetch time if that read fails.
-      setSynced((await fetchCareersCacheSyncedAt()) || new Date())
+      const synced = (await fetchCareersCacheSyncedAt()) || new Date()
+      setSynced(synced)
+      setSession(cacheKey, { rows, synced })
     } catch (e) {
       setError(e.message || 'Failed to load')
       toast('Leverage Careers: ' + (e.message || 'load failed'), { type: 'muted' })
@@ -581,7 +593,7 @@ export default function LeverageCareersDashboard() {
     }
   }, [token, activeWindow.from, activeWindow.to])
 
-  useEffect(() => { if (token) load() }, [token, activeWindow.from, activeWindow.to]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (token) load(false) }, [token, activeWindow.from, activeWindow.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- main-page aggregates ----
   const filters = useMemo(
@@ -842,7 +854,7 @@ export default function LeverageCareersDashboard() {
               </span>
             )}
             <Button
-              onClick={load} disabled={loading || !token} size="sm" variant="secondary"
+              onClick={() => load(true)} disabled={loading || !token} size="sm" variant="secondary"
               icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
             >{loading ? 'Refreshing' : 'Refresh'}</Button>
           </div>
