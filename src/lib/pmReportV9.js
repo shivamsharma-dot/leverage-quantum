@@ -70,12 +70,12 @@ function scoreTable(rows, fmtINR, fmtN) {
 // every cell reconciled exactly, confirming this is a pure reshape of fields
 // mtdScorecard already computes, not a new metric.
 //
-// Percent cells here are a WHOLE number (Math.round, no decimal) -- confirmed
-// against the screenshot ("6%" not "5.8%"), deliberately different from table
-// 1's Lead to QL % (which keeps 1 decimal, untouched by this change).
+// Percent cells here now keep 1 decimal (2026-09-12, asked for directly --
+// "need one decimal value in this") -- matches table 1's Lead to QL % format.
+// Was a whole number (Math.round, no decimal) in the initial build.
 function outcomesTable(s, fmtN) {
   const t = { columns: ['', 'Total QL', 'Applications/AC Sales', 'QL → Outcome %', 'QL daily run-rate'], rows: [], strongRows: [] }
-  const pctWhole = (num, den) => (num == null || den == null || den <= 0) ? DASH : Math.round((num / den) * 100) + '%'
+  const pctWhole = (num, den) => (num == null || den == null || den <= 0) ? DASH : ((num / den) * 100).toFixed(1) + '%'
   const runRate = ql => (ql == null || s.daysDone == null || s.daysDone <= 0) ? DASH : fmtN(Math.round(ql / s.daysDone))
 
   // Total row -- Applications/AC Sales dashes out entirely (not a partial,
