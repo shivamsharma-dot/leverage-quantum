@@ -3815,38 +3815,91 @@ async function handleBigQuery(req, res, me) {
         const rows = []
         let cursor = null
         // A wide range against overall_bq_daily (raw, one row per campaign -- unlike
-        // the small agg table) can need far more sequential pages than this function's
-        // own 60s ceiling (export const maxDuration below) allows -- confirmed live
-        // 2026-09-08: a 2-month range against the raw table genuinely timed out here,
-        // where the OLD client-side version had no such ceiling and would just take
-        // longer. Rather than let Vercel kill the function outright (a hard failure
-        // that the old design never had), bail out cleanly at a safe budget and say so
-        // -- overallBqCache.js falls back to fetching the rest directly from Supabase
-        // itself for exactly this case, so a wide query still succeeds, just without
-        // the caching benefit for its own tail end.
+        // the small agg table) can need far more pages than this function's own 60s
+        // ceiling (export const maxDuration below) allows -- confirmed live 2026-09-08:
+        // a 2-month range against the raw table genuinely timed out here, where the OLD
+        // client-side version had no such ceiling and would just take longer. Rather
+        // than let Vercel kill the function outright, bail out cleanly at a safe budget
+        // and say so -- overallBqCache.js falls back to fetching the rest directly from
+        // Supabase itself for exactly this case, so a wide query still succeeds, just
+        // without the caching benefit for its own tail end.
         const startedAt = Date.now()
         const TIME_BUDGET_MS = 40000
         let truncated = false
-        for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
-          if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break }
+        const buildPath = offset => {
           let path = table + '?select=' + encodeURIComponent(select + ',row_key')
             + '&lead_date_iso=gte.' + since + '&lead_date_iso=lte.' + until
-            + '&order=row_key.asc&limit=' + PAGE
+            + '&order=row_key.asc&limit=' + PAGE + '&offset=' + offset
           if (sourceList.length) {
             const list = '(' + sourceList.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
             path += '&Source=in.' + encodeURIComponent(list)
           }
-          if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
-          const r = await supabaseAdmin(path)
-          if (!r.ok) {
-            const detail = await r.text().catch(() => '')
-            return res.status(502).json({ error: table + ' read failed (' + r.status + '): ' + detail.slice(0, 300) })
+          return path
+        }
+        // Page 1 also asks PostgREST for an exact total count (Prefer: count=exact ->
+        // a 'Content-Range: 0-999/12345' response header) -- knowing the total up front
+        // is what lets every REMAINING page fire in parallel batches via plain
+        // offset/limit, instead of the old one-cursor-at-a-time keyset loop that used
+        // to be the real remaining bottleneck here once the *other* half of this fix
+        // (OverallDashboard.jsx's bqRange no longer racing a full-history query on
+        // every cold load) stopped competing for the same connections. A genuine month
+        // of this table is 20,000-50,000+ rows -- 20-50 sequential round trips the old
+        // loop paid one at a time, confirmed live as the dominant remaining wait after
+        // the wide-range race was fixed. Capped at 8 concurrent requests per batch, not
+        // "fire all N pages at once" -- the same reason overall-bq-sync.yml's own writes
+        // dropped from 16-way to 3-way concurrent after finding real Postgres statement
+        // timeouts (57014) under load; reads are less risky than writes here but still
+        // bounded, not assumed unlimited. row_key stays in the select purely so a
+        // mid-read failure can still hand back a valid keyset cursor -- the client's
+        // existing fallback (fetchTailDirect in overallBqCache.js) resumes with exactly
+        // the same row_key keyset pagination as before, completely unchanged.
+        const firstRes = await supabaseAdmin(buildPath(0), { headers: { Prefer: 'count=exact' } })
+        if (!firstRes.ok) {
+          const detail = await firstRes.text().catch(() => '')
+          return res.status(502).json({ error: table + ' read failed (' + firstRes.status + '): ' + detail.slice(0, 300) })
+        }
+        const firstPage = await firstRes.json()
+        for (const row of firstPage) { const { row_key, ...rest } = row; rows.push(rest); cursor = row_key }
+        const contentRange = firstRes.headers.get('content-range') || ''
+        const totalStr = (contentRange.split('/')[1] || '').trim()
+        const total = totalStr && totalStr !== '*' ? Number(totalStr) : null
+        // null means "count unavailable" (header missing/unparseable) -- falls back to
+        // "keep paging in parallel batches until a short page shows up", same end
+        // condition the old sequential loop used, just batched instead of one at a time.
+        const totalPages = (total != null && Number.isFinite(total)) ? Math.max(1, Math.ceil(total / PAGE)) : null
+
+        if (firstPage.length === PAGE && totalPages !== 1) {
+          const CONCURRENCY = 8
+          let p = 1
+          outer: // eslint-disable-line no-labels
+          while (totalPages == null || p < totalPages) {
+            if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break }
+            const batchPages = []
+            for (let k = 0; k < CONCURRENCY && (totalPages == null || p + k < totalPages); k++) batchPages.push(p + k)
+            if (!batchPages.length) break
+            let settled
+            try {
+              settled = await Promise.all(batchPages.map(pi => supabaseAdmin(buildPath(pi * PAGE)).then(async r => {
+                if (!r.ok) { const d = await r.text().catch(() => ''); throw new Error('page ' + pi + ' failed (' + r.status + '): ' + d.slice(0, 200)) }
+                return r.json()
+              })))
+            } catch (e) {
+              // Whatever earlier FULLY-SUCCESSFUL batches already appended stays --
+              // `cursor` still points at the true end of that contiguous prefix, so the
+              // client's keyset fallback resumes from exactly the right place rather
+              // than silently skipping or duplicating rows.
+              truncated = true
+              break
+            }
+            let shortPage = false
+            for (const page of settled) {
+              if (!Array.isArray(page)) { truncated = true; break outer } // eslint-disable-line no-labels
+              for (const row of page) { const { row_key, ...rest } = row; rows.push(rest); cursor = row_key }
+              if (page.length < PAGE) shortPage = true
+            }
+            if (shortPage) break
+            p += batchPages.length
           }
-          const page = await r.json()
-          if (!Array.isArray(page) || page.length === 0) break
-          for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
-          if (page.length < PAGE) break
-          cursor = page[page.length - 1].row_key
         }
         // A truncated result is never cached and never labeled fromCache -- it is
         // incomplete by construction, so it must never be handed to a later caller as
