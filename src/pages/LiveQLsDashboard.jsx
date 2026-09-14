@@ -897,6 +897,30 @@ export default function LiveQLsDashboard() {
             <div style={{ padding: 28, color: '#B91C1C', fontSize: 13 }}>{error}</div>
           ) : (
             <>
+              {/* Switching the date preset keeps showing the PREVIOUS window's numbers
+                  while the new fetch is in flight (deliberate -- avoids a jarring full
+                  re-skeleton on every date change), but that meant nothing on screen
+                  visibly changed for as long as the fetch took (10-40s+ for a wide
+                  window, worse now that Distinct Queued's own background fetch also
+                  waits on this) -- reported live as "the date filter isn't working at
+                  all." Fixed with a real, hard-to-miss banner plus dimming the whole
+                  KPI+Records area below, so a refresh in progress is visually obvious
+                  even though the underlying stale-while-revalidate data is unchanged. */}
+              {loading && data && (
+                <div style={{
+                  margin: '20px 28px 0', padding: '10px 16px', borderRadius: 10,
+                  background: C.navyBg, border: '0.5px solid ' + C.navy, color: C.navy,
+                  fontSize: 12, fontWeight: 700, fontFamily: FONT,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                    style={{ animation: 'spin .8s linear infinite', flexShrink: 0 }}>
+                    <path d="M21 12a9 9 0 11-9-9" />
+                  </svg>
+                  Loading {(DATE_PRESETS.find(([k]) => k === datePreset) || [null, datePreset])[1]} -- the numbers below are still the previous window's until this finishes.
+                </div>
+              )}
+              <div style={{ opacity: loading ? 0.45 : 1, pointerEvents: loading ? 'none' : 'auto', transition: 'opacity .2s' }}>
               {data && (data.human.truncated || data.ai.truncated) && (
                 <div style={{
                   margin: '20px 28px 0', padding: '10px 16px', borderRadius: 10,
@@ -1045,6 +1069,7 @@ export default function LiveQLsDashboard() {
                     </table>
                   </div>
                 </Card>
+              </div>
               </div>
             </>
           )}
