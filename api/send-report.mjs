@@ -2765,6 +2765,81 @@ export default async function handler(req, res) {
   if ((req.body?.type || req.query?.type) === 'ceo_pin') {
     return handleCeoPin(req, res)
   }
+  // TEMPORARY diagnostic-only branch, added 2026-09-14 to live-test new Slack
+  // Block Kit block types (data_table / data_visualization / container) in the
+  // #voxpath sandbox for the Super Tracker report redesign research. Gated by
+  // an invented one-off secret, not tied to any user session. Remove this whole
+  // branch once the live test is done -- it is not part of any real feature.
+  if ((req.body?.type || req.query?.type) === 'block_kit_viz_test' && req.query?.key === 'st_viz_diag_2026_0914') {
+    const token = process.env.SLACK_BOT_TOKEN
+    const channel = 'C0B6FKV1XEJ' // #voxpath sandbox
+    const results = {}
+    const attempts = [
+      ['data_table', [
+        { type: 'section', text: { type: 'mrkdwn', text: ':test_tube: *TEST 1 -- data_table block*' } },
+        {
+          type: 'data_table',
+          caption: 'Sample metric grid',
+          page_size: 10,
+          row_header_column_index: 0,
+          rows: [
+            [
+              { type: 'raw_text', text: 'Metric' },
+              { type: 'raw_text', text: 'Category' },
+              { type: 'raw_text', text: 'This week' },
+            ],
+            [
+              { type: 'raw_text', text: 'Total QLs' },
+              { type: 'raw_text', text: 'B2C' },
+              { type: 'raw_number', number: 2780 },
+            ],
+            [
+              { type: 'raw_text', text: 'Applications' },
+              { type: 'raw_text', text: 'B2C' },
+              { type: 'raw_number', number: 412 },
+            ],
+          ],
+        },
+      ]],
+      ['data_visualization_line', [
+        { type: 'section', text: { type: 'mrkdwn', text: ':test_tube: *TEST 2 -- data_visualization block (line chart)*' } },
+        {
+          type: 'data_visualization',
+          title: 'Total QLs -- last 4 weeks',
+          chart: {
+            type: 'line',
+            series: [{ name: 'Total QLs', data: [
+              { label: 'W1', value: 2100 },
+              { label: 'W2', value: 2450 },
+              { label: 'W3', value: 2300 },
+              { label: 'W4', value: 2780 },
+            ] }],
+            axis_config: { categories: ['W1', 'W2', 'W3', 'W4'], x_label: 'Week', y_label: 'Total QLs' },
+          },
+        },
+      ]],
+      ['container', [
+        {
+          type: 'container',
+          title: { type: 'plain_text', text: 'TEST 3 -- Container (collapsible category)' },
+          is_collapsible: true,
+          default_collapsed: false,
+          child_blocks: [
+            { type: 'section', text: { type: 'mrkdwn', text: 'This is a collapsible container wrapping a section block.' } },
+          ],
+        },
+      ]],
+    ]
+    for (const [label, blocks] of attempts) {
+      try {
+        const ts = await slackPostBlocks(token, channel, label + ' test', blocks)
+        results[label] = { ok: true, ts }
+      } catch (e) {
+        results[label] = { ok: false, error: e.message }
+      }
+    }
+    return res.status(200).json({ results })
+  }
   if ((req.body?.type || req.query?.type) === 'slack_report') {
     return handleSlackReport(req, res)
   }
