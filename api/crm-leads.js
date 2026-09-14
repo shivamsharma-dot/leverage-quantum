@@ -767,68 +767,6 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
 }
 
-// Distinct Queued -- counts by real Opportunity ID rather than by raw queued-Activity count,
-// so a lead queued to BOTH Human and AI (confirmed real via a live investigation: ~9% of a
-// week's combined Queued total) is counted once, not twice. A deliberately SEPARATE, lazy
-// mode (the frontend fires this only after the main page has already rendered off the cheap
-// live_ql_metrics call above) since getting real Opportunity IDs means fetching every queued
-// ROW, not the instant RecordCount-only call the headline Queued cards still use and are
-// completely unaffected by this.
-//
-// Rows with no opportunityId value (~7% of AI's queued rows, confirmed via a separate live
-// investigation to be REAL leads with REAL Opportunities -- the id just wasn't stamped on
-// this specific "queued" log entry, not a missing-Opportunity bug) can't be deduped against
-// anything, so each one counts as its own distinct lead rather than being silently dropped or
-// merged.
-//
-// Per-channel distinctCount and totalDistinct will NOT sum exactly (Human + AI > Total) --
-// that gap IS the overlap count, surfaced explicitly via `overlapCount` rather than forced to
-// reconcile, since forcing it would mean picking an arbitrary "which channel owns this lead"
-// rule this account doesn't actually have.
-const LIVE_QL_DISTINCT_QUEUED_MAX_PAGES = 50
-async function fetchLiveQlDistinctQueued(creds, { date }) {
-  const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
-  const perChannel = {}
-  const oppIdSets = {}
-  // Both channels' paginated row-fetches run in PARALLEL (Promise.all), same as
-  // fetchLiveQlMetrics/fetchLiveQlChannel already do -- a first version of this ran them
-  // sequentially in a plain for-loop, which measured live at ~44s for "Today" alone (roughly
-  // double the ~20-25s either channel takes on its own), a genuinely bad experience for a
-  // fetch this page's own commit message called "a few seconds." Caught by directly timing
-  // the real deployed endpoint before trusting the "lazy background load" framing.
-  const results = await Promise.all(['human', 'ai'].map(async key => {
-    const ch = LIVE_QL_CHANNELS[key]
-    const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
-    const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ch.fields.opportunityId].join(',')
-    const result = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_DISTINCT_QUEUED_MAX_PAGES)
-    return { key, result }
-  }))
-  results.forEach(({ key, result }) => {
-    const ch = LIVE_QL_CHANNELS[key]
-    const withId = result.rows.filter(r => r[ch.fields.opportunityId])
-    const missingOpportunityId = result.rows.length - withId.length
-    const distinctIds = new Set(withId.map(r => r[ch.fields.opportunityId]))
-    oppIdSets[key] = distinctIds
-    perChannel[key] = {
-      distinctCount: distinctIds.size + missingOpportunityId,
-      recordCount: result.recordCount,
-      rowsFetched: result.rows.length,
-      truncated: result.recordCount > result.rows.length,
-      missingOpportunityId,
-    }
-  })
-  const overlap = [...oppIdSets.human].filter(id => oppIdSets.ai.has(id))
-  const totalDistinct = new Set([...oppIdSets.human, ...oppIdSets.ai]).size
-    + perChannel.human.missingOpportunityId + perChannel.ai.missingOpportunityId
-  return {
-    date: date || 'today',
-    human: perChannel.human,
-    ai: perChannel.ai,
-    totalDistinct,
-    overlapCount: overlap.length,
-  }
-}
-
 async function fetchLiveQlMetrics(creds, { date }) {
   const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
   const [human, ai] = await Promise.all([
@@ -3011,7 +2949,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
-    if (mode === 'live_ql_distinct_queued') return res.status(200).json(await fetchLiveQlDistinctQueued(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
