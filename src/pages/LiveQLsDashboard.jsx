@@ -628,6 +628,47 @@ export default function LiveQLsDashboard() {
   const totalQlUnfiltered = data ? data.human.qlCount + data.ai.qlCount : 0
   const queuedToQlPct = totalQueued > 0 ? (totalQlUnfiltered / totalQueued) * 100 : null
 
+  // "QLs This Period" is a run-rate (Total QLs ÷ elapsed time), not a plain total -- a raw
+  // total says nothing about pace without knowing how much of the window has actually
+  // elapsed. Today is the only genuinely LIVE, partial window, so it's the one preset
+  // measured per HOUR (elapsed since midnight, local clock -- matches how the rest of
+  // this page already shows LeadSquared's own timestamps unconverted); every other
+  // preset is measured per DAY -- This Week/This Month use how many days have elapsed
+  // so far (also partial), while Yesterday/Last Week/Last Month are already-closed
+  // periods, so "elapsed" there is just their own full length. Week-start is Monday,
+  // matching this app's own convention elsewhere (LeverageCareersDashboard,
+  // OrganicSocialDashboard). Floored at a minimum of 1 unit so the first few minutes of
+  // a new day/period can't read as an absurd spike (e.g. 3 QLs in 6 minutes = "30/hour").
+  const daysInMonth = (year, monthIndex) => new Date(year, monthIndex + 1, 0).getDate()
+  const periodNow = new Date()
+  let periodUnit = 'day'
+  let periodElapsed = 1
+  if (datePreset === 'today') {
+    periodUnit = 'hour'
+    periodElapsed = Math.max(1, (periodNow.getHours() * 60 + periodNow.getMinutes()) / 60)
+  } else if (datePreset === 'yesterday') {
+    periodElapsed = 1
+  } else if (datePreset === 'this_week') {
+    const dow = (periodNow.getDay() + 6) % 7 // Monday = 0 .. Sunday = 6
+    periodElapsed = dow + 1
+  } else if (datePreset === 'last_week') {
+    periodElapsed = 7
+  } else if (datePreset === 'this_month') {
+    periodElapsed = periodNow.getDate()
+  } else if (datePreset === 'last_month') {
+    const lm = new Date(periodNow.getFullYear(), periodNow.getMonth() - 1, 1)
+    periodElapsed = daysInMonth(lm.getFullYear(), lm.getMonth())
+  }
+  const periodAvgQl = totalQlUnfiltered / periodElapsed
+  const periodLabel = periodUnit === 'hour' ? 'Avg QLs / Hour' : 'Avg QLs / Day'
+  const periodSub = periodUnit === 'hour'
+    ? `${fmtN(totalQlUnfiltered)} total over ${periodElapsed.toFixed(1)}h elapsed`
+    : datePreset === 'this_month'
+      ? `${fmtN(totalQlUnfiltered)} total, day ${periodElapsed} of ${daysInMonth(periodNow.getFullYear(), periodNow.getMonth())}`
+      : datePreset === 'this_week'
+        ? `${fmtN(totalQlUnfiltered)} total, day ${periodElapsed} of 7`
+        : `${fmtN(totalQlUnfiltered)} total over ${periodElapsed} day${periodElapsed === 1 ? '' : 's'}`
+
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
   // Clamped rather than reset-via-effect: a filter change can shrink the result set out
   // from under whatever page was showing, and this way there's no dependency list to keep
@@ -831,7 +872,7 @@ export default function LiveQLsDashboard() {
                       ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
                       ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filters, same as the Queued cards.'],
-                      ['QLs This Period', 'Same total as Total QLs, but always for the full date-range window -- ignores the Filters above, so it stays a fixed reference point even when the table is narrowed.'],
+                      ['QLs This Period', 'A run-rate, not a plain total -- Total QLs divided by elapsed time. Today shows QLs per hour (elapsed since midnight, since it’s still a live, partial day); every other preset shows QLs per day (This Week/This Month divide by however many days have elapsed so far; Yesterday/Last Week/Last Month, already-closed periods, divide by their own full length -- 1 / 7 / the real days in that month). The sub-line always shows the real total and elapsed time behind the rate. Always unfiltered and ignores the Filters above, same as the Queued cards.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
                       ['Opp Created → QL Call', 'Elapsed time between the Opportunity being created and this QL call, auto-scaled to seconds/minutes/hours/days.'],
@@ -904,7 +945,7 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="Human QLs" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label="Queued to QL %" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
-                <PremKPI label="QLs This Period" value={fmtN(totalQlUnfiltered)} sub="Human + AI, for the date range -- ignores the Filters above" accent={C.green} icon={KPI_ICONS.total} />
+                <PremKPI label={periodLabel} value={periodAvgQl.toFixed(1)} sub={periodSub} accent={C.green} icon={KPI_ICONS.total} />
               </div>
 
               <div style={{ padding: '16px 28px 28px' }}>
