@@ -2765,6 +2765,57 @@ export default async function handler(req, res) {
   if ((req.body?.type || req.query?.type) === 'ceo_pin') {
     return handleCeoPin(req, res)
   }
+  // TEMPORARY diagnostic-only branch, added 2026-09-14 to live-test the
+  // REBUILT Super Tracker v3 builder (Δ column, indexed trend chart, biggest
+  // movers callout -- the analysis-focused rebuild, not the earlier
+  // reporting-coverage version) end-to-end in #voxpath before calling it
+  // done. Remove this whole branch once the live test is done.
+  if ((req.body?.type || req.query?.type) === 'super_tracker_v3b_diag_test' && req.query?.key === 'st3b_diag_2026_0914') {
+    const { SUPER_TRACKER_REPORT_VERSIONS } = await import('../src/lib/superTrackerReport.js')
+    const v3 = SUPER_TRACKER_REPORT_VERSIONS.find(v => v.id === 'super_tracker_v3')
+    const weekLabels = ['24-30 Aug', '31 Aug-6 Sep', '7-13 Sep']
+    const mkRow = (sNo, category, metric, businessLine, owner, toBePosted, values) => ({
+      sNo, category, metric, businessLine, owner, toBePosted,
+      weeks: weekLabels.map((label, i) => ({ label, value: values[i] || '' })),
+    })
+    const section1 = {
+      title: 'B2C Metrics', label: 'B2C Metrics', weekLabels,
+      rows: [
+        mkRow('CC01', 'Content & Community', 'Instagram followers', 'B2C', 'Priya', 'Yes', ['12000', '12500', '13100']),
+        mkRow('CC02', 'Content & Community', 'Blog posts published', 'B2C', 'Priya', 'Yes', ['4', '', '']),
+        mkRow('R01', 'Revenue', 'Total QLs', 'B2C', 'Aman', 'Yes', ['2100', '2450', '2780']),
+        mkRow('R02', 'Revenue', 'AC Sales', 'B2C', 'Aman', 'Yes', ['18', '21', '15']),
+        mkRow('R03', 'Revenue', 'Renewal rate %', 'B2C', 'Aman', 'Yes', ['88', '85', '79']),
+      ],
+    }
+    const section2 = {
+      title: 'B2B Metrics', label: 'B2B Metrics', weekLabels,
+      rows: [
+        mkRow('B01', 'Partnerships', 'New partners signed', 'B2B', 'Rohit', 'Yes', ['2', '3', '3']),
+        mkRow('B02', 'Partnerships', 'Renewal rate %', 'B2B', 'Rohit', 'Yes', ['88', '', '']),
+      ],
+    }
+    const ctx = {
+      sections: [section1, section2, section1, section1, section1, section2, section2],
+      categoryOrder: ['Content & Community', 'Revenue', 'Partnerships'],
+      weekOverride: null,
+      isTest: true,
+    }
+    const messages = v3.build(ctx)
+    const token = process.env.SLACK_BOT_TOKEN
+    const channel = 'C0B6FKV1XEJ'
+    const results = []
+    for (const m of messages) {
+      const r = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ channel, text: m.text.slice(0, 2900), blocks: m.blocks }),
+      })
+      const d = await r.json().catch(() => ({}))
+      results.push({ key: m.key, ok: !!d.ok, ts: d.ts, error: d.error, response_metadata: d.response_metadata })
+    }
+    return res.status(200).json({ results })
+  }
   if ((req.body?.type || req.query?.type) === 'slack_report') {
     return handleSlackReport(req, res)
   }

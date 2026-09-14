@@ -294,37 +294,43 @@ function buildSuperTrackerV2(ctx) {
 }
 
 // ---------------------------------------------------------------------------
-// v3 -- "visual" version, built after live-testing Slack's 2026 Block Kit
+// v3 -- "analysis" version, built after live-testing Slack's 2026 Block Kit
 // additions in the #voxpath sandbox (data_table, data_visualization, container
-// all confirmed working on this workspace). Two real upgrades over v1/v2:
-//   1. The plain `table` block becomes a native `data_table` -- Slack's own
-//      client gives the reader pagination/sort/filter for free, so a section
-//      no longer needs to be pre-truncated to a hard row budget the same way
-//      (data_table's real ceiling is ~200 data rows, not v1's ~85).
-//   2. A real `data_visualization` bar chart, and -- for the sections beyond
-//      the first 5 that v1/v2 squash into one shared table (flagged there as
-//      "worth revisiting once actually seen") -- each of THOSE now gets its
-//      own collapsible `container`, with its own proper table, instead of
-//      losing its identity in one shared grid.
+// all confirmed working on this workspace).
 //
-// The chart is a COVERAGE read (does this metric have a value in the current
-// week column, yes/no), never a parse of the tracked VALUE itself -- Super
-// Tracker rows are wildly heterogeneous (money, percentages, plain counts,
-// Y/N flags, dates all live in the same "This week" column across different
-// metrics), so summing/averaging the values themselves would be guessing at
-// units this file cannot know. "How much of this section got filled in" is
-// the one number that's always safe to compute regardless of a metric's own
-// unit.
+// First attempt at this version charted REPORTING COVERAGE (did someone fill
+// this cell in) -- explicit user feedback: wrong report entirely. Nobody
+// asked who's filling up the tracker; the ask is to analyse the actual
+// tracked NUMBERS -- is a metric up or down, and by how much. Rebuilt around
+// that instead:
+//   1. `data_table` still replaces the plain `table` block (native
+//      pagination/sort/filter, ~200-row ceiling instead of v1's ~85), now
+//      with a real "Δ vs last week" column computed from the tracked values.
+//   2. `data_visualization` charts an INDEXED TREND (first tracked week =
+//      100) across every metric in the section whose own week-by-week
+//      history is cleanly numeric -- lets several metrics on completely
+//      different scales (follower counts vs a percentage vs money) share one
+//      chart, since each is plotted relative to its OWN starting point, never
+//      against another metric's.
+//   3. A "Biggest movers" callout -- the metrics that moved the most (up or
+//      down) this week, surfaced directly instead of buried in a 100-row
+//      table.
+//
+// The one thing this deliberately still never does: compare or add together
+// the VALUES of two DIFFERENT metrics (a follower count plus a percentage is
+// meaningless). Every computation below is a metric compared only to
+// ITSELF, across weeks -- which is safe regardless of what unit that metric
+// happens to be in, without this file ever needing to know that unit.
 //
 // Real Slack constraints this code works within (confirmed against the live
-// docs, not assumed): a data_visualization chart takes 1-20 data points and a
-// message may carry at most 2 of them; a data_table's header row must be
-// raw_text (rich_text/bold is rejected there, unlike the old table block); a
-// container's child_blocks may NOT contain data_table or data_visualization
-// (only the older `table` block, section, context, etc.) -- which is exactly
-// why the chart lives at the top level of each message, not inside a
-// container, and why the collapsible per-section containers below hold the
-// OLD `table` block, not a data_table.
+// docs, not assumed): a data_visualization chart takes 1-20 data points per
+// series, up to 12 series, and a message may carry at most 2 charts; a
+// data_table's header row must be raw_text (rich_text/bold is rejected there,
+// unlike the old table block); a container's child_blocks may NOT contain
+// data_table or data_visualization (only the older `table` block, section,
+// context, etc.) -- which is exactly why the chart lives at the top level of
+// each message, not inside a container, and why the collapsible per-section
+// containers below hold the OLD `table` block, not a data_table.
 
 const CHART_LABEL_MAX = 20
 const CHART_TITLE_MAX = 50
@@ -335,10 +341,10 @@ function truncateLabel(s, max) {
   return s.length <= max ? s : s.slice(0, max - 1) + '…'
 }
 
-// De-duplicates chart labels after truncation (two different category names
-// could theoretically collide once both are cut to 20 chars) -- axis_config
-// requires every category label to be unique, so a silent collision would
-// otherwise merge two real categories into one bar.
+// De-duplicates chart labels after truncation (two different names could
+// theoretically collide once both are cut to 20 chars) -- axis_config
+// categories and series names both require uniqueness within one chart, so a
+// silent collision would otherwise merge two real things into one line/bar.
 function dedupeChartLabel(raw, seen) {
   let label = truncateLabel(raw, CHART_LABEL_MAX)
   if (!seen.has(label)) { seen.set(label, 1); return label }
@@ -347,42 +353,106 @@ function dedupeChartLabel(raw, seen) {
   return truncateLabel(raw, CHART_LABEL_MAX - String(n).length - 1) + ' ' + n
 }
 
-// One bar per category: how many of that category's posted-to-Slack metrics
-// have a real value in the current week column, out of how many are tracked.
-// A data_visualization chart is capped at 20 points -- categories beyond that
-// are dropped (smallest first), which is a real Slack limit, not a style
-// choice; the table below still shows every category regardless.
-function categoryCoverage(rows, categoryOrder, curWeek) {
-  const catSeen = new Set(rows.map(r => r.category || 'Uncategorized'))
-  const ordered = (categoryOrder || []).filter(c => catSeen.has(c))
-  rows.forEach(r => { const c = r.category || 'Uncategorized'; if (!ordered.includes(c)) ordered.push(c) })
-  const out = ordered.map(cat => {
-    const inCat = rows.filter(r => (r.category || 'Uncategorized') === cat)
-    const populated = inCat.filter(r => weekValue(r, curWeek).trim() !== '').length
-    return { category: cat, total: inCat.length, populated, pct: inCat.length ? Math.round((populated / inCat.length) * 100) : 0 }
-  })
-  out.sort((a, b) => b.total - a.total)
-  return { shown: out.slice(0, 20), truncated: Math.max(0, out.length - 20) }
+// A metric's OWN column is self-consistent across weeks even though this
+// workbook tracks wildly different KINDS of numbers row to row (followers,
+// money, percentages, plain counts) -- comparing "this week" to "last week"
+// for the SAME row never requires knowing what unit that row is in. Strips
+// common formatting (currency symbols, thousands separators, %, whitespace)
+// before parsing; anything that still isn't a plain number after that (a
+// date, "Y"/"N", free text) comes back null and is simply left out of every
+// numeric read below rather than risking a wrong comparison.
+function parseNum(v) {
+  if (v == null) return null
+  const s = String(v).trim()
+  if (!s) return null
+  const cleaned = s.replace(/[₹$,\s%]/g, '')
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : null
 }
 
-function coverageChartBlock(title, coverage) {
-  if (!coverage.shown.length) return null
-  const seen = new Map()
-  const categories = []
-  const points = []
-  coverage.shown.forEach(c => {
-    const label = dedupeChartLabel(c.category, seen)
-    categories.push(label)
-    points.push({ label, value: c.pct })
+function weekDelta(row, prevWeek, curWeek) {
+  if (!prevWeek) return null
+  const prevN = parseNum(weekValue(row, prevWeek))
+  const curN = parseNum(weekValue(row, curWeek))
+  if (prevN == null || curN == null) return null
+  const abs = curN - prevN
+  const pct = prevN !== 0 ? (abs / Math.abs(prevN)) * 100 : null
+  return { abs, pct, prevN, curN }
+}
+
+// A blank result (not "0%") whenever the two weeks can't be honestly
+// compared -- either value wasn't a plain number, or last week's value was
+// zero (a percent change off zero is undefined, not infinite/huge).
+function fmtDelta(d) {
+  if (!d) return '—'
+  if (d.abs === 0) return 'flat'
+  const arrow = d.abs > 0 ? '▲' : '▼'
+  if (d.pct != null) return arrow + ' ' + Math.abs(d.pct).toFixed(1) + '%'
+  return arrow + ' ' + Math.abs(d.abs).toLocaleString('en-IN')
+}
+
+// Top N increases and top N decreases by % change, among rows where a real
+// percentage change could be computed (skips anything not cleanly numeric on
+// both weeks, or with a zero baseline).
+function biggestMovers(rows, prevWeek, curWeek, n) {
+  if (!prevWeek) return { up: [], down: [] }
+  const withDelta = rows
+    .map(r => ({ row: r, d: weekDelta(r, prevWeek, curWeek) }))
+    .filter(x => x.d && x.d.pct != null && x.d.abs !== 0)
+  const up = withDelta.filter(x => x.d.abs > 0).sort((a, b) => b.d.pct - a.d.pct).slice(0, n)
+  const down = withDelta.filter(x => x.d.abs < 0).sort((a, b) => a.d.pct - b.d.pct).slice(0, n)
+  return { up, down }
+}
+
+function moversLine(x) {
+  const d = x.d
+  const arrow = d.abs > 0 ? '▲' : '▼'
+  const sign = d.abs > 0 ? '+' : ''
+  return arrow + ' *' + escMrkdwn(x.row.metric) + '* ' + sign + d.pct.toFixed(1) + '% ('
+    + d.prevN.toLocaleString('en-IN') + ' → ' + d.curN.toLocaleString('en-IN') + ')'
+}
+
+function moversBlock(rows, prevWeek, curWeek, n) {
+  const { up, down } = biggestMovers(rows, prevWeek, curWeek, n)
+  if (!up.length && !down.length) return null
+  const parts = []
+  if (up.length) parts.push('*Biggest increases:*\n' + up.map(moversLine).join('\n'))
+  if (down.length) parts.push('*Biggest decreases:*\n' + down.map(moversLine).join('\n'))
+  return { type: 'section', text: { type: 'mrkdwn', text: parts.join('\n\n') } }
+}
+
+// Indexes every metric in the section whose ENTIRE tracked history is
+// cleanly numeric (no gaps, no non-numeric weeks, no zero baseline) to its
+// own first tracked week = 100, then plots up to 12 of them as one line
+// chart -- this is what makes it safe to show a follower count and a
+// percentage on the same chart: neither is ever read at its own scale, only
+// as "how far has this moved from where IT started."
+function indexedTrendChart(section, rows) {
+  const weeks = (section.weekLabels || []).slice(-20)
+  if (weeks.length < 2) return null
+  const candidates = []
+  rows.forEach(r => {
+    const nums = weeks.map(w => parseNum(weekValue(r, w)))
+    if (nums.every(x => x != null) && nums[0] !== 0) candidates.push({ row: r, nums })
   })
+  if (!candidates.length) return null
+  const chosen = candidates.slice(0, 12)
+
+  const catSeen = new Map()
+  const categories = weeks.map(w => dedupeChartLabel(w, catSeen))
+
+  const nameSeen = new Map()
+  const series = chosen.map(c => {
+    const name = dedupeChartLabel(c.row.metric, nameSeen)
+    const data = categories.map((label, i) => ({ label, value: Math.round((c.nums[i] / c.nums[0]) * 100) }))
+    return { name, data }
+  })
+
   return {
     type: 'data_visualization',
-    title: truncateLabel(title, CHART_TITLE_MAX),
-    chart: {
-      type: 'bar',
-      series: [{ name: '% reported', data: points }],
-      axis_config: { categories, x_label: 'Category', y_label: '% reported' },
-    },
+    title: truncateLabel(section.label + ' — trend (first week = 100)', CHART_TITLE_MAX),
+    chart: { type: 'line', series, axis_config: { categories, x_label: 'Week', y_label: 'Index (first week = 100)' } },
   }
 }
 
@@ -424,32 +494,27 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
   }
 
   const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in — newer columns exist but are still mostly blank)')
-  const rowsForCoverage = (section.rows || []).filter(r => isYes(r.toBePosted))
-  const populatedReal = rowsForCoverage.filter(r => weekValue(r, t.cur).trim() !== '').length
-  const overallPct = t.total ? Math.round((populatedReal / t.total) * 100) : 0
-  const coverage = categoryCoverage(rowsForCoverage, categoryOrder, t.cur)
-
-  const sub = '_' + overallPct + '% of ' + t.total.toLocaleString('en-IN') + ' metric(s) reported'
-    + (t.prev ? ' this week (comparing ' + t.prev + ' to ' + t.cur + ')' : ' for the week of ' + (t.cur || '—'))
-    + ', across ' + t.categoryCount + ' categor' + (t.categoryCount === 1 ? 'y' : 'ies') + staleNote + '._'
+  const postedRows = (section.rows || []).filter(r => isYes(r.toBePosted))
+  const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.categoryCount + ' categor' + (t.categoryCount === 1 ? 'y' : 'ies')
+    + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + staleNote + '._'
 
   const head = ['Category', 'Group', 'Metric', 'Business Line', 'Owner']
   if (t.prev) head.push('Last week (' + t.prev + ')')
   head.push('This week (' + (t.cur || '—') + ')')
+  if (t.prev) head.push('Δ vs last week')
   const metricColIdx = head.indexOf('Metric')
   const body = t.shown.map(r => {
     const row = [r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—']
     if (t.prev) row.push(weekValue(r, t.prev))
     row.push(weekValue(r, t.cur))
+    if (t.prev) row.push(fmtDelta(weekDelta(r, t.prev, t.cur)))
     return row
   })
 
-  const chart = coverageChartBlock(section.label + ' — reporting coverage', coverage)
+  const movers = moversBlock(postedRows, t.prev, t.cur, 3)
+  const chart = indexedTrendChart(section, postedRows)
   const overflow = t.total - t.shown.length
   const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
-  const coverageTruncNote = coverage.truncated > 0
-    ? '_Chart shows the top 20 categories by metric count; ' + coverage.truncated + ' smaller categor' + (coverage.truncated === 1 ? 'y is' : 'ies are') + ' still in the table below, just not charted._'
-    : null
 
   return {
     key: 'section_' + idx,
@@ -458,8 +523,8 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: title } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
+      ...(movers ? [movers] : []),
       ...(chart ? [chart] : []),
-      ...(coverageTruncNote ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: coverageTruncNote }] }] : []),
       dataTableBlock('st3_sec_' + idx, section.label + ' — metrics', head, body, metricColIdx),
       ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
     ],
@@ -471,39 +536,51 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
 // into ONE shared table (needing a "Section" column just to tell them apart
 // -- flagged there as a default worth revisiting). Here each remaining
 // section gets its own collapsible `container`, collapsed by default, with
-// its own proper table -- plus one chart summarizing all of them at a glance
-// before anyone expands anything. A container cannot hold a data_table, so
-// each one holds the older `table` block instead.
+// its own proper table (including the same real Δ column) -- plus one
+// combined "biggest movers" callout across all of them at the top, before
+// anyone expands anything. A container cannot hold a data_table or a chart,
+// so each one holds the older `table` block instead, and the trend chart is
+// left to the individual section messages above.
 function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
   const title = ':bar_chart: *' + sections.map(s => escMrkdwn(s.label)).join(' · ') + '*'
   const sub = '_' + sections.length + ' more section(s) — each collapsed below into its own table. Full detail for all of them is in the CSV attached to this report._'
   const perSectionBudget = Math.max(8, Math.floor(SECTION_ROW_BUDGET / sections.length))
   const SECTION_CONTAINER_BUDGET = 12
 
-  const seen = new Map()
-  const chartCategories = []
-  const chartPoints = []
   const containers = []
   let shownCount = 0
+  // Movers are pooled only across sections that share the SAME week pair as
+  // the first remaining section -- sections can in principle have different
+  // week histories, and a "biggest mover" comparison only makes sense between
+  // rows measured over the identical two weeks.
+  let poolPrev = null
+  let poolCur = null
+  const pooledRows = []
 
   sections.forEach((section, si) => {
     const t = messageRowsFor(section, perSectionBudget, weekOverride, categoryOrder)
     if (!t.total) return
-    const populated = (section.rows || []).filter(r => isYes(r.toBePosted) && weekValue(r, t.cur).trim() !== '').length
-    const pct = Math.round((populated / t.total) * 100)
-    if (chartCategories.length < 20) {
-      const label = dedupeChartLabel(section.label, seen)
-      chartCategories.push(label)
-      chartPoints.push({ label, value: pct })
-    }
+    if (poolPrev === null && poolCur === null) { poolPrev = t.prev; poolCur = t.cur }
+    const postedRows = (section.rows || []).filter(r => isYes(r.toBePosted))
+    if (t.prev === poolPrev && t.cur === poolCur) pooledRows.push(...postedRows)
+
     if (shownCount >= SECTION_CONTAINER_BUDGET) return
     shownCount++
-    const head = ['Category', 'Group', 'Metric', 'Business Line', 'Owner', 'This week']
-    const body = t.shown.map(r => [r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—', weekValue(r, t.cur)])
+    const head = ['Category', 'Group', 'Metric', 'Business Line', 'Owner']
+    if (t.prev) head.push('Last week')
+    head.push('This week')
+    if (t.prev) head.push('Δ vs last week')
+    const body = t.shown.map(r => {
+      const row = [r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—']
+      if (t.prev) row.push(weekValue(r, t.prev))
+      row.push(weekValue(r, t.cur))
+      if (t.prev) row.push(fmtDelta(weekDelta(r, t.prev, t.cur)))
+      return row
+    })
     const overflow = t.total - t.shown.length
     containers.push({
       type: 'container',
-      title: { type: 'plain_text', text: truncateLabel(section.label + ' — ' + pct + '% reported (' + t.total + ' metrics)', CONTAINER_TITLE_MAX) },
+      title: { type: 'plain_text', text: truncateLabel(section.label + ' (' + t.total + ' metrics)', CONTAINER_TITLE_MAX) },
       is_collapsible: true,
       default_collapsed: true,
       child_blocks: [
@@ -525,13 +602,9 @@ function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
     })
   })
 
-  const chart = chartCategories.length ? {
-    type: 'data_visualization',
-    title: truncateLabel('Remaining sections — % reported', CHART_TITLE_MAX),
-    chart: { type: 'bar', series: [{ name: '% reported', data: chartPoints }], axis_config: { categories: chartCategories, x_label: 'Section', y_label: '% reported' } },
-  } : null
+  const movers = moversBlock(pooledRows, poolPrev, poolCur, 3)
   const overflowSectionsNote = sections.length > shownCount
-    ? '_' + (sections.length - shownCount) + ' further section(s) are chart-only above — full detail is in the CSV attached to this report._'
+    ? '_' + (sections.length - shownCount) + ' further section(s) are in the CSV only — not shown above.'
     : null
 
   return {
@@ -541,7 +614,7 @@ function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: title } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
-      ...(chart ? [chart] : []),
+      ...(movers ? [movers] : []),
       ...containers,
       ...(overflowSectionsNote ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowSectionsNote }] }] : []),
     ],
@@ -599,12 +672,14 @@ export const SUPER_TRACKER_REPORT_VERSIONS = [
     id: 'super_tracker_v3',
     code: 'ST3',
     msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
-    name: 'Super Tracker — visual (charts + native tables)',
-    tagline: 'A real reporting-coverage chart per section, plus a native sortable/paginated table.',
+    name: 'Super Tracker — analysis (trend chart + movers + native tables)',
+    tagline: 'What actually moved this week, an indexed trend chart, and a native sortable table — not who reported it.',
     what: [
-      'Every section table is a native Slack data_table — the reader can sort, filter, and page through it in Slack itself, no CSV needed just to browse',
-      'A real bar chart per section: % of that section’s metrics with a real value in the current week, broken down by category',
-      'Sections beyond the first 5 (previously squashed into one shared table) now each get their own collapsible card with its own proper table, plus one summary chart across all of them',
+      'A "Biggest increases / decreases" callout at the top of every message — the metrics that moved the most this week, with the real before/after figures',
+      'Every section table is a native Slack data_table (sortable/paginated in Slack itself) with a real Δ vs last week column computed from the actual tracked values',
+      'A real indexed trend chart per section (first tracked week = 100) so metrics on completely different scales — a follower count, a percentage, a rupee figure — can be compared as trajectories on one chart without ever mixing their raw units',
+      'Every number comparison is one metric vs. itself across weeks — this never adds or averages two different metrics together',
+      'Sections beyond the first 5 (previously squashed into one shared table) now each get their own collapsible card with its own proper table, plus one combined movers callout across all of them',
       'Only metrics flagged To be posted? = Yes, same as the other versions',
       'The full flattened sheet (every section/metric/week) attached as a CSV',
       'Uses newer Slack block types (data_table, data_visualization, container) — live-tested working on this workspace, but degrades to a plain-text summary on a client that doesn’t support them yet',
