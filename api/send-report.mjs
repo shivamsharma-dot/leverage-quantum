@@ -2829,12 +2829,13 @@ export default async function handler(req, res) {
       ]],
     ]
     for (const [label, blocks] of attempts) {
-      try {
-        const ts = await slackPostBlocks(token, channel, label + ' test', blocks)
-        results[label] = { ok: true, ts }
-      } catch (e) {
-        results[label] = { ok: false, error: e.message }
-      }
+      const r = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ channel, text: label + ' test', blocks }),
+      })
+      const d = await r.json().catch(() => ({}))
+      results[label] = { ok: !!d.ok, ts: d.ts, error: d.error, response_metadata: d.response_metadata, warning: d.warning }
     }
     return res.status(200).json({ results })
   }
