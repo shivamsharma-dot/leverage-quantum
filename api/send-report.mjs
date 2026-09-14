@@ -2791,12 +2791,12 @@ export default async function handler(req, res) {
             [
               { type: 'raw_text', text: 'Total QLs' },
               { type: 'raw_text', text: 'B2C' },
-              { type: 'raw_number', number: 2780 },
+              { type: 'raw_number', text: '2780' },
             ],
             [
               { type: 'raw_text', text: 'Applications' },
               { type: 'raw_text', text: 'B2C' },
-              { type: 'raw_number', number: 412 },
+              { type: 'raw_number', text: '412' },
             ],
           ],
         },
