@@ -766,15 +766,15 @@ export default function LiveQLsDashboard() {
   const exportRows = filteredRows.map(r => {
     const row = {
       Channel: r.channel === 'human' ? 'Human' : 'AI',
-      // "Activity Created On" -- when the QL call/qualification activity itself was
-      // logged in LeadSquared, distinct from "Opportunity Created On" below (when the
-      // Opportunity record the call is FOR was first created, usually well earlier).
-      'Activity Created On': r.createdOn,
       'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '',
       'Opportunity Owner': r.ownerName || '',
       'Sales Group': r.ownerSalesGroups || '',
-      'Owner Assigned On': r.ownerAssignedOn || '',
       'Opportunity Created On': r.oppCreatedOn || '',
+      // "Activity Created On" -- when the QL call/qualification activity itself was
+      // logged in LeadSquared, distinct from "Opportunity Created On" above (when the
+      // Opportunity record the call is FOR was first created, usually well earlier).
+      'Activity Created On': r.createdOn,
+      'Owner Assigned On': r.ownerAssignedOn || '',
       'Time: Opp Created -> QL Call': formatDurationBetween(r.oppCreatedOn, r.createdOn) || '',
       'Time: QL Call -> Owner Assigned': formatCallToOwnerAssign(r.createdOn, r.ownerAssignedOn) || '',
       'Misassigned Owner (Futwork/Futwork AI)': r.ownerName && MISASSIGNED_OWNER_NAMES.has(r.ownerName) ? 'Yes' : '',
@@ -975,7 +975,7 @@ export default function LiveQLsDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Sales Group', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...OPPORTUNITY_FIELDS.map(f => f.label), ...visibleFields.map(f => f.label)].map(h => (
+                          {['Channel', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Sales Group', 'Opportunity Created On', 'Activity Created On', 'Owner Assigned On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...OPPORTUNITY_FIELDS.map(f => f.label), ...visibleFields.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -1008,7 +1008,6 @@ export default function LiveQLsDashboard() {
                             borderLeft: misassigned ? '3px solid #DC2626' : '3px solid transparent',
                           }}>
                             <td style={{ padding: '7px 10px', fontWeight: 700, color: r.channel === 'human' ? C.blue : C.cyan, whiteSpace: 'nowrap' }}>{r.channel === 'human' ? 'Human' : 'AI'}</td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.createdOn}</td>
                             <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
                               {r.prospectId ? (
                                 <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer"
@@ -1028,8 +1027,9 @@ export default function LiveQLsDashboard() {
                               {cellVal(ownerData && ownerData.ownerName)}{misassigned ? ' ⚠' : ''}
                             </td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.ownerSalesGroups)}</td>
-                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.ownerAssignedOn)}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.createdOn)}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.createdOn}</td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.ownerAssignedOn)}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the Opportunity's own creation and this QL call.">
                               {cellVal(formatDurationBetween(ownerData && ownerData.createdOn, r.createdOn))}
                             </td>
