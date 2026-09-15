@@ -92,7 +92,8 @@ const OPPORTUNITY_FIELDS = [
 // of FULL_FIELDS deliberately -- it already has its own dedicated table column and
 // shouldn't also get folded into the generic "every activity field" column set.
 const FILTERABLE_FIELDS = [
-  { key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' }, ...OPPORTUNITY_FIELDS,
+  { key: 'channelLabel', label: 'Channel' }, ...FULL_FIELDS, { key: 'ownerName', label: 'Opportunity Owner' },
+  { key: 'ownerSalesGroups', label: 'Sales Group' }, ...OPPORTUNITY_FIELDS,
   // The one numeric field in this registry -- a raw, unrounded day-count shadowing the
   // existing display-only "Opp Created -> QL Call" column, so it can be filtered with
   // real "more than N days" comparisons instead of only shown as a formatted string.
@@ -571,6 +572,11 @@ export default function LiveQLsDashboard() {
         // value picker doesn't show the raw lowercase channel key instead.
         channelLabel: r.channel === 'human' ? 'Human' : 'AI',
         ownerName: od ? od.ownerName : null, ownerAssignedOn: od ? od.ownerAssignedOn : null, oppCreatedOn: od ? od.createdOn : null,
+        // Sales Group is not a field on the Opportunity itself (confirmed against the
+        // real 107-field schema) -- it's the OWNER's own Sales Group membership,
+        // resolved server-side alongside ownerName. Comma-separated since one person
+        // can belong to multiple groups; blank when they belong to none.
+        ownerSalesGroups: od ? od.ownerSalesGroups : null,
         // Raw numeric shadow of the "Opp Created -> QL Call" display column -- lets the
         // Advanced Filter do real "more than N days" comparisons (see OPERATORS' number
         // ops above), rather than only ever showing a formatted "7.8d" string.
@@ -766,6 +772,7 @@ export default function LiveQLsDashboard() {
       'Activity Created On': r.createdOn,
       'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '',
       'Opportunity Owner': r.ownerName || '',
+      'Sales Group': r.ownerSalesGroups || '',
       'Owner Assigned On': r.ownerAssignedOn || '',
       'Opportunity Created On': r.oppCreatedOn || '',
       'Time: Opp Created -> QL Call': formatDurationBetween(r.oppCreatedOn, r.createdOn) || '',
@@ -875,6 +882,7 @@ export default function LiveQLsDashboard() {
                       ['QLs This Period', 'A run-rate, not a plain total -- Total QLs divided by elapsed time. Today shows QLs per hour (elapsed since midnight, since it’s still a live, partial day); every other preset shows QLs per day (This Week/This Month divide by however many days have elapsed so far; Yesterday/Last Week/Last Month, already-closed periods, divide by their own full length -- 1 / 7 / the real days in that month). The sub-line always shows the real total and elapsed time behind the rate. Always unfiltered and ignores the Filters above, same as the Queued cards.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
+                      ['Sales Group', 'Not a field on the Opportunity itself (LeadSquared has no such field) -- it’s the OWNER’s own Sales Group membership, resolved the same way Owner Assigned On is. A person can belong to multiple groups at once (shown comma-separated) or none (shown as a dash). Loads and filters the same way as the other Owner columns.'],
                       ['Opp Created → QL Call', 'Elapsed time between the Opportunity being created and this QL call, auto-scaled to seconds/minutes/hours/days.'],
                       ['QL Call → Owner Assigned', 'Elapsed time from this QL call to the current owner being assigned. “Current Owner Assignment Time” is a live field, so it often reflects a REASSIGNMENT that happens AFTER the call (e.g. automatic post-QL routing), not the owner who actually made it -- shown as “X before” on the rarer, opposite case where the owner was already assigned before this call.'],
                       ['Opportunity fields', 'Stage, Status, Open Age, First/Last Called On, Last Interacted On, Total Spoken Calls, and Total Engagement all come from the linked Opportunity, same as Owner -- so they load per page, then in the background for the rest of the window, same as the Owner columns. Open Age only shows a value while Status is “Open”.'],
@@ -957,7 +965,7 @@ export default function LiveQLsDashboard() {
                     horizontally inside its own card rather than wrapping text and
                     producing uneven row heights. */}
                 <Card title="Records" sub={
-                  `${fmtN(filteredRows.length)} rows -- ${(visibleFields.length + OPPORTUNITY_FIELDS.length + 9)} columns` +
+                  `${fmtN(filteredRows.length)} rows -- ${(visibleFields.length + OPPORTUNITY_FIELDS.length + 10)} columns` +
                   (ownerWarmStats.total > 0 && ownerWarmStats.resolved < ownerWarmStats.total
                     ? ` -- loading owner data for export: ${fmtN(ownerWarmStats.resolved)} of ${fmtN(ownerWarmStats.total)}${ownerWarmStats.capped ? ' (capped)' : ''}`
                     : '')
@@ -967,7 +975,7 @@ export default function LiveQLsDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...OPPORTUNITY_FIELDS.map(f => f.label), ...visibleFields.map(f => f.label)].map(h => (
+                          {['Channel', 'Activity Created On', 'Prospect ID', 'Opportunity ID', 'Opportunity Owner', 'Sales Group', 'Owner Assigned On', 'Opportunity Created On', 'Opp Created → QL Call', 'QL Call → Owner Assigned', ...OPPORTUNITY_FIELDS.map(f => f.label), ...visibleFields.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -1019,6 +1027,7 @@ export default function LiveQLsDashboard() {
                               title={misassigned ? 'Still owned by a bot/vendor placeholder, not a real floor owner -- likely a missed assignment.' : undefined}>
                               {cellVal(ownerData && ownerData.ownerName)}{misassigned ? ' ⚠' : ''}
                             </td>
+                            <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.ownerSalesGroups)}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.ownerAssignedOn)}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{cellVal(ownerData && ownerData.createdOn)}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }} title="Time between the Opportunity's own creation and this QL call.">
@@ -1040,7 +1049,7 @@ export default function LiveQLsDashboard() {
                           )
                         })}
                         {pageRows.length === 0 && (
-                          <tr><td colSpan={(visibleFields.length + OPPORTUNITY_FIELDS.length + 9)} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
+                          <tr><td colSpan={(visibleFields.length + OPPORTUNITY_FIELDS.length + 10)} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
                         )}
                       </tbody>
                     </table>

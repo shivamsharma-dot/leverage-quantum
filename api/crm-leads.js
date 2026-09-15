@@ -198,16 +198,27 @@ async function fetchLeadSquaredLeads(creds, { since, until }) {
   return { rows: filtered, count: filtered.length, truncated, since, until }
 }
 
-// UserManagement.svc/Users.Get -- resolves a GUID like Owner/CreatedBy into a real display
-// name. LeadSquared's own UI shows real names in these columns (verified live: "Futwork AI",
-// "JULIUS ALICE MAUYON"), not raw GUIDs, so this is needed for parity, not a nice-to-have.
-// Cached in-memory per cold start -- same pattern as the opportunity-metadata cache below,
-// since the user list is effectively static within a session.
+// UserManagement.svc/Users.Get -- one shared raw fetch (cached) behind both name
+// resolution below and Sales Group resolution (fetchLeadSquaredUserGroupsMap, near
+// fetchLiveQlOpportunityOwners) -- avoids a second identical Users.Get network call for
+// the same underlying data.
+let _lsqUsersRawCache = null
+async function fetchLeadSquaredUsersRaw(creds) {
+  if (_lsqUsersRawCache) return _lsqUsersRawCache
+  const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
+  _lsqUsersRawCache = Array.isArray(data) ? data : []
+  return _lsqUsersRawCache
+}
+
+// Resolves a GUID like Owner/CreatedBy into a real display name. LeadSquared's own UI
+// shows real names in these columns (verified live: "Futwork AI", "JULIUS ALICE
+// MAUYON"), not raw GUIDs, so this is needed for parity, not a nice-to-have. Cached in
+// memory per cold start -- same pattern as the opportunity-metadata cache below, since
+// the user list is effectively static within a session.
 let _lsqUsersCache = null
 async function fetchLeadSquaredUsersMap(creds) {
   if (_lsqUsersCache) return _lsqUsersCache
-  const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
-  const rows = Array.isArray(data) ? data : []
+  const rows = await fetchLeadSquaredUsersRaw(creds)
   const byId = {}
   rows.forEach(u => { byId[u.ID] = [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || u.ID })
   _lsqUsersCache = byId
@@ -817,6 +828,26 @@ async function fetchLiveQlMetrics(creds, { date }) {
 // 0 of 15 had any value. "Current Owner Assignment Time" (mx_Custom_94) was populated on
 // 15 of 15, so that's what's surfaced here (clearly labeled as "current", not
 // misrepresented as "first").
+// Sales Group is NOT a field on the Opportunity object at all -- confirmed live against
+// the real 107-field Opportunity schema (GetOpportunityTypeMetadata, event code 12003),
+// zero fields named or resembling "sales"/"group". It's a property of the OWNER (the
+// assigned User) instead, parsed the same way the Team Mapping page already does from
+// Users.Get's own comma-separated `Groups` string (confirmed live to reconcile exactly
+// with LeadSquared's own Manage > Sales Groups screen). A user can belong to MULTIPLE
+// groups at once (confirmed live, e.g. a real owner in 4 groups simultaneously) or none
+// -- so this is joined into one comma-separated string per owner, not a single value.
+let _lsqUserGroupsCache = null
+async function fetchLeadSquaredUserGroupsMap(creds) {
+  if (_lsqUserGroupsCache) return _lsqUserGroupsCache
+  const rows = await fetchLeadSquaredUsersRaw(creds)
+  const byId = {}
+  rows.forEach(u => {
+    byId[u.ID] = typeof u.Groups === 'string' && u.Groups ? u.Groups.split(',').map(s => s.trim()).filter(Boolean) : []
+  })
+  _lsqUserGroupsCache = byId
+  return byId
+}
+
 const LIVE_QL_OWNER_BULK_MAX = 500
 async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
   const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_BULK_MAX)
@@ -829,8 +860,9 @@ async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
     { SubConOp: 'And', LSO: 'ProspectActivityId', LSO_Type: 'String', Operator: 'eq', RSO: id },
   ] }))
   const advancedSearch = JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
-  const [ownerMap, data] = await Promise.all([
+  const [ownerMap, groupsMap, data] = await Promise.all([
     fetchLeadSquaredUsersMap(creds),
+    fetchLeadSquaredUserGroupsMap(creds),
     leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
       OpportunityEventCode: 12003,
       AdvancedSearch: advancedSearch,
@@ -854,6 +886,7 @@ async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
       createdOn: r.CreatedOn || null,
       ownerAssignedOn: r.mx_Custom_94 || null,
       ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
+      ownerSalesGroups: r.Owner ? (groupsMap[r.Owner] || []).join(', ') : null,
       status: r.Status || null,
       stage: r.mx_Custom_2 || null,
       totalEngagement: r.mx_Custom_12 || null,
