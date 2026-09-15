@@ -103,7 +103,15 @@ jobs:
               DATE(opportunity_created_date) AS opp_date,
               source,
               COUNT(opportunity_id) AS opp_count,
-              COUNT(CASE WHEN last_disposition_from_futwork IS NULL THEN opportunity_id END) AS floor_queued,
+              -- Floor = genuinely untouched by any of the three routing paths, not just "not Futwork Human".
+              -- Was only checking last_disposition_from_futwork IS NULL, so an opportunity routed to
+              -- Futwork AI or Superbot (but never Futwork Human) was silently counted as Floor too --
+              -- inflating it. last_disposition_ai_futwork is the same sibling column api/crm-leads.js's
+              -- APPS_SQL already uses on this exact table for the AI-routed check.
+              COUNT(CASE WHEN last_disposition_from_futwork IS NULL
+                          AND last_disposition_ai_futwork IS NULL
+                          AND last_disposition_from_superbot IS NULL
+                     THEN opportunity_id END) AS floor_queued,
               COUNT(CASE WHEN last_disposition_from_futwork IS NOT NULL THEN opportunity_id END) AS futwork_queued,
               COUNT(CASE WHEN last_disposition_from_superbot IS NOT NULL THEN opportunity_id END) AS superbot_queued
             FROM v3
