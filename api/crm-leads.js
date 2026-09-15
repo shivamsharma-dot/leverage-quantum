@@ -831,19 +831,23 @@ async function fetchLiveQlMetrics(creds, { date }) {
 // Sales Group is NOT a field on the Opportunity object at all -- confirmed live against
 // the real 107-field Opportunity schema (GetOpportunityTypeMetadata, event code 12003),
 // zero fields named or resembling "sales"/"group". It's a property of the OWNER (the
-// assigned User) instead, parsed the same way the Team Mapping page already does from
-// Users.Get's own comma-separated `Groups` string (confirmed live to reconcile exactly
-// with LeadSquared's own Manage > Sales Groups screen). A user can belong to MULTIPLE
-// groups at once (confirmed live, e.g. a real owner in 4 groups simultaneously) or none
-// -- so this is joined into one comma-separated string per owner, not a single value.
+// assigned User) instead. IMPORTANT: Users.Get (fetchLeadSquaredUsersRaw, used for name
+// resolution above) returns group membership as `MemberOfGroups` -- an unconfirmed shape
+// this codebase has never actually parsed (see fetchLeadSquaredTeamUsers' own comment,
+// "Groups comes back as a comma-joined STRING here, not an array like Users.Get's
+// MemberOfGroups"). Reusing THAT field directly here was tried first and shipped a real
+// bug (every owner showed a dash even when confirmed, via Team Mapping, to have real
+// groups) -- fixed by instead reusing fetchLeadSquaredTeamUsers' own already-proven
+// `.groups` (from User/AdvancedSearch's comma-separated `Groups` CSV field, confirmed
+// live to reconcile exactly with LeadSquared's own Manage > Sales Groups screen). A user
+// can belong to MULTIPLE groups at once (confirmed live, e.g. a real owner in 4 groups
+// simultaneously) or none -- joined into one comma-separated string per owner here.
 let _lsqUserGroupsCache = null
 async function fetchLeadSquaredUserGroupsMap(creds) {
   if (_lsqUserGroupsCache) return _lsqUserGroupsCache
-  const rows = await fetchLeadSquaredUsersRaw(creds)
+  const rows = await fetchLeadSquaredTeamUsers(creds)
   const byId = {}
-  rows.forEach(u => {
-    byId[u.ID] = typeof u.Groups === 'string' && u.Groups ? u.Groups.split(',').map(s => s.trim()).filter(Boolean) : []
-  })
+  rows.forEach(u => { byId[u.id] = Array.isArray(u.groups) ? u.groups : [] })
   _lsqUserGroupsCache = byId
   return byId
 }
