@@ -76,6 +76,9 @@ function parseCSV(csv) {
     valid_passport:  (r[h('valid_passport')] || '').trim(),
     preferred_intake:(r[h('preferred_intake')] || '').trim(),
     highest_qual:    (r[h('highest_qualification')] || '').trim(),
+    // Same literal 'SR'/'AC' column already read this way on Human/AI QL Detail
+    // (r[h('vertical')]) -- a real sheet column, never derived from country.
+    vertical:        (r[h('vertical')] || '').trim(),
     count:           1,  // one row = one qualified lead
     corridorId:      classifyCorridor(r[h('opp_first_campaign_name')] || ''),
     // Derived once here (not re-derived per-render) so the generic Advanced Filter
@@ -98,6 +101,7 @@ const QL_FILTERABLE_FIELDS = [
   { key: 'campaign', label: 'Campaign' },
   { key: 'corridorLabel', label: 'Corridor' },
   { key: 'category', label: 'Category' },
+  { key: 'vertical', label: 'Vertical' },
   { key: 'country', label: 'Country' },
   { key: 'degree_type', label: 'Degree Type' },
   { key: 'disposition', label: 'Disposition' },
@@ -780,6 +784,22 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   function removeAdvCondition(id) { setAdvConditions(prev => prev.filter(c => c.id !== id)); setPage(0) }
   function clearAdvConditions() { setAdvConditions([]); setPage(0) }
 
+  // Click-to-scope on the Vertical KPI cards (same UX as Human/AI QL Detail's
+  // SR/AC cards) -- implemented as a normal Advanced Filter condition rather
+  // than a separate toggle state, since Daily QLs already has a real condition
+  // builder and this keeps one single source of truth for what's filtered.
+  const verticalFocus = activeAdvConditions.find(c => c.field === 'vertical' && c.operator === 'is')?.value || null
+  function toggleVerticalCondition(v) {
+    setAdvConditions(prev => {
+      const already = prev.some(c => c.field === 'vertical' && c.operator === 'is' && c.value === v)
+      const withoutVertical = prev.filter(c => c.field !== 'vertical')
+      if (already) return withoutVertical
+      qlConditionIdCounter += 1
+      return [...withoutVertical, { id: 'qlc' + qlConditionIdCounter, field: 'vertical', operator: 'is', value: v }]
+    })
+    setPage(0)
+  }
+
   // ===== MONTHLY VIEW (Monthly QLs sheet) =====
   const MQ_METRICS = useMemo(() => ([
     { key: 'opp_count',       label: 'Total Opp Count' },
@@ -1015,12 +1035,20 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     const prevFwai = prevBase.filter(r => r.provider === 'Futwork AI').reduce((s, r) => s + r.count, 0)
     const prevSb   = prevBase.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
     const prevTot  = prevFw + prevFwai + prevSb
+    // Vertical split -- same 'SR'/'AC' values as Human/AI QL Detail's r.vertical,
+    // just read here from the daily per-lead rows instead of a per-row detail table.
+    const sr = filtered.filter(r => r.vertical === 'SR').reduce((s, r) => s + r.count, 0)
+    const ac = filtered.filter(r => r.vertical === 'AC').reduce((s, r) => s + r.count, 0)
+    const prevSr = prevBase.filter(r => r.vertical === 'SR').reduce((s, r) => s + r.count, 0)
+    const prevAc = prevBase.filter(r => r.vertical === 'AC').reduce((s, r) => s + r.count, 0)
     return {
-      fw, fwai, sb, total,
+      fw, fwai, sb, total, sr, ac,
       totalDelta: prevTot > 0 ? ((total - prevTot)  / prevTot * 100) : null,
       fwDelta:    prevFw  > 0 ? ((fw    - prevFw)   / prevFw  * 100) : null,
       fwaiDelta:  prevFwai > 0 ? ((fwai - prevFwai) / prevFwai * 100) : null,
       sbDelta:    prevSb  > 0 ? ((sb    - prevSb)   / prevSb  * 100) : null,
+      srDelta:    prevSr  > 0 ? ((sr    - prevSr)   / prevSr  * 100) : null,
+      acDelta:    prevAc  > 0 ? ((ac    - prevAc)   / prevAc  * 100) : null,
     }
   }, [filtered, rows, months, selMonth, matchesAdvancedRow])
 
@@ -1588,13 +1616,33 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
             <>
             {view === 'daily' && (<>
               {/* -- PREMIUM KPI ROW -- */}
-              <div className='lq-kpi-grid' style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
+              <div className='lq-kpi-grid' style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14, marginBottom: verticalFocus ? 10 : 18 }}>
                 <PremKPI label="Total Qualified" value={fmtN(totals.total)} sub={selMonth}                       delta={totals.totalDelta} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork"          value={fmtN(totals.fw)}   sub={pct(totals.fw, totals.total) + ' share'}   delta={totals.fwDelta}    accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI"       value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' share'} delta={totals.fwaiDelta}  accent="#29B9C3" accentBg="#E4F8F9" icon={KPI_ICONS.ai} />
                 <PremKPI label="Superbot"         value={fmtN(totals.sb)}   sub={pct(totals.sb, totals.total) + ' share'}   delta={totals.sbDelta}    accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.bot} />
+                {/* Vertical (SR/AC) -- same clickable-card-scopes-the-page pattern as
+                    Human/AI QL Detail's own SR/AC cards, wired here into the Advanced
+                    Filter that already exists on this page instead of a separate toggle. */}
+                <div onClick={() => toggleVerticalCondition('SR')} role="button" tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleVerticalCondition('SR') } }}
+                  title="Click to scope this page to Student Recruitment (SR) leads"
+                  style={{ cursor: 'pointer', borderRadius: 16, outline: verticalFocus === 'SR' ? '2px solid #1C9FD4' : 'none', outlineOffset: 2 }}>
+                  <PremKPI label="Student Recruitment (SR)" value={fmtN(totals.sr)} sub={pct(totals.sr, totals.total) + ' share'} delta={totals.srDelta} accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.ai} />
+                </div>
+                <div onClick={() => toggleVerticalCondition('AC')} role="button" tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleVerticalCondition('AC') } }}
+                  title="Click to scope this page to Admission Consultation (AC) leads"
+                  style={{ cursor: 'pointer', borderRadius: 16, outline: verticalFocus === 'AC' ? '2px solid #4CAE6F' : 'none', outlineOffset: 2 }}>
+                  <PremKPI label="Admission Consultation (AC)" value={fmtN(totals.ac)} sub={pct(totals.ac, totals.total) + ' share'} delta={totals.acDelta} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.total} />
+                </div>
                 <PremKPI label="Top Country"      value={topCountries[0]?.country || '-'} sub={topCountries[0] ? fmtN(topCountries[0].count) + ' qualified' : 'no data'} delta={topCountryDelta} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.globe} />
               </div>
+              {verticalFocus && (
+                <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
+                  Scoped to <b>{verticalFocus}</b> — click the card again to clear.
+                </div>
+              )}
 
               {/* -- ROW 1: SOURCE STACKED BAR + PROVIDER DONUT -- */}
               <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
