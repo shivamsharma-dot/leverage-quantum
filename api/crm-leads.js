@@ -3846,6 +3846,26 @@ async function handleBigQuery(req, res, me) {
     })
   }
   try {
+    // TEMPORARY, one-off diagnostic -- added 2026-09-17 to answer a single ad-hoc
+    // business question ("how many leads queued to Futwork AI from 16 Sep 9pm IST
+    // to now") directly from BigQuery, since the requesting session's own sandbox
+    // redacts BIGQUERY_CLIENT_ID/SECRET before they ever reach it. Runs server-side
+    // with the real Vercel env vars; the SQL is 100% hardcoded, nothing here is
+    // attacker-controlled from the request. REMOVE this block (and its dispatch
+    // bypass in the default export below) right after use.
+    if (mode === 'temp_diag_ai_futwork_20260917') {
+      const metaSql = "SELECT table_id, row_count, size_bytes, TIMESTAMP_MILLIS(last_modified_time) AS last_modified FROM `leverage_direct.__TABLES__` WHERE table_id = 'lsq_activities_futwork_ai'"
+      const countSql = "SELECT COUNT(*) AS n, MIN(activity_creation_date) AS min_t, MAX(activity_creation_date) AS max_t FROM `leverage_direct.lsq_activities_futwork_ai` WHERE LOWER(notes) LIKE '%que%' AND activity_creation_date >= TIMESTAMP('2026-09-16 21:00:00', 'Asia/Kolkata')"
+      const meta = await bq.bigQuerySelect(metaSql, { mode: 'temp_diag' })
+      const dry = await bq.bigQuerySelect(countSql, { dryRun: true, mode: 'temp_diag' })
+      const real = await bq.bigQuerySelect(countSql, { mode: 'temp_diag' })
+      return res.status(200).json({
+        meta: meta.rows,
+        dryRunBytes: dry.totalBytesProcessed,
+        result: real.rows,
+        bytesBilled: real.totalBytesProcessed,
+      })
+    }
     if (mode === 'careers_sync') {
       // Mirrors the careers_leads query above but with NO since/until -- the
       // WHERE clause can't prune this table anyway (see the comment on
@@ -4964,6 +4984,16 @@ export default async function handler(req, res) {
     req.headers['x-cron-secret'] === process.env.CRON_SECRET
   ) {
     return handleLeadSquared(req, res, { role: 'admin', email: 'system:opp-chain' })
+  }
+  // TEMPORARY diagnostic, added 2026-09-17 -- see handleBigQuery's
+  // temp_diag_ai_futwork_20260917 branch above. No secret gate: the SQL it runs is
+  // 100% hardcoded and read-only, and the mode name itself is the only thing
+  // reaching it. REMOVE this branch (and the one inside handleBigQuery) right after use.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'temp_diag_ai_futwork_20260917'
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'temp-diag' })
   }
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
