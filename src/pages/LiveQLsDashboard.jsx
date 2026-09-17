@@ -645,6 +645,12 @@ export default function LiveQLsDashboard() {
   // exclude recycled DNP leads from the "queued" base so they don't inflate/dilute the
   // conversion rate.
   const queuedToQlPctFresh = totalQueuedFresh > 0 ? (totalQlUnfiltered / totalQueuedFresh) * 100 : null
+  // Per-channel conversion rate (each channel's own QLs over its own Queued) -- unfiltered,
+  // same convention as the two ratios above. AI's denominator is its full Queued count
+  // (Fresh + DNP combined), not just Fresh -- this is "how well is the AI channel overall
+  // converting", a different question from the Fresh-vs-DNP split above.
+  const qlPctHuman = data && data.human.queuedCount > 0 ? (data.human.qlCount / data.human.queuedCount) * 100 : null
+  const qlPctAi = data && data.ai.queuedCount > 0 ? (data.ai.qlCount / data.ai.queuedCount) * 100 : null
 
   // "QLs This Period" is a run-rate (Total QLs ÷ elapsed time), not a plain total -- a raw
   // total says nothing about pace without knowing how much of the window has actually
@@ -890,8 +896,9 @@ export default function LiveQLsDashboard() {
                       ['QL', 'An activity counts as a QL when its Note = Post (call actually completed, not still queued), Disposition Status = Final, and Disposition is one of 9 confirmed values (e.g. Discover Future Intent, Interested in Call Back, Call Transferred To Counsellor).'],
                       ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
-                      ['AI Queued (Fresh vs DNP)', 'Not every AI-queued lead is new -- Futwork sometimes recycles a Human "Did Not Pick" lead straight into the AI queue instead of calling a genuinely fresh one. Split via Futwork Ai Project containing "DNP". Human queued has no such recycling, so it’s always 100% fresh.'],
-                      ['Queued to QL % (Fresh vs with DNP)', 'Same numerator (Total QLs, unfiltered) both ways -- only the denominator differs. "with DNP" divides by everyone queued (Human + all AI). "Fresh" divides by Human + AI Queued (Fresh) only, so recycled DNP leads don’t inflate or dilute the real conversion rate.'],
+                      ['AI Queued -- Fresh vs DNP', 'Not every AI-queued lead is new -- Futwork sometimes recycles a Human "Did Not Pick" lead straight into the AI queue instead of calling a genuinely fresh one. Split via Futwork Ai Project containing "DNP" (shown as two "AI Queued" cards, distinguished by the Fresh/DNP sub-line). Human queued has no such recycling, so it’s always 100% fresh.'],
+                      ['QL % (DNP) vs QL % (Fresh)', 'Same numerator (Total QLs, unfiltered) both ways -- only the denominator differs. "QL % (DNP)" divides by everyone queued (Human + all AI). "QL % (Fresh)" divides by Human + AI Queued (Fresh) only, so recycled DNP leads don’t inflate or dilute the real conversion rate.'],
+                      ['QL % (Human) / QL % (AI)', 'Each channel’s own conversion rate -- that channel’s QLs over that channel’s own Queued count, unfiltered. AI’s denominator here is its FULL Queued count (Fresh + DNP combined), since this answers "how well is the AI channel converting overall", a different question from the Fresh-vs-DNP split above.'],
                       ['QLs This Period', 'A run-rate, not a plain total -- Total QLs divided by elapsed time. Today shows QLs per hour (elapsed since midnight, since it’s still a live, partial day); every other preset shows QLs per day (This Week/This Month divide by however many days have elapsed so far; Yesterday/Last Week/Last Month, already-closed periods, divide by their own full length -- 1 / 7 / the real days in that month). The sub-line always shows the real total and elapsed time behind the rate. Always unfiltered and ignores the Filters above, same as the Queued cards.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
@@ -960,14 +967,16 @@ export default function LiveQLsDashboard() {
               )}
               <div className="lq-kpi-grid" style={{ ...KPI_CARD_ROW, marginTop: 20 }}>
                 <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
-                <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.agent} />
-                <PremKPI label="AI Queued (Fresh)" value={fmtN(aiQueuedFresh)} sub="new leads, not yet actioned" accent={C.green} icon={KPI_ICONS.bot} />
-                <PremKPI label="AI Queued (DNP)" value={fmtN(aiQueuedDnp)} sub="Human Did-Not-Pick, recycled to AI" accent={C.green} icon={KPI_ICONS.bot} />
+                <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="Fresh" accent={C.green} icon={KPI_ICONS.agent} />
+                <PremKPI label="AI Queued" value={fmtN(aiQueuedFresh)} sub="Fresh" accent={C.green} icon={KPI_ICONS.bot} />
+                <PremKPI label="AI Queued" value={fmtN(aiQueuedDnp)} sub="DNP" accent={C.green} icon={KPI_ICONS.bot} />
                 <PremKPI label="Total QLs" value={fmtN(totalQL)} sub="Human + AI" accent={C.navy} icon={KPI_ICONS.total} />
                 <PremKPI label="Human QLs" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
-                <PremKPI label="Queued to QL % (Fresh)" value={queuedToQlPctFresh == null ? '—' : `${queuedToQlPctFresh.toFixed(1)}%`} sub="Total QLs / Fresh Queued (DNP excluded)" accent={C.navy} icon={KPI_ICONS.total} />
-                <PremKPI label="Queued to QL % (with DNP)" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="QL % (DNP)" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="QL % (Fresh)" value={queuedToQlPctFresh == null ? '—' : `${queuedToQlPctFresh.toFixed(1)}%`} sub="Total QLs / Fresh Queued (DNP excluded)" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="QL % (Human)" value={qlPctHuman == null ? '—' : `${qlPctHuman.toFixed(1)}%`} sub="Human QLs / Human Queued" accent={C.blue} icon={KPI_ICONS.agent} />
+                <PremKPI label="QL % (AI)" value={qlPctAi == null ? '—' : `${qlPctAi.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh + DNP)" accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label={periodLabel} value={periodAvgQl.toFixed(1)} sub={periodSub} accent={C.green} icon={KPI_ICONS.total} />
               </div>
 
