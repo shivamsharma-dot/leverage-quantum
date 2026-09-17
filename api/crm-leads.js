@@ -2987,22 +2987,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
-    // TEMPORARY, one-off (2026-09-17): exact window Sep 16 21:00 -> now, AI queued. Remove after use.
-    if (mode === 'live_ql_ai_window_debug') {
-      const ch = LIVE_QL_CHANNELS.ai
-      const dateKeyword = LIVE_QL_DATE_KEYWORDS[req.query.date] || LIVE_QL_DATE_KEYWORDS.today
-      const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
-      const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ch.fields.opportunityId].join(',')
-      const { recordCount, rows } = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_MAX_PAGES)
-      const times = rows.map(r => r.CreatedOn).sort()
-      // CreatedOn from this endpoint is UTC despite QueryTimeZone -- 9pm IST = 15:30 UTC.
-      const cutoff = new Date(req.query.cutoff || '2026-09-16T15:30:00Z')
-      const inWindow = rows.filter(r => new Date(String(r.CreatedOn).replace(' ', 'T')) >= cutoff)
-      return res.status(200).json({
-        recordCount, totalRows: rows.length, minCreatedOn: times[0], maxCreatedOn: times[times.length - 1],
-        inWindowCount: inWindow.length, sampleFirst: rows.slice(0, 3).map(r => r.CreatedOn), sampleLast: rows.slice(-3).map(r => r.CreatedOn),
-      })
-    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
