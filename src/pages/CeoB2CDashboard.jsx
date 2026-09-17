@@ -913,7 +913,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     const cols = ['Line item', day ? day.date : 'Latest day', periodLabel]
     if (hasPrev) cols.push(prevLab)
     const spec = REV.concat(isCashFlow ? [] : [['upskilling', 'Upskilling']]).concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost]])
-      .concat(isCashFlow ? [] : [['ebitdaBeforeCorp', 'EBITDA Before Corp. Overheads']])
+      .concat(isCashFlow ? [] : [['ebitdaBeforeCorp', 'Contribution Profit']])
       .concat([['net', L.net]])
     const body = spec.map(function (d) {
       const r = {}
@@ -1277,7 +1277,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                   </tr>
                   {!isCashFlow ? (
                     <tr className={styles.total}>
-                      <td>EBITDA Before Corp. Overheads</td>
+                      <td>Contribution Profit</td>
                       <td className={day && day.ebitdaBeforeCorp != null && day.ebitdaBeforeCorp < 0 ? styles.neg : styles.pos}>{full(day && day.ebitdaBeforeCorp)}</td>
                       <td className={mtd.ebitdaBeforeCorp != null && mtd.ebitdaBeforeCorp < 0 ? styles.neg : styles.pos}>{full(mtd.ebitdaBeforeCorp)}</td>
                       {hasPrev ? <td>{full(prev.ebitdaBeforeCorp)}</td> : null}

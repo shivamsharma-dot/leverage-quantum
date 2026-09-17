@@ -1493,8 +1493,8 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
       + T.sectionTitle('Cost by Line') + T.dataTable(lineHeaders, b2c.pnl.costLines.map(lineRow))
     const chartB = T.sectionTitle('Revenue vs. Cost, Daily') + T.dualDayBarChart(b2c.pnl.daySeries.map(d => ({ label: gazDayLabel(d.date), a: d.totalRev || 0, b: d.totalCost || 0, tip: d.date + ': rev ' + fmtINR(d.totalRev).replace(/&#8377;/, '₹') + ', cost ' + fmtINR(d.totalCost).replace(/&#8377;/, '₹') })))
     const ebitdaNote = (b2c.pnl.ytd.ebitdaBeforeCorp >= 0 && b2c.pnl.now.ebitdaBeforeCorp < 0)
-      ? ('YTD EBITDA before Corp. Overheads is positive at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ', even though this period alone is negative at ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' &mdash; the earlier months carried the year.')
-      : ('EBITDA before Corp. Overheads stands at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ' year-to-date, versus ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' for this period alone.')
+      ? ('YTD Contribution Profit is positive at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ', even though this period alone is negative at ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' &mdash; the earlier months carried the year.')
+      : ('Contribution Profit stands at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ' year-to-date, versus ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' for this period alone.')
     const ytdB = T.ytdBox({
       label: b2c.fyLabel + ', Year to Date', dateRange: b2c.fyStart + ' to ' + until,
       pnl: [['Total Revenue', fmtINR(b2c.pnl.ytd.totalRev)], ['Total Cost', fmtINR(b2c.pnl.ytd.totalCost)], ['Net', fmtINR(b2c.pnl.ytd.net), b2c.pnl.ytd.net >= 0 ? T.GREEN : T.NAVY]],
