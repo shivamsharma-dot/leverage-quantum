@@ -651,6 +651,9 @@ export default function LiveQLsDashboard() {
   // converting", a different question from the Fresh-vs-DNP split above.
   const qlPctHuman = data && data.human.queuedCount > 0 ? (data.human.qlCount / data.human.queuedCount) * 100 : null
   const qlPctAi = data && data.ai.queuedCount > 0 ? (data.ai.qlCount / data.ai.queuedCount) * 100 : null
+  // Same numerator (AI QLs) as QL % (AI) above -- denominator narrowed to AI Queued
+  // (Fresh) only, so recycled DNP leads don't drag this one down.
+  const qlPctAiFresh = data && data.ai.queuedFresh > 0 ? (data.ai.qlCount / data.ai.queuedFresh) * 100 : null
 
   // "QLs This Period" is a run-rate (Total QLs ÷ elapsed time), not a plain total -- a raw
   // total says nothing about pace without knowing how much of the window has actually
@@ -898,7 +901,7 @@ export default function LiveQLsDashboard() {
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filters above.'],
                       ['AI Queued -- Fresh vs DNP', 'Not every AI-queued lead is new -- Futwork sometimes recycles a Human "Did Not Pick" lead straight into the AI queue instead of calling a genuinely fresh one. Split via Futwork Ai Project containing "DNP" (shown as two "AI Queued" cards, distinguished by the Fresh/DNP sub-line). Human queued has no such recycling, so it’s always 100% fresh.'],
                       ['QL % (DNP) vs QL % (Fresh)', 'Same numerator (Total QLs, unfiltered) both ways -- only the denominator differs. "QL % (DNP)" divides by everyone queued (Human + all AI). "QL % (Fresh)" divides by Human + AI Queued (Fresh) only, so recycled DNP leads don’t inflate or dilute the real conversion rate.'],
-                      ['QL % (Human) / QL % (AI)', 'Each channel’s own conversion rate -- that channel’s QLs over that channel’s own Queued count, unfiltered. AI’s denominator here is its FULL Queued count (Fresh + DNP combined), since this answers "how well is the AI channel converting overall", a different question from the Fresh-vs-DNP split above.'],
+                      ['QL % (Human) / QL % (AI) / QL % (AI Fresh)', 'Each channel’s own conversion rate -- that channel’s QLs over that channel’s own Queued count, unfiltered. Human has no Fresh/DNP concept, so it’s one card. AI has two: "QL % (AI)" divides by AI’s FULL Queued count (Fresh + DNP combined) -- "how well is the AI channel converting overall"; "QL % (AI Fresh)" divides by AI Queued (Fresh) only, so recycled DNP leads (which rarely convert, having already been tried once by Human) don’t drag the real fresh-lead conversion rate down.'],
                       ['QLs This Period', 'A run-rate, not a plain total -- Total QLs divided by elapsed time. Today shows QLs per hour (elapsed since midnight, since it’s still a live, partial day); every other preset shows QLs per day (This Week/This Month divide by however many days have elapsed so far; Yesterday/Last Week/Last Month, already-closed periods, divide by their own full length -- 1 / 7 / the real days in that month). The sub-line always shows the real total and elapsed time behind the rate. Always unfiltered and ignores the Filters above, same as the Queued cards.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
@@ -977,6 +980,7 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="QL % (Fresh)" value={queuedToQlPctFresh == null ? '—' : `${queuedToQlPctFresh.toFixed(1)}%`} sub="Total QLs / Fresh Queued (DNP excluded)" accent={C.navy} icon={KPI_ICONS.total} />
                 <PremKPI label="QL % (Human)" value={qlPctHuman == null ? '—' : `${qlPctHuman.toFixed(1)}%`} sub="Human QLs / Human Queued" accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="QL % (AI)" value={qlPctAi == null ? '—' : `${qlPctAi.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh + DNP)" accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="QL % (AI Fresh)" value={qlPctAiFresh == null ? '—' : `${qlPctAiFresh.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh only)" accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label={periodLabel} value={periodAvgQl.toFixed(1)} sub={periodSub} accent={C.green} icon={KPI_ICONS.total} />
               </div>
 
