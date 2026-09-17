@@ -2995,7 +2995,8 @@ async function handleLeadSquared(req, res, me) {
       const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ch.fields.opportunityId].join(',')
       const { recordCount, rows } = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_MAX_PAGES)
       const times = rows.map(r => r.CreatedOn).sort()
-      const cutoff = new Date('2026-09-16T21:00:00')
+      // CreatedOn from this endpoint is UTC despite QueryTimeZone -- 9pm IST = 15:30 UTC.
+      const cutoff = new Date(req.query.cutoff || '2026-09-16T15:30:00Z')
       const inWindow = rows.filter(r => new Date(String(r.CreatedOn).replace(' ', 'T')) >= cutoff)
       return res.status(200).json({
         recordCount, totalRows: rows.length, minCreatedOn: times[0], maxCreatedOn: times[times.length - 1],
