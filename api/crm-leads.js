@@ -718,6 +718,28 @@ function buildQueuedAdvancedSearch(code, dateKeyword, queuedNote) {
   })
 }
 
+// Same shape as buildQueuedAdvancedSearch, plus one more AND'd condition on a given
+// field -- used to get a fast, exact, count-only split of Queued by a field value
+// (e.g. Futwork Ai Project contains "DNP") without pulling and paginating through every
+// queued row. "lik" is LeadSquared's own contains/substring operator (see
+// LIVE_QL_CONTAINS_WORDS above), so this covers both "equals DNP" and "contains DNP" in
+// one shot.
+function buildQueuedFieldContainsSearch(code, dateKeyword, queuedNote, field, containsValue) {
+  return JSON.stringify({
+    GrpConOp: 'And',
+    Conditions: [{
+      Type: 'Activity', ConOp: 'and', IsFilterCondition: true,
+      RowCondition: [
+        { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+        { SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword },
+        { SubConOp: 'And', LSO: 'ActivityEvent_Note', LSO_Type: 'String', Operator: 'eq', RSO: queuedNote },
+        { SubConOp: 'And', LSO: field, LSO_Type: 'String', Operator: 'lik', RSO: containsValue },
+      ],
+    }],
+    QueryTimeZone: 'India Standard Time',
+  })
+}
+
 async function runActivityAdvancedSearch(creds, code, advancedSearchStr, includeCsv, pageSize) {
   const data = await leadsquaredPost('/v2/ProspectActivity.svc/Activity/Retrieve/BySearchParameter', creds, {
     ActivityEvent: code,
@@ -762,11 +784,20 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   const qlSearch = buildQlAdvancedSearch(ch.code, ch.dispositionField, dateKeyword, ch.dispositionExact, null)
   const queuedSearch = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
   const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ...Object.values(ch.fields)].join(',')
-  const [qlResult, queuedResult] = await Promise.all([
+  // AI-only: Futwork sometimes recycles a Human "Did Not Pick" lead straight into the AI
+  // queue instead of it being a genuinely new/fresh lead -- tagged via Futwork Ai Project
+  // (mx_Custom_32) containing "DNP" (confirmed live 2026-09-17). A second fast, count-only
+  // query (same shape as Queued, one extra AND'd condition) gets this split with zero
+  // extra pagination cost -- Human queued leads have no such recycling concept.
+  const dnpSearch = channelKey === 'ai'
+    ? buildQueuedFieldContainsSearch(ch.code, dateKeyword, ch.queuedNote, ch.fields.futworkAiProject, 'DNP')
+    : null
+  const [qlResult, queuedResult, dnpResult] = await Promise.all([
     runActivityAdvancedSearchAll(creds, ch.code, qlSearch, includeCsv, LIVE_QL_MAX_PAGES),
     // Queued is count-only (PageSize 1, we only ever read RecordCount) -- unaffected by the
     // pagination bug above, since fetchLiveQlMetrics never reads its `rows`.
     runActivityAdvancedSearch(creds, ch.code, queuedSearch, null, 1),
+    dnpSearch ? runActivityAdvancedSearch(creds, ch.code, dnpSearch, null, 1) : Promise.resolve({ recordCount: 0 }),
   ])
   const rows = qlResult.rows.map(r => {
     const mapped = { id: r.ProspectActivityId, prospectId: r.RelatedProspectId, createdOn: r.CreatedOn }
@@ -775,7 +806,14 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   })
   // truncated: true means the QL count for this channel/window exceeded LIVE_QL_MAX_PAGES*1000
   // rows -- not expected at real volumes but surfaced honestly rather than silently dropped.
-  return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
+  const queuedDnp = dnpResult.recordCount
+  return {
+    qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount,
+    // queuedFresh is only meaningful for AI (Human has queuedDnp always 0, so it just
+    // equals queuedCount there).
+    queuedDnp, queuedFresh: queuedResult.recordCount - queuedDnp,
+    rows, truncated: qlResult.recordCount > rows.length,
+  }
 }
 
 async function fetchLiveQlMetrics(creds, { date }) {
@@ -789,6 +827,9 @@ async function fetchLiveQlMetrics(creds, { date }) {
     human, ai,
     totalQL: human.qlCount + ai.qlCount,
     totalQueued: human.queuedCount + ai.queuedCount,
+    // Human queued has no DNP-recycling concept (queuedDnp always 0 there), so this is
+    // just Human's full count plus AI's fresh-only count.
+    totalQueuedFresh: human.queuedCount + ai.queuedFresh,
     fieldLabels: {
       country: 'Country', preferredDegree: 'Preferred Degree', intake: 'Intake',
       disposition: 'Disposition', callDuration: 'Call Duration', dispositionReason: 'Disposition Reason',
