@@ -3887,6 +3887,38 @@ async function handleBigQuery(req, res, me) {
     })
   }
   try {
+    // TEMPORARY, one-off diagnostic -- added 2026-09-17 to cross-check the live-
+    // LeadSquared answer to "how many leads queued to Futwork AI from 16 Sep 9pm
+    // IST to now" against BigQuery's own synced copy. Deliberately checks BOTH a
+    // UTC and an IST reading of the 9pm cutoff, plus a freshness probe (max
+    // activity_creation_date vs CURRENT_TIMESTAMP()) -- the live LeadSquared API
+    // was found to return CreatedOn as UTC despite claiming IST, so this does not
+    // assume BigQuery's own column follows the same convention. 100% hardcoded
+    // read-only SQL, nothing here is attacker-controlled from the request.
+    // REMOVE this block (and its dispatch bypass in the default export below)
+    // right after use.
+    if (mode === 'temp_diag_ai_futwork_20260917') {
+      const metaSql = "SELECT table_id, row_count, size_bytes, TIMESTAMP_MILLIS(last_modified_time) AS last_modified FROM `leverage_direct.__TABLES__` WHERE table_id = 'lsq_activities_futwork_ai'"
+      const colTypeSql = "SELECT column_name, data_type FROM `leverage_direct.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'lsq_activities_futwork_ai' AND column_name IN ('activity_creation_date','notes')"
+      const freshSql = "SELECT MAX(activity_creation_date) AS max_activity_creation_date, CURRENT_TIMESTAMP() AS now_utc FROM `leverage_direct.lsq_activities_futwork_ai`"
+      const countUtcSql = "SELECT COUNT(*) AS n, MIN(activity_creation_date) AS min_t, MAX(activity_creation_date) AS max_t FROM `leverage_direct.lsq_activities_futwork_ai` WHERE LOWER(notes) LIKE '%que%' AND activity_creation_date >= TIMESTAMP('2026-09-16 21:00:00', 'UTC')"
+      const countIstSql = "SELECT COUNT(*) AS n, MIN(activity_creation_date) AS min_t, MAX(activity_creation_date) AS max_t FROM `leverage_direct.lsq_activities_futwork_ai` WHERE LOWER(notes) LIKE '%que%' AND activity_creation_date >= TIMESTAMP('2026-09-16 21:00:00', 'Asia/Kolkata')"
+      const meta = await bq.bigQuerySelect(metaSql, { mode: 'temp_diag' })
+      const colType = await bq.bigQuerySelect(colTypeSql, { mode: 'temp_diag' })
+      const fresh = await bq.bigQuerySelect(freshSql, { mode: 'temp_diag' })
+      const dry = await bq.bigQuerySelect(countIstSql, { dryRun: true, mode: 'temp_diag' })
+      const utcResult = await bq.bigQuerySelect(countUtcSql, { mode: 'temp_diag' })
+      const istResult = await bq.bigQuerySelect(countIstSql, { mode: 'temp_diag' })
+      return res.status(200).json({
+        meta: meta.rows,
+        columnTypes: colType.rows,
+        freshness: fresh.rows,
+        dryRunBytes: dry.totalBytesProcessed,
+        countIfCutoffIsUtc: utcResult.rows,
+        countIfCutoffIsIst: istResult.rows,
+        bytesBilled: utcResult.totalBytesProcessed + istResult.totalBytesProcessed,
+      })
+    }
     if (mode === 'careers_sync') {
       // Mirrors the careers_leads query above but with NO since/until -- the
       // WHERE clause can't prune this table anyway (see the comment on
@@ -5005,6 +5037,16 @@ export default async function handler(req, res) {
     req.headers['x-cron-secret'] === process.env.CRON_SECRET
   ) {
     return handleLeadSquared(req, res, { role: 'admin', email: 'system:opp-chain' })
+  }
+  // TEMPORARY diagnostic, added 2026-09-17 -- see handleBigQuery's
+  // temp_diag_ai_futwork_20260917 branch above. No secret gate: the SQL it runs is
+  // 100% hardcoded and read-only, and the mode name itself is the only thing
+  // reaching it. REMOVE this branch (and the one inside handleBigQuery) right after use.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'temp_diag_ai_futwork_20260917'
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'temp-diag' })
   }
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
