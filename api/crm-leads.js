@@ -2987,6 +2987,24 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
+    // TEMPORARY, one-off (2026-09-17): AI-queued 9pm Sep16 -> now, distribution by Futwork Ai
+    // Project (mx_Custom_32). Remove after use.
+    if (mode === 'live_ql_ai_project_debug') {
+      const ch = LIVE_QL_CHANNELS.ai
+      const cutoff = new Date(req.query.cutoff || '2026-09-16T15:30:00Z')
+      const includeCsv = ['ProspectActivityId', 'CreatedOn', ch.fields.futworkAiProject].join(',')
+      const [todayRes, yestRes] = await Promise.all([
+        runActivityAdvancedSearchAll(creds, ch.code, buildQueuedAdvancedSearch(ch.code, LIVE_QL_DATE_KEYWORDS.today, ch.queuedNote), includeCsv, LIVE_QL_MAX_PAGES),
+        runActivityAdvancedSearchAll(creds, ch.code, buildQueuedAdvancedSearch(ch.code, LIVE_QL_DATE_KEYWORDS.yesterday, ch.queuedNote), includeCsv, LIVE_QL_MAX_PAGES),
+      ])
+      const rows = [...todayRes.rows, ...yestRes.rows].filter(r => new Date(String(r.CreatedOn).replace(' ', 'T')) >= cutoff)
+      const byProject = {}
+      rows.forEach(r => {
+        const p = r[ch.fields.futworkAiProject] || '(blank)'
+        byProject[p] = (byProject[p] || 0) + 1
+      })
+      return res.status(200).json({ total: rows.length, byProject })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
