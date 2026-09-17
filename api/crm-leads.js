@@ -2987,6 +2987,25 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
+    // TEMPORARY, one-off investigation (2026-09-17): AI-queued leads after 9pm + their
+    // firstChannelSource (mx_Custom_2 on the AI activity schema). Remove after use.
+    if (mode === 'live_ql_ai_after9pm_debug') {
+      const ch = LIVE_QL_CHANNELS.ai
+      const dateKeyword = LIVE_QL_DATE_KEYWORDS[req.query.date] || LIVE_QL_DATE_KEYWORDS.yesterday
+      const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
+      const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ch.fields.firstChannelSource, ch.fields.opportunityId].join(',')
+      const { recordCount, rows } = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_MAX_PAGES)
+      const after9pm = rows.filter(r => {
+        const hour = new Date(String(r.CreatedOn).replace(' ', 'T')).getHours()
+        return hour >= 21
+      })
+      const bySource = {}
+      after9pm.forEach(r => {
+        const src = r[ch.fields.firstChannelSource] || '(blank)'
+        bySource[src] = (bySource[src] || 0) + 1
+      })
+      return res.status(200).json({ recordCount, totalRows: rows.length, after9pmCount: after9pm.length, bySource, sample: after9pm.slice(0, 5) })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
