@@ -586,15 +586,33 @@ jobs:
           print('Aggregated', len(records), 'raw records into', len(agg_records),
                 '(date, Source) rows for', AGG_TABLE, '.')
 
+          # Real bug found live (2026-09-17): this loop's own exhausted-retries
+          # branch used to `raise` straight out of the loop with no surrounding
+          # try/except -- unlike the prune step below (and the raw table's own
+          # prune), which was already hardened against exactly this failure
+          # mode back on 2026-09-12. A single batch's 3 retries failing (a
+          # transient Supabase blip, a timeout) crashed the ENTIRE script right
+          # here, meaning: the raw table (overall_bq_daily, upserted earlier in
+          # this same run) had already committed its fresh data, but the agg
+          # table's prune, its row-count check, and the bigquery_jobs log below
+          # never ran -- overall_bq_daily_agg was left frozen on the PREVIOUS
+          # run's data for however many (date, Source) rows this run never got
+          # to. Confirmed live: the raw table's sync_id/synced_at was a full
+          # hour newer than the agg table's, with Futwork Human QL correctly
+          # populated in the raw table but reading 0 in the (stale) agg table
+          # for the same day -- exactly this failure mode, not a data problem.
+          agg_upsert_ok = True
           agg_upsert_url = SB_URL + '/rest/v1/' + AGG_TABLE + '?on_conflict=row_key'
           for i in range(0, len(agg_records), BATCH):
               body = json.dumps(agg_records[i:i + BATCH]).encode('utf-8')
+              batch_ok = False
               for attempt in range(3):
                   try:
                       req = sb(agg_upsert_url, 'POST', body,
                                {'Prefer': 'resolution=merge-duplicates,return=minimal'})
                       with urllib.request.urlopen(req, timeout=60) as r:
                           r.read()
+                      batch_ok = True
                       break
                   except Exception as e:
                       detail = ''
@@ -604,9 +622,15 @@ jobs:
                       except Exception:
                           pass
                       print('agg batch', i, 'attempt', attempt, 'failed:', repr(e) + detail)
-                      if attempt == 2:
-                          raise
-                      time.sleep(2 * (attempt + 1))
+                      if attempt < 2:
+                          time.sleep(2 * (attempt + 1))
+              if not batch_ok:
+                  agg_upsert_ok = False
+                  print('WARNING: agg batch', i, '-', min(i + BATCH, len(agg_records)),
+                        'failed all 3 attempts -- continuing to the next batch instead of '
+                        'aborting the whole sync. These rows keep whatever value',
+                        AGG_TABLE, 'already had; they should catch up next run.')
+                  continue
               done = min(i + BATCH, len(agg_records))
               print('  agg upserted', done, '/', len(agg_records))
 
@@ -616,17 +640,30 @@ jobs:
           # than allowed to abort the rest of the script (the bigquery_jobs
           # logging below, and a clean exit), for the same reason -- the real
           # data upsert already landed either way.
+          #
+          # Deliberately skipped entirely when agg_upsert_ok is False: pruning
+          # deletes every row not stamped with THIS run's sync_id, but a row
+          # whose upsert failed above never got that stamp -- pruning anyway
+          # would delete perfectly good data (from an earlier run) for exactly
+          # the rows this run couldn't refresh, turning a "stale but present"
+          # row into a "missing" one, which is strictly worse.
           agg_prune_url = (SB_URL + '/rest/v1/' + AGG_TABLE + '?or=(sync_id.neq.'
                            + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
           agg_pruned_ok = True
-          try:
-              delete_with_retry(agg_prune_url, AGG_TABLE)
-              print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
-          except Exception as e:
+          if not agg_upsert_ok:
               agg_pruned_ok = False
-              print('WARNING:', AGG_TABLE, 'prune failed after all retries -- some stale '
-                    'rows from a previous sync may linger until a later sync\'s prune '
-                    'succeeds. Error:', repr(e))
+              print('Skipping', AGG_TABLE, 'prune entirely this run -- at least one upsert '
+                    'batch failed above, so pruning now would delete still-valid rows that '
+                    'simply did not get refreshed this run.')
+          else:
+              try:
+                  delete_with_retry(agg_prune_url, AGG_TABLE)
+                  print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
+              except Exception as e:
+                  agg_pruned_ok = False
+                  print('WARNING:', AGG_TABLE, 'prune failed after all retries -- some stale '
+                        'rows from a previous sync may linger until a later sync\'s prune '
+                        'succeeds. Error:', repr(e))
 
           req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1', 'GET',
                    None, {'Prefer': 'count=exact', 'Range': '0-0'})
@@ -640,7 +677,8 @@ jobs:
                                % (AGG_TABLE, after_agg, len(agg_records)))
           elif not agg_pruned_ok:
               print('Skipping the exact row-count check for', AGG_TABLE, '-- prune did not '
-                    'complete this run, so a higher-than-expected count is expected, not an error.')
+                    'complete this run (or was skipped after an upsert failure), so a '
+                    'different-than-expected count is expected, not an error.')
 
           # Log this sync's own BigQuery job into bigquery_jobs, so Settings >
           # Data > BigQuery Usage reflects every real job Quantum triggers --
