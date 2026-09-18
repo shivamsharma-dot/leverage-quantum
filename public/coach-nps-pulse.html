@@ -159,6 +159,42 @@
     cursor:pointer; text-decoration:underline; text-underline-offset:2px; font-family:inherit; padding:4px;
   }
 
+  /* ---------- info tooltip ---------- */
+  .info-btn{
+    display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+    border-radius:50%; background:var(--border-soft); border:1px solid var(--border);
+    color:var(--text-3); font-size:10px; font-weight:800; font-style:italic; font-family:Georgia,serif;
+    cursor:pointer; flex:none; transition:all .12s ease; line-height:1;
+  }
+  .info-btn:hover, .info-btn:focus-visible{ background:var(--navyBg); color:var(--navy); border-color:var(--blue); outline:none; }
+  .info-panel{
+    position:fixed; background:var(--text-1); color:var(--bg); font-size:12.5px; line-height:1.55;
+    padding:11px 13px; border-radius:10px; box-shadow:var(--shadow); max-width:280px; z-index:60; font-weight:500;
+  }
+
+  /* ---------- click-through interactivity ---------- */
+  .ssm-row{ cursor:pointer; transition:background .12s ease, border-color .12s ease; }
+  .ssm-row:hover{ background:var(--navyBg); border-color:var(--blue); }
+  .mgr-table tbody tr{ cursor:pointer; transition:background .12s ease; }
+  .mgr-table tbody tr:hover{ background:var(--navyBg); }
+  .active-filter-chip{
+    display:none; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--navy);
+    background:var(--navyBg); border:1px solid var(--blue); border-radius:999px; padding:5px 6px 5px 12px;
+  }
+  .active-filter-chip.show{ display:inline-flex; }
+  .active-filter-chip button{
+    width:18px; height:18px; border-radius:50%; border:none; background:rgba(255,255,255,.6); color:var(--navy);
+    cursor:pointer; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  table.coach-table tbody tr.coach-row{cursor:pointer;}
+  tr.coach-detail-row td{ background:var(--surface-2); padding:14px 16px; border-bottom:1px solid var(--border-soft); }
+  .coach-detail-days{ display:flex; flex-wrap:wrap; gap:8px; }
+  .coach-detail-day{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12px; color:var(--text-2);
+  }
+  .coach-detail-day b{ color:var(--text-1); font-variant-numeric:tabular-nums; }
+  .coach-detail-empty{ font-size:12.5px; color:var(--text-3); font-style:italic; }
+
   /* ---------- kpi row ---------- */
   .kpis{
     display:grid; grid-template-columns: 1.35fr 1fr 1fr 1.5fr; gap:14px; margin-bottom:16px;
@@ -348,7 +384,7 @@
 
   <section class="kpis">
     <div class="card">
-      <div class="kpi-label">Overall NPS</div>
+      <div class="kpi-label">Overall NPS<button class="info-btn" data-tip="NPS = % Promoters (ratings 9–10) minus % Detractors (ratings 0–6), weighted by how many students gave each score. Passives (7–8) don’t count for or against the score, but do count toward Ratings Collected. Recalculated live for whichever date range is selected above.">i</button></div>
       <div class="kpi-hero">
         <span class="num" id="ovNps">&mdash;</span>
         <span class="delta" id="ovDelta"></span>
@@ -361,7 +397,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="kpi-label">Ratings Collected</div>
+      <div class="kpi-label">Ratings Collected<button class="info-btn" data-tip="Total individual ratings in the selected range — each rating counted once, however many a coach received. The small arrow compares average ratings/day in the earlier half of the range vs. the later half. This is response VOLUME, not a true response rate — the sheet doesn’t record how many students were asked to rate, only how many actually did.">i</button></div>
       <div class="kpi-hero">
         <span class="kpi-num" id="ovTotal">&mdash;</span>
         <span class="delta" id="volDelta"></span>
@@ -369,12 +405,12 @@
       <div class="kpi-foot" id="ovTotalFoot">&mdash;</div>
     </div>
     <div class="card">
-      <div class="kpi-label">Average Rating</div>
+      <div class="kpi-label">Average Rating<button class="info-btn" data-tip="Straight mean of every individual rating (0–10) in the selected range — sum of all ratings divided by the number of ratings. Not coach-weighted: a coach with 20 ratings influences this more than one with 2.">i</button></div>
       <div class="kpi-num" id="ovAvg">&mdash;</div>
       <div class="kpi-foot">out of 10</div>
     </div>
     <div class="card">
-      <div class="kpi-label">Reporting-Line Coverage</div>
+      <div class="kpi-label">Reporting-Line Coverage<button class="info-btn" data-tip="Share of coaches rated in this range whose email address was found in the TeamMapping sheet tab. A coach shows as “Unmapped” when their email isn’t listed there, or their manager/SSM cell is blank or #N/A — fix it in TeamMapping to have them roll up correctly.">i</button></div>
       <div class="kpi-num" id="ovCoverage">&mdash;</div>
       <div class="kpi-foot" id="ovCoverageFoot">coaches matched to team mapping tab</div>
     </div>
@@ -382,31 +418,32 @@
 
   <section class="charts">
     <div class="card chart-holder">
-      <h2>Day-on-day NPS</h2>
-      <p class="hint">Hover a point for that day&rsquo;s breakdown &middot; bars beneath show response volume</p>
+      <h2>Day-on-day NPS<button class="info-btn" data-tip="Each point is that single calendar day’s own NPS — computed only from ratings received on that date, same formula as the headline NPS. Bars underneath show how many ratings came in that day, so a big swing on a low-volume day means less than one on a busy day. Click any point to zoom the whole dashboard to just that day.">i</button></h2>
+      <p class="hint">Hover a point for that day&rsquo;s breakdown &middot; click to zoom into that day &middot; bars beneath show response volume</p>
       <div id="trendHolder">
         <svg id="trendChart" viewBox="0 0 640 260" preserveAspectRatio="xMidYMid meet"></svg>
         <div class="trend-tooltip" id="trendTip"></div>
       </div>
     </div>
     <div class="card">
-      <h2>Rating distribution</h2>
-      <p class="hint">All ratings in the selected range, 0&ndash;10</p>
-      <div id="distHolder">
+      <h2>Rating distribution<button class="info-btn" data-tip="Count of individual ratings at each score, 0–10, across the selected range. Green = promoter range (9–10), teal = passive (7–8), navy = detractor (0–6) — the same buckets used everywhere on this page. Hover a bar for its exact count and share of all ratings.">i</button></h2>
+      <p class="hint">All ratings in the selected range, 0&ndash;10 &middot; hover a bar for details</p>
+      <div id="distHolder" style="position:relative;">
         <svg id="distChart" viewBox="0 0 380 260" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="trend-tooltip" id="distTip"></div>
       </div>
     </div>
   </section>
 
   <section class="panels">
     <div class="panel">
-      <h2>By senior manager</h2>
-      <p class="hint">NPS rolled up to SSM level</p>
+      <h2>By senior manager<button class="info-btn" data-tip="Coaches rolled up to their SSM (from the TeamMapping tab) — NPS computed the same formula as the headline number, just scoped to that SSM’s coaches. Sorted by response volume, highest first. Click a row to filter the coach leaderboard below to just that SSM.">i</button></h2>
+      <p class="hint">NPS rolled up to SSM level &middot; click a row to filter the leaderboard</p>
       <div class="ssm-list" id="ssmList"></div>
     </div>
     <div class="panel">
-      <h2>By manager</h2>
-      <p class="hint">Sorted by response volume &middot; bar shows NPS position from &minus;100 to 100</p>
+      <h2>By manager<button class="info-btn" data-tip="Same rollup, one level down — by direct manager instead of SSM. The bar shows where that manager’s NPS falls on the full −100 to +100 scale. Click a row to filter the coach leaderboard below to just that manager.">i</button></h2>
+      <p class="hint">Sorted by response volume &middot; click a row to filter the leaderboard</p>
       <div class="mgr-scroll scroll-x">
         <table class="mgr-table">
           <thead><tr><th>Manager</th><th>Responses</th><th style="width:38%">NPS</th><th>Avg</th></tr></thead>
@@ -419,10 +456,11 @@
   <section class="table-panel">
     <div class="table-head">
       <div>
-        <h2 style="margin-bottom:2px;">Coach leaderboard</h2>
-        <p class="hint" style="margin-bottom:0;">Every coach rated in the selected range</p>
+        <h2 style="margin-bottom:2px;">Coach leaderboard<button class="info-btn" data-tip="Every coach with at least one rating in the selected range. NPS, Avg, Min/Max and the promoter/passive/detractor mix are all computed only from ratings in this window — change the date range above and every row recalculates. Min/Max turn navy when a coach’s lowest and highest rating differ by 7 points or more — a sign of inconsistent service, not just one bad day. Click any row to see that coach’s day-by-day ratings.">i</button></h2>
+        <p class="hint" style="margin-bottom:0;">Every coach rated in the selected range &middot; click a row for day-by-day detail</p>
       </div>
       <div class="controls">
+        <span class="active-filter-chip" id="activeFilterChip"><span id="activeFilterText"></span><button id="activeFilterClear" aria-label="Clear this filter">&times;</button></span>
         <input type="text" id="searchBox" placeholder="Search coach or email&hellip;">
         <select id="mgrFilter"><option value="">All managers</option></select>
         <select id="ssmFilter"><option value="">All senior managers</option></select>
@@ -573,6 +611,55 @@ function syncToolbarInputs(){
   document.querySelectorAll('.tb-pill').forEach(b=> b.classList.toggle('active', b.dataset.preset===state.preset));
 }
 
+// ---------- info tooltips (ⓘ buttons throughout the page) ----------
+function initInfoTooltips(){
+  let openPanel = null, openBtn = null;
+  function closeTip(){ if(openPanel){ openPanel.remove(); openPanel=null; openBtn=null; } }
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.info-btn');
+    if(btn){
+      e.stopPropagation();
+      if(openBtn === btn){ closeTip(); return; }
+      closeTip();
+      const panel = document.createElement('div');
+      panel.className = 'info-panel';
+      panel.textContent = btn.dataset.tip;
+      document.body.appendChild(panel);
+      const r = btn.getBoundingClientRect();
+      let left = r.left;
+      const pw = panel.offsetWidth;
+      if(left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+      panel.style.left = Math.max(12,left) + 'px';
+      let top = r.bottom + 6;
+      const ph = panel.offsetHeight;
+      if(top + ph > window.innerHeight - 12) top = r.top - ph - 6;
+      panel.style.top = Math.max(12,top) + 'px';
+      openPanel = panel; openBtn = btn;
+      return;
+    }
+    if(openPanel && !e.target.closest('.info-panel')) closeTip();
+  });
+  window.addEventListener('scroll', closeTip, true);
+  window.addEventListener('resize', closeTip);
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeTip(); });
+}
+
+// ---------- quick filter (click-through from SSM/manager panels) ----------
+function applyQuickFilter(type, value){
+  document.getElementById('mgrFilter').value = type==='manager' ? value : '';
+  document.getElementById('ssmFilter').value = type==='ssm' ? value : '';
+  document.getElementById('searchBox').value = '';
+  state.page = 1;
+  render();
+  document.querySelector('.table-panel').scrollIntoView({behavior:'smooth', block:'start'});
+}
+document.getElementById('activeFilterClear').addEventListener('click', ()=>{
+  document.getElementById('mgrFilter').value = '';
+  document.getElementById('ssmFilter').value = '';
+  state.page = 1;
+  render();
+});
+
 // ---------- header meta ----------
 document.getElementById("genDate").textContent = "Loading…";
 
@@ -707,16 +794,24 @@ function renderTrendChart(rows){
       const lbl = el("text",{x:cx,y:padT+plotTopH+56,class:"tick","text-anchor":"middle"});
       lbl.textContent = fmtDate(d.date); svg.appendChild(lbl);
     }
-    const hit = el("rect",{x:cx-(plotW/dayTrend.length)/2,y:0,width:plotW/dayTrend.length,height:H,fill:"transparent"});
+    const hit = el("rect",{x:cx-(plotW/dayTrend.length)/2,y:0,width:plotW/dayTrend.length,height:H,fill:"transparent",style:"cursor:pointer"});
     hit.addEventListener("mouseenter", ()=>{
       tip.style.opacity=1;
-      tip.innerHTML = `<b>${fmtDateFull(d.date)}</b><br>NPS ${d.nps} &middot; avg ${d.avg.toFixed(2)}<br>${d.total} ratings &middot; ${d.promoters}P / ${d.passives}Pa / ${d.detractors}D`;
+      tip.innerHTML = `<b>${fmtDateFull(d.date)}</b><br>NPS ${d.nps} &middot; avg ${d.avg.toFixed(2)}<br>${d.total} ratings &middot; ${d.promoters}P / ${d.passives}Pa / ${d.detractors}D<br><span style="opacity:.7">Click to zoom into this day</span>`;
     });
     hit.addEventListener("mousemove", (e)=>{
       const r = holder.getBoundingClientRect();
       tip.style.left = (e.clientX-r.left)+"px"; tip.style.top = (e.clientY-r.top)+"px";
     });
     hit.addEventListener("mouseleave", ()=>{ tip.style.opacity=0; });
+    hit.addEventListener("click", ()=>{
+      tip.style.opacity=0;
+      state.from = d.date; state.to = d.date; state.preset = null;
+      document.getElementById('monthSelect').value = '';
+      syncToolbarInputs();
+      state.page = 1;
+      render();
+    });
     svg.appendChild(hit);
   });
 }
@@ -730,6 +825,7 @@ function renderDistChart(rows){
   const total = counts.reduce((a,b)=>a+b,0);
   svg.parentElement.querySelector('.empty-chart')?.remove();
   if(total===0){
+    document.getElementById('distTip').style.opacity = 0;
     const div = document.createElement('div'); div.className='empty-chart'; div.textContent = 'No ratings in this range yet.';
     svg.after(div); return;
   }
@@ -739,6 +835,8 @@ function renderDistChart(rows){
   const bw = plotW/11;
   const svgns="http://www.w3.org/2000/svg";
   function el(tag,attrs){ const e=document.createElementNS(svgns,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+  const distTip = document.getElementById('distTip');
+  const distHolderEl = document.getElementById('distHolder');
 
   [0,0.5,1].forEach(f=>{
     const y = padT + plotH*(1-f);
@@ -750,6 +848,8 @@ function renderDistChart(rows){
     const x = padL + rating*bw + bw*0.15;
     const w = bw*0.7;
     const color = rating>=9?"var(--good)":rating>=7?"var(--warn)":"var(--bad)";
+    const bucket = rating>=9?'promoter':rating>=7?'passive':'detractor';
+    const hitBar = el("rect",{x,y:padT,width:w,height:plotH,fill:"transparent",style:"cursor:default"});
     svg.appendChild(el("rect",{x,y:padT+plotH-h,width:w,height:Math.max(h,c>0?1:0),rx:3,fill:color}));
     const lbl = el("text",{x:x+w/2,y:H-12,class:"tick","text-anchor":"middle"});
     lbl.textContent = rating; svg.appendChild(lbl);
@@ -757,6 +857,16 @@ function renderDistChart(rows){
       const cnt = el("text",{x:x+w/2,y:padT+plotH-h-6,class:"tick","text-anchor":"middle"});
       cnt.textContent = c; cnt.style.fill = "var(--text-2)"; svg.appendChild(cnt);
     }
+    svg.appendChild(hitBar);
+    hitBar.addEventListener("mouseenter", ()=>{
+      distTip.style.opacity = 1;
+      distTip.innerHTML = `<b>Rating ${rating}</b> &middot; ${bucket}<br>${c} rating${c===1?'':'s'} &middot; ${pct(c,total).toFixed(1)}% of total`;
+    });
+    hitBar.addEventListener("mousemove", (e)=>{
+      const r = distHolderEl.getBoundingClientRect();
+      distTip.style.left = (e.clientX-r.left)+"px"; distTip.style.top = (e.clientY-r.top)+"px";
+    });
+    hitBar.addEventListener("mouseleave", ()=>{ distTip.style.opacity = 0; });
   });
 }
 
@@ -767,8 +877,8 @@ function renderSsmPanel(rows){
   rows.forEach(r=> (bySsm[r[6]] = bySsm[r[6]]||[]).push([r[3],r[4]]) );
   const ssms = Object.entries(bySsm).map(([name,items])=>{ const s = npsStats(items); s.ssm=name; return s; }).sort((a,b)=>b.total-a.total);
   if(ssms.length===0){ list.innerHTML = '<p class="hint">No data in this range.</p>'; return; }
-  list.innerHTML = ssms.map(s=>`
-    <div class="ssm-row">
+  list.innerHTML = ssms.map((s,i)=>`
+    <div class="ssm-row" data-idx="${i}" title="Click to filter the coach leaderboard to ${s.ssm}">
       <div>
         <div class="ssm-name" style="${s.ssm==='Unmapped'?'color:var(--unmapped);font-style:italic;font-weight:500;':''}">${s.ssm}</div>
         <div class="ssm-vol">${s.total} response${s.total===1?'':'s'} &middot; avg ${s.avg.toFixed(2)}</div>
@@ -777,6 +887,9 @@ function renderSsmPanel(rows){
       <span class="pill ${npsClass(s.nps)}">${s.nps>0?'+':''}${s.nps}</span>
     </div>
   `).join('');
+  list.querySelectorAll('.ssm-row').forEach(rowEl=>{
+    rowEl.addEventListener('click', ()=> applyQuickFilter('ssm', ssms[Number(rowEl.dataset.idx)].ssm));
+  });
 }
 
 // ---------- manager panel ----------
@@ -786,9 +899,9 @@ function renderMgrPanel(rows){
   rows.forEach(r=> (byMgr[r[5]] = byMgr[r[5]]||[]).push([r[3],r[4]]) );
   const mgrs = Object.entries(byMgr).map(([name,items])=>{ const s = npsStats(items); s.manager=name; return s; }).sort((a,b)=>b.total-a.total);
   if(mgrs.length===0){ body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-3);padding:20px;font-style:italic;">No data in this range.</td></tr>'; return; }
-  body.innerHTML = mgrs.map(m=>{
+  body.innerHTML = mgrs.map((m,i)=>{
     const pos = (m.nps+100)/200*100;
-    return `<tr>
+    return `<tr data-idx="${i}" title="Click to filter the coach leaderboard to ${m.manager}">
       <td class="mgr-name" ${m.manager==='Unmapped'?'style="color:var(--unmapped);font-style:italic;font-weight:500;"':''}>${m.manager}</td>
       <td class="num-right">${m.total}</td>
       <td>
@@ -800,6 +913,9 @@ function renderMgrPanel(rows){
       <td class="num-right">${m.avg.toFixed(2)}</td>
     </tr>`;
   }).join('');
+  body.querySelectorAll('tr').forEach(rowEl=>{
+    rowEl.addEventListener('click', ()=> applyQuickFilter('manager', mgrs[Number(rowEl.dataset.idx)].manager));
+  });
 }
 
 // ---------- coach table ----------
@@ -839,6 +955,12 @@ function renderCoachTable(rows){
   const mgrF = document.getElementById('mgrFilter').value;
   const ssmF = document.getElementById('ssmFilter').value;
 
+  const chip = document.getElementById('activeFilterChip');
+  const chipText = document.getElementById('activeFilterText');
+  if(mgrF){ chip.classList.add('show'); chipText.textContent = 'Manager: ' + mgrF; }
+  else if(ssmF){ chip.classList.add('show'); chipText.textContent = 'Senior manager: ' + ssmF; }
+  else { chip.classList.remove('show'); chipText.textContent = ''; }
+
   let filtered = coaches.filter(c=>{
     if(mgrF && c.manager!==mgrF) return false;
     if(ssmF && c.ssm!==ssmF) return false;
@@ -862,8 +984,13 @@ function renderCoachTable(rows){
   if(pageRows.length===0){
     body.innerHTML = `<tr class="empty-row"><td colspan="9">No coaches match this filter.</td></tr>`;
   } else {
-    body.innerHTML = pageRows.map(c=>`
-      <tr>
+    body.innerHTML = pageRows.map((c,i)=>{
+      const dayItems = rows.filter(r=>r[2]===c.email).sort((a,b)=> a[0]<b[0] ? -1 : a[0]>b[0] ? 1 : 0);
+      const daysHtml = dayItems.length
+        ? `<div class="coach-detail-days">` + dayItems.map(r=>`<div class="coach-detail-day"><b>${fmtDate(r[0])}</b>: rated ${r[3]}${r[4]>1?' &times; '+r[4]:''}</div>`).join('') + `</div>`
+        : `<div class="coach-detail-empty">No individual ratings found for this coach in range.</div>`;
+      return `
+      <tr class="coach-row" data-idx="${i}" title="Click for day-by-day detail">
         <td>
           <div class="coach-name">${c.name}</div>
           <div class="coach-email">${c.email}</div>
@@ -881,7 +1008,19 @@ function renderCoachTable(rows){
           <span style="width:${pct(c.detractors,c.total)}%;background:var(--bad)"></span>
         </div></td>
       </tr>
-    `).join('');
+      <tr class="coach-detail-row" data-detail-idx="${i}" style="display:none;"><td colspan="9">${daysHtml}</td></tr>
+    `;
+    }).join('');
+    body.querySelectorAll('tr.coach-row').forEach(tr=>{
+      tr.addEventListener('click', ()=>{
+        const idx = tr.dataset.idx;
+        const detail = body.querySelector(`tr.coach-detail-row[data-detail-idx="${idx}"]`);
+        if(!detail) return;
+        const opening = detail.style.display === 'none';
+        body.querySelectorAll('tr.coach-detail-row').forEach(d=> d.style.display='none');
+        detail.style.display = opening ? 'table-row' : 'none';
+      });
+    });
   }
   document.getElementById('coachCount').textContent = filtered.length
     ? `Showing ${startIdx+1}–${Math.min(startIdx+pageSize, filtered.length)} of ${filtered.length} coaches`
@@ -939,6 +1078,7 @@ async function loadLiveData(){
   syncToolbarInputs();
   applyPreset('all');
 }
+initInfoTooltips();
 loadLiveData();
 </script>
 
