@@ -164,9 +164,14 @@
     display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
     border-radius:50%; background:var(--border-soft); border:1px solid var(--border);
     color:var(--text-3); font-size:10px; font-weight:800; font-style:italic; font-family:Georgia,serif;
-    cursor:pointer; flex:none; transition:all .12s ease; line-height:1;
+    cursor:pointer; flex:none; transition:all .12s ease; line-height:1; position:relative;
   }
   .info-btn:hover, .info-btn:focus-visible{ background:var(--navyBg); color:var(--navy); border-color:var(--blue); outline:none; }
+  /* Invisible expanded hit area on touch screens -- the 15px visual dot stays the same size,
+     but the tappable region grows to roughly 45x45px, closer to Apple/Google's touch-target guidance. */
+  @media (max-width:768px), (pointer:coarse){
+    .info-btn::after{ content:''; position:absolute; top:-15px; left:-15px; right:-15px; bottom:-15px; }
+  }
   .info-panel{
     position:fixed; background:var(--text-1); color:var(--bg); font-size:12.5px; line-height:1.55;
     padding:11px 13px; border-radius:10px; box-shadow:var(--shadow); max-width:280px; z-index:60; font-weight:500;
@@ -185,6 +190,10 @@
   .active-filter-chip button{
     width:18px; height:18px; border-radius:50%; border:none; background:rgba(255,255,255,.6); color:var(--navy);
     cursor:pointer; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; padding:0;
+    position:relative;
+  }
+  @media (max-width:768px), (pointer:coarse){
+    .active-filter-chip button::after{ content:''; position:absolute; top:-13px; left:-13px; right:-13px; bottom:-13px; }
   }
   table.coach-table tbody tr.coach-row{cursor:pointer;}
   tr.coach-detail-row td{ background:var(--surface-2); padding:14px 16px; border-bottom:1px solid var(--border-soft); }
