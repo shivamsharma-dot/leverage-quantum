@@ -4953,32 +4953,6 @@ async function handleSuperTracker(req, res, me) {
 }
 
 export default async function handler(req, res) {
-  // TEMPORARY diagnostic (2026-09-18) -- one-off check of a new Google Sheet
-  // the user shared with the Sheets service account, to see whether it can
-  // back the MTD Scorecard's Total QL / SR-AC split. Gated by a throwaway
-  // header (not any real secret) since this is called once via curl, never
-  // through the app itself. REMOVE right after use.
-  if ((req.query && req.query.mode) === 'tmp_sheet_probe_20260918' && req.headers['x-tmp-diag'] === 'ql-sheet-check-9f21') {
-    try {
-      const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
-      const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
-      if (!clientEmail || !privateKey) return res.status(200).json({ error: 'GOOGLE_SHEETS_CLIENT_EMAIL/PRIVATE_KEY not set' })
-      const { JWT } = await import('google-auth-library')
-      const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
-      const { access_token } = await auth.authorize()
-      const sheetId = '1h9VWj9laZKnhyg0eNUZi-wu7Ju59DunFrSaD9hx0Yfs'
-      const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title,sheets.properties`, { headers: { Authorization: `Bearer ${access_token}` } })
-      const meta = await metaRes.json()
-      if (!metaRes.ok) return res.status(200).json({ metaOk: false, status: metaRes.status, meta })
-      const tabs = (meta.sheets || []).map(s => s.properties.title)
-      const firstTab = tabs[0] || 'Sheet1'
-      const valsRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(firstTab)}!A1:Z25`, { headers: { Authorization: `Bearer ${access_token}` } })
-      const vals = await valsRes.json()
-      return res.status(200).json({ metaOk: true, title: meta.properties?.title, tabs, valsOk: valsRes.ok, status: valsRes.status, values: vals.values || vals })
-    } catch (e) {
-      return res.status(200).json({ error: String(e?.message || e) })
-    }
-  }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
   // Deliberately checked BEFORE getSessionUser: an automation with no human
