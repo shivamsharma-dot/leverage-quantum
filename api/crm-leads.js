@@ -2710,10 +2710,17 @@ async function handleNpsDashboard(req, res) {
       const d = await r.json()
       return res.status(r.ok ? 200 : r.status).json(d)
     }
+    if (req.query && req.query.debug === 'headers') {
+      const [t, e] = await Promise.all([
+        fetchNpsSheetValues(access_token, "'TeamMapping'!A1:L2"),
+        fetchNpsSheetValues(access_token, "'Extract'!A1:F2"),
+      ])
+      return res.status(200).json({ teamMapping: t, extract: e })
+    }
 
     const [teamRows, extractRows] = await Promise.all([
-      fetchNpsSheetValues(access_token, "'team mapping'!A2:L5000"),
-      fetchNpsSheetValues(access_token, "'extract'!A2:F20000"),
+      fetchNpsSheetValues(access_token, "'TeamMapping'!A2:L5000"),
+      fetchNpsSheetValues(access_token, "'Extract'!A2:F20000"),
     ])
 
     const clean = v => (!v || v === '#N/A') ? null : String(v).trim()
