@@ -2703,21 +2703,6 @@ async function handleNpsDashboard(req, res) {
     const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
     const { access_token } = await auth.authorize()
 
-    if (req.query && req.query.debug === 'tabs') {
-      const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + NPS_SHEET_ID + '?fields=sheets.properties', {
-        headers: { Authorization: 'Bearer ' + access_token },
-      })
-      const d = await r.json()
-      return res.status(r.ok ? 200 : r.status).json(d)
-    }
-    if (req.query && req.query.debug === 'headers') {
-      const [t, e] = await Promise.all([
-        fetchNpsSheetValues(access_token, "'TeamMapping'!A1:L2"),
-        fetchNpsSheetValues(access_token, "'Extract'!A1:F2"),
-      ])
-      return res.status(200).json({ teamMapping: t, extract: e })
-    }
-
     const [teamRows, extractRows] = await Promise.all([
       fetchNpsSheetValues(access_token, "'TeamMapping'!A2:L5000"),
       fetchNpsSheetValues(access_token, "'Extract'!A2:F20000"),
