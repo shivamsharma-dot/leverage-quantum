@@ -5020,17 +5020,6 @@ async function handleSuperTracker(req, res, me) {
 }
 
 export default async function handler(req, res) {
-  // TEMPORARY diagnostic (2026-09-18, round 2) -- verifying the just-shipped
-  // fetchQlSplitSheetTotals against the real MTD window. REMOVE right after use.
-  if ((req.query && req.query.mode) === 'tmp_ql_split_verify' && req.headers['x-tmp-diag'] === 'ql-split-verify-4a7c') {
-    try {
-      const { since, until } = req.query
-      const out = await fetchQlSplitSheetTotals(since, until)
-      return res.status(200).json(out)
-    } catch (e) {
-      return res.status(200).json({ error: String(e?.message || e) })
-    }
-  }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
   // Deliberately checked BEFORE getSessionUser: an automation with no human
