@@ -2514,6 +2514,49 @@ async function syncTeamMappingSheet(sheetId, creds) {
   return { rows: rows.length }
 }
 
+// MTD Scorecard Slack report only -- see the 'ql_split_totals' dispatch
+// comment for full context. Reads the "QL Split" sheet's plain long table
+// (Day / Provider / Vertical / Count, no header assumptions beyond column
+// ORDER since the real header text is just human-readable labels) and sums
+// Count by Vertical across BOTH providers (Futwork = Human, Futwork AI) for
+// the given [since, until] window (both inclusive, 'YYYY-MM-DD'). Day comes
+// back as Sheets' own locale date text (e.g. "9/1/2026" = 1 Sep 2026, not 9
+// Jan) -- parsed as M/D/YYYY, matching the real sample checked live before
+// building this.
+const QL_SPLIT_SHEET_ID = '1h9VWj9laZKnhyg0eNUZi-wu7Ju59DunFrSaD9hx0Yfs'
+async function fetchQlSplitSheetTotals(since, until) {
+  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+  const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  if (!clientEmail || !privateKey) throw new Error('GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY are not set')
+  const { JWT } = await import('google-auth-library')
+  const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
+  const { access_token } = await auth.authorize()
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${QL_SPLIT_SHEET_ID}/values/Sheet1!A2:D20000`, {
+    headers: { Authorization: `Bearer ${access_token}` },
+  })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error('QL Split sheet read failed (' + r.status + '): ' + (d.error?.message || 'unknown'))
+  const sinceDate = new Date(since + 'T00:00:00')
+  const untilDate = new Date(until + 'T00:00:00')
+  let srQl = 0, acQl = 0, rowsInWindow = 0
+  for (const row of d.values || []) {
+    const [dayStr, , vertical, countStr] = row
+    if (!dayStr) continue
+    const parts = String(dayStr).split('/')
+    if (parts.length !== 3) continue
+    const [m, day, y] = parts.map(Number)
+    if (!m || !day || !y) continue
+    const dt = new Date(y, m - 1, day)
+    if (dt < sinceDate || dt > untilDate) continue
+    const n = Number(countStr) || 0
+    if (vertical === 'SR') srQl += n
+    else if (vertical === 'AC') acQl += n
+    else continue
+    rowsInWindow++
+  }
+  return { srQl, acQl, totalQL: srQl + acQl, rowsInWindow }
+}
+
 // The one function every save/delete/restore/finished-import routes through.
 // Best-effort and independent per connector -- one connector failing (a dead
 // webhook URL, the bot not yet invited to the Slack channel) never blocks or
@@ -3705,7 +3748,7 @@ function overallBqCacheSet(key, data) {
 async function handleBigQuery(req, res, me) {
   const auth = await import('../lib/auth.mjs')
   const mode = (req.query && req.query.mode) || 'ping'
-  const gateId = mode === 'careers_leads' ? 'leverage_careers' : 'settings'
+  const gateId = mode === 'careers_leads' ? 'leverage_careers' : mode === 'ql_split_totals' ? 'overall' : 'settings'
   if (!auth.canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -3779,6 +3822,30 @@ async function handleBigQuery(req, res, me) {
   // whatever was last fetched for a given (mode, since, until, sources) combination.
   // The underlying table only actually changes 2-3x/day (overall-bq-sync.yml), so a
   // 5-minute-old cached answer is never meaningfully stale.
+  // MTD Scorecard Slack report only (pmReportV8/V9's "Marketing Efficiency"/
+  // "Sales Efficiency" messages) -- the OVERALL row's Total QL/SR/AC now comes
+  // from a dedicated "QL Split" Google Sheet (2026-09-18, asked for directly)
+  // instead of BigQuery + Monthly QLs' ratio-derived split. Deliberately
+  // scoped to ONLY this one report: no other page, KPI card, or dashboard
+  // reads this. The sheet is a plain long table -- Day / Provider (Futwork,
+  // Futwork AI) / Vertical (SR, AC) / Count -- with NO source/channel
+  // dimension and NO Superbot rows, confirmed live via a one-off probe before
+  // building this (see git history 2026-09-18). That's exactly why this only
+  // covers the "Overall" figures used by both messages: Paid/Organic/Referral
+  // (message 1 only) have nothing in this sheet to bucket by, and Superbot is
+  // deliberately excluded from Total QL here per direct confirmation, unlike
+  // every other "Total QLs" figure elsewhere in this app.
+  if (mode === 'ql_split_totals') {
+    const { since, until } = req.query || {}
+    if (!isIsoDate(since) || !isIsoDate(until)) {
+      return res.status(400).json({ error: 'since and until are required as YYYY-MM-DD' })
+    }
+    try {
+      return res.status(200).json(await fetchQlSplitSheetTotals(since, until))
+    } catch (err) {
+      return res.status(502).json({ error: String((err && err.message) || err) })
+    }
+  }
   const OVERALL_BQ_READ_MODES = ['overall_bq_rows', 'overall_bq_agg_rows', 'overall_bq_bounds', 'overall_bq_synced_at']
   if (OVERALL_BQ_READ_MODES.includes(mode)) {
     const { supabaseAdmin } = await import('../lib/auth.mjs')

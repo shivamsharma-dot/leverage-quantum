@@ -3344,7 +3344,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       fetchAppsCountSince(monthStart, until).catch(() => null),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
-    ]).then(([raw, appsCount, qlSplitRaw, prefsResp]) => {
+      fetch(`/api/crm-leads?source=bigquery&mode=ql_split_totals&since=${monthStart}&until=${until}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([raw, appsCount, qlSplitRaw, prefsResp, qlSplitSheet]) => {
       if (dead) return
       // Real bug found live (2026-09-10): this report's Spend was short by exactly
       // Affiliate's manual monthly entry (affiliate_spend_manual) -- Affiliate's real
@@ -3416,6 +3417,26 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral')
         applySplit(referralRow, r => r.source === 'Referral')
         superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
+      }
+
+      // OVERALL row's Total QL/SR/AC -- and therefore message 2 too, which reads
+      // this exact object -- now comes from a dedicated "QL Split" Google Sheet
+      // instead of the ratio-derived split above (2026-09-18, asked for
+      // directly: "you have to fetch total ql and sr ac split from a separate
+      // sheet"). Scoped to ONLY this report, per explicit instruction ("dont
+      // touch anything on any page, no logic change anywhere, just in this
+      // report") -- Paid/Organic/Referral rows above are UNTOUCHED (that sheet
+      // has no source/channel dimension to bucket by), and every other Total
+      // QLs figure app-wide is unaffected. This sheet also has no Superbot
+      // rows -- Total QL here is deliberately Futwork (Human) + Futwork AI
+      // only (confirmed directly: "Exclude Superbot, use sheet as-is"), unlike
+      // the broader Total QLs definition used everywhere else in this app. If
+      // the sheet fetch fails, this silently falls back to the ratio-derived
+      // numbers just computed above rather than showing a broken report.
+      if (qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL)) {
+        overallRow.totalQL = qlSplitSheet.totalQL
+        overallRow.srQl = qlSplitSheet.srQl
+        overallRow.acQl = qlSplitSheet.acQl
       }
 
       // acSales/qlSalePct are deliberately NOT set here -- they're derived reactively

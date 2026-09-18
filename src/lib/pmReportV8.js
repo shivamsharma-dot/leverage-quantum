@@ -52,11 +52,18 @@
 // (nothing is discarded) -- only the DISPLAY is blanked for these two rows.
 //
 // SR/AC QL split: Overall's own data has no vertical dimension on QL itself (only
-// Applications carry a Vertical), so this comes from Monthly QLs' own, independently
-// synced BigQuery pipeline (2026-09-10 feedback: "QL split can be taken from Monthly
-// QLs page"). Superbot QL isn't split by vertical in that pipeline -- if it's
-// non-zero for the period, it's disclosed as its own line rather than silently
-// folded into either SR or AC.
+// Applications carry a Vertical). The OVERALL row's own Total QL/SR/AC (used by
+// both this table's Overall row AND message 2, which reads the same object) now
+// comes from a dedicated "QL Split" Google Sheet (2026-09-18, asked for directly)
+// -- a plain long table of Day/Provider(Futwork, Futwork AI)/Vertical(SR, AC)/
+// Count, fetched server-side via the Sheets service account (OverallDashboard.jsx's
+// mtdScorecard effect, mode=ql_split_totals on api/crm-leads.js). That sheet has
+// no source/channel dimension, so Paid/Organic/Referral rows below keep the OLDER
+// method: Monthly QLs' own, independently synced BigQuery pipeline gives the
+// SR:AC RATIO, applied to each bucket's own Futwork QL total. Superbot QL is
+// reported as its own line (still from Monthly QLs) -- excluded from the new
+// sheet-derived Overall Total QL entirely (confirmed directly), unlike the
+// broader "Total QLs" definition used everywhere else in this app.
 
 const DASH = '—'
 const pctText = n => (n == null ? DASH : n.toFixed(1) + '%')
