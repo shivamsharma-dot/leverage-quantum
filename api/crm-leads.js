@@ -2665,6 +2665,88 @@ async function testTeamConnector(which, me, creds) {
   return Array.isArray(saved) ? saved[0] : saved
 }
 
+// Public, unauthenticated, no secret gate -- deliberately, same reasoning as
+// team_export_pull below: this powers the standalone "Coach NPS Pulse" page
+// (public/coach-nps-pulse.html), served with no Quantum login so stakeholders
+// without a company account can view it. The page calls this on every load
+// instead of embedding a static, once-a-day-rebuilt dataset -- so there is no
+// scheduled rebuild/redeploy for this feature at all; it's just always current.
+// Only ever returns coach names + ratings + manager/SSM names -- no student
+// PII, no financial data -- so an open read endpoint is an acceptable trade.
+const NPS_SHEET_ID = '1mxT4nfulrsJQaCRwuIdhU5ERHuguiYZZ4Auy9wtn-Sc'
+const NPS_MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 }
+function parseNpsSheetDate(s) {
+  const m = String(s || '').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/)
+  if (!m) return null
+  const day = parseInt(m[1], 10)
+  const mon = NPS_MONTHS[m[2]]
+  const year = parseInt(m[3], 10)
+  if (mon === undefined || !day || !year) return null
+  return year + '-' + String(mon + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0')
+}
+async function fetchNpsSheetValues(accessToken, range) {
+  const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + NPS_SHEET_ID + '/values/' + encodeURIComponent(range), {
+    headers: { Authorization: 'Bearer ' + accessToken },
+  })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error('NPS sheet read failed (' + r.status + '): ' + (d.error && d.error.message || 'unknown'))
+  return d.values || []
+}
+async function handleNpsDashboard(req, res) {
+  try {
+    const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+    const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+    if (!clientEmail || !privateKey) {
+      return res.status(500).json({ error: 'GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY are not set' })
+    }
+    const { JWT } = await import('google-auth-library')
+    const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
+    const { access_token } = await auth.authorize()
+
+    if (req.query && req.query.debug === 'tabs') {
+      const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + NPS_SHEET_ID + '?fields=sheets.properties', {
+        headers: { Authorization: 'Bearer ' + access_token },
+      })
+      const d = await r.json()
+      return res.status(r.ok ? 200 : r.status).json(d)
+    }
+
+    const [teamRows, extractRows] = await Promise.all([
+      fetchNpsSheetValues(access_token, "'team mapping'!A2:L5000"),
+      fetchNpsSheetValues(access_token, "'extract'!A2:F20000"),
+    ])
+
+    const clean = v => (!v || v === '#N/A') ? null : String(v).trim()
+    const team = {}
+    for (const row of teamRows) {
+      const email = (row[1] || '').trim().toLowerCase()
+      if (!email) continue
+      team[email] = {
+        manager: clean(row[5]) || clean(row[4]) || 'Unmapped',
+        ssm: clean(row[7]) || 'Unmapped',
+      }
+    }
+
+    const rows = []
+    for (const row of extractRows) {
+      const dateStr = row[1], name = row[2], emailRaw = row[3], ratingStr = row[4], countStr = row[5]
+      const email = (emailRaw || '').trim().toLowerCase()
+      const iso = parseNpsSheetDate(dateStr)
+      if (!email || !iso) continue
+      const rating = parseInt(ratingStr, 10)
+      if (isNaN(rating)) continue
+      const count = parseInt(countStr, 10) || 0
+      const t = team[email] || {}
+      rows.push([iso, (name || '').trim(), email, rating, count, t.manager || 'Unmapped', t.ssm || 'Unmapped'])
+    }
+
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900')
+    return res.status(200).json({ generated_at: new Date().toISOString().slice(0, 10), rows })
+  } catch (e) {
+    return res.status(500).json({ error: String(e && e.message || e) })
+  }
+}
+
 // The pull-based connector -- an external script/tool hits this with its own
 // api_key on its own schedule, no Quantum session cookie at all. Handled
 // separately, before this file's normal getSessionUser gate (see the bottom
@@ -5026,6 +5108,11 @@ export default async function handler(req, res) {
   // logged in has no session cookie to send, and never will.
   if ((req.query && req.query.source) === 'leadsquared' && (req.query && req.query.mode) === 'team_export_pull') {
     return handleTeamExportPull(req, res)
+  }
+  // Same reasoning as team_export_pull above: powers the public, no-login
+  // "Coach NPS Pulse" static page -- see handleNpsDashboard's own comment.
+  if ((req.query && req.query.source) === 'nps_dashboard') {
+    return handleNpsDashboard(req, res)
   }
   // Same reasoning as team_export_pull above: the GitHub Actions cron that
   // refreshes the Leverage Careers BigQuery cache has no human session to send
