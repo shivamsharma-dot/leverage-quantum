@@ -1902,15 +1902,23 @@ async function verifyCeoPin(pin, byEmail) {
   return { ok: false, code: 'wrong', failsLeft: Math.max(0, PIN_MAX_FAILS - body.fails), message: 'That PIN is not right.' }
 }
 
-// Admin-only. Reports status and sets/changes the PIN. Never returns the hash,
-// the salt, the pepper, or anything derived from the PIN.
+// Reports status (any signed-in user) and sets/changes the PIN (admin only).
+// 'status' never returns the hash, the salt, the pepper, or anything derived
+// from the PIN -- only whether one is set/locked -- so it's safe for anyone
+// signed in to read: using a guarded channel is gated on the PIN itself
+// (see handleSlackReport's guarded branch) plus the confirmation phrase, not
+// on role, per direct instruction (2026-09-18): "every one can send slack
+// report even with viewer access but they should know the pin obviously."
+// CHANGING the PIN stays admin-only below -- deciding who's trusted with it
+// going forward is a different, more sensitive act than using one someone
+// already handed you.
 async function handleCeoPin(req, res) {
   const { getSessionUser } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
-  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
   const crypto = await import('node:crypto')
   const action = String((req.body && req.body.action) || 'status')
+  if (action !== 'status' && me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
 
   if (action === 'status') {
     const rec = await pinRecordRead(crypto)
@@ -2581,19 +2589,20 @@ async function handleSlackReport(req, res) {
   if (list.length > 6) return res.status(400).json({ error: 'A report is capped at 6 messages' })
 
   // A guarded channel is one the CEO is in, and it is the only kind that is gated.
-  // have to be true, all checked here on the server: the caller is an admin, the
-  // caller sent the exact confirmation phrase, and the PIN verifies. Nothing
-  // touches Slack until all three pass.
+  // Two things have to be true, checked here on the server: the caller sent the
+  // exact confirmation phrase, and the PIN verifies. Nothing touches Slack until
+  // both pass. Deliberately NOT admin-gated (removed 2026-09-18, direct
+  // instruction: "every one can send slack report even with viewer access but
+  // they should know the pin obviously") -- anyone with page access to this
+  // report who knows the phrase and the PIN can send, same as before for an
+  // admin; only SETTING/changing the PIN (handleCeoPin's 'set' action) stays
+  // admin-only, since that's what actually controls who can be trusted with it.
   const guardFam = normaliseTarget(slackTarget).family
   // Guarded means the CEO is in that channel. Which ones those are lives in
   // shared/slackChannels.mjs, so a new channel can never quietly arrive unlocked.
   const guardSpec = SLACK_TARGETS[guardFam] || null
   const wantsCeo = !!(guardSpec && guardSpec.guarded)
   if (wantsCeo) {
-    if (me.role !== 'admin') {
-      await logReport({ report_type: 'ceo report blocked', recipients: [me.email], status: 'failed', error: 'not an admin', triggered_by: me.email })
-      return res.status(403).json({ error: 'Only an admin can post to ' + channelHandle(guardFam) + '.' })
-    }
     if (!phraseMatches(guardFam, confirm)) {
       return res.status(400).json({ error: 'Type ' + confirmPhrase(guardFam) + ' to confirm this send.', code: 'need_confirm' })
     }

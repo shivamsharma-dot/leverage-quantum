@@ -544,7 +544,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               <span style={{ color: pickErr ? '#B42318' : (DEST(target).guarded ? C.navy : C.muted), fontWeight: (pickErr || DEST(target).guarded) ? 700 : 500 }}>
                 {pickErr ? 'Pick a channel above before sending.' : DEST(target).reads}
               </span>
-              {DEST(target).guarded && <span style={{ color:C.sub, fontWeight:600 }}>Admin, phrase and PIN.</span>}
+              {DEST(target).guarded && <span style={{ color:C.sub, fontWeight:600 }}>Phrase and PIN.</span>}
             </div>
           </div>
 
@@ -557,7 +557,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               </div>
               <div style={{ fontSize:10.5, color:C.sub, lineHeight:1.55 }}>
                 {!pinInfo ? 'Checking the PIN\u2026'
-                  : pinInfo.denied ? 'Only an admin can post to ' + channelHandle(target) + '.'
+                  : pinInfo.denied ? 'Could not check the PIN status. Try again.'
                   : pinInfo.invalid ? 'The PIN record does not verify. An admin has to set the PIN again in Settings \u203A Reports.'
                   : !pinInfo.set ? 'No PIN is set yet. An admin has to set one in Settings \u203A Reports first.'
                   : pinInfo.locked ? 'Locked after too many wrong PINs. Try again in ' + Math.ceil((pinInfo.lockedForSec || 0) / 60) + ' min.'
