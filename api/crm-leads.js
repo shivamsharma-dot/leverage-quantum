@@ -3967,7 +3967,16 @@ async function handleBigQuery(req, res, me) {
           'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
         ]
         const select = columns.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
-        const PAGE = 1000
+        // Was 1000 -- PostgREST's own hard per-request cap, previously fixed at 1000
+        // regardless of what a caller asked for. The Supabase project's Data API "Max
+        // rows" setting was raised to 10,000 (2026-09-19, directly to cut this page's
+        // real round-trip count -- a normal MTD view's ~50,000 rows needed ~50 pages at
+        // 1,000/page; at 10,000/page it's ~5), so this can now actually ask for more per
+        // request and get it. Kept well under the new 10,000 ceiling itself so a single
+        // page's own transfer/serialize time doesn't become the new bottleneck in its
+        // place -- 5,000 is a real, moderate step up, not "ask for the max just because
+        // the cap allows it."
+        const PAGE = 5000
         // A wide range against overall_bq_daily (raw, one row per campaign -- unlike
         // the small agg table) can need far more pages than this function's own 60s
         // ceiling (export const maxDuration below) allows -- confirmed live 2026-09-08:

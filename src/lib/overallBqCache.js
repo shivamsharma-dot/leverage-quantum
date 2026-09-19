@@ -97,7 +97,13 @@ const AGG_COLUMNS = [
   'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
 ]
 const inList = vals => '(' + vals.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
-const PAGE = 1000
+// Was 1000 -- matches the server-side PAGE bump in api/crm-leads.js (2026-09-19),
+// now that the Supabase project's Data API "Max rows" setting has been raised to
+// 10,000. This path is only ever used to finish the TAIL of a chunk the server
+// itself couldn't complete in time -- keeping it in step with the server's own
+// page size means a fallback read costs the same number of round trips per row
+// as the primary path, not a regression back to the old 10x-more-requests rate.
+const PAGE = 5000
 
 async function fetchTailDirect({ table, columns, since, until, sources, cursor, signal }) {
   const select = columns.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
