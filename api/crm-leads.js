@@ -933,7 +933,16 @@ async function fetchNotAttemptedOpportunities(creds, { since, until }) {
     AdvancedSearch: advancedSearch,
     Paging: { PageIndex: pageIndex, PageSize: pageSize },
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-    Columns: { Include_CSV: 'OpportunityId,Owner,CreatedOn,Status,mx_Custom_100,mx_Custom_58,RelatedProspectId' },
+    // Confirmed live 2026-09-19: explicitly naming 'OpportunityId' in Include_CSV makes
+    // this endpoint return OpportunityId:null for every row. OpportunityId belongs to a
+    // small fixed set of system fields (OpportunityEventType, RelatedProspectId,
+    // OpportunityEvent, CreatedOn, ModifiedOn, OpportunityId) that come back automatically
+    // whenever Include_CSV is used at all -- UNLESS one of them is ALSO explicitly
+    // re-named in the CSV, which nulls that one specific field out. So Include_CSV here
+    // deliberately lists only the fields that aren't already free (Owner, Status, and the
+    // two custom disposition fields) -- OpportunityId/CreatedOn/RelatedProspectId are read
+    // below without ever being named in this list.
+    Columns: { Include_CSV: 'Owner,Status,mx_Custom_100,mx_Custom_58' },
   }).then(data => (Array.isArray(data && data.List) ? data.List : []))
   const [{ rows: raw, truncated }, ownerMap, groupsMap] = await Promise.all([
     fetchAllPages(fetchPage, NOT_ATTEMPTED_MAX_PAGES),
@@ -3220,17 +3229,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null }))
-    if (mode === 'not_attempted_debug_raw') {
-      const search = buildNotAttemptedOpportunitySearch()
-      const raw = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
-        OpportunityEventCode: 12003,
-        AdvancedSearch: search,
-        Paging: { PageIndex: 1, PageSize: 2 },
-        Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-        Columns: { Include_CSV: 'Owner,Status,mx_Custom_100,mx_Custom_58' },
-      })
-      return res.status(200).json({ recordCount: raw && raw.RecordCount, sample: raw && raw.List })
-    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
