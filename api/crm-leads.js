@@ -3227,8 +3227,7 @@ async function handleLeadSquared(req, res, me) {
         AdvancedSearch: search,
         Paging: { PageIndex: 1, PageSize: 2 },
         Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-        // No Columns/Include_CSV at all this time -- full default field set, to find
-        // whatever the real Opportunity-id-bearing field is actually called here.
+        Columns: { Include_CSV: 'mx_Custom_100,mx_Custom_58' },
       })
       return res.status(200).json({ recordCount: raw && raw.RecordCount, sample: raw && raw.List })
     }
