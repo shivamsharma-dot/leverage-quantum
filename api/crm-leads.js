@@ -4041,16 +4041,21 @@ async function handleBigQuery(req, res, me) {
         const chunks = splitIntoMonthChunks(since, until)
         const CONCURRENCY = 3
         const chunkResults = []
+        const chunkTimings = [] // TEMPORARY (2026-09-19) -- remove alongside the tmp_bq_speed diagnostic
         let nextChunkIdx = 0
         async function worker() {
           while (nextChunkIdx < chunks.length) {
             const my = chunks[nextChunkIdx++]
-            chunkResults.push(await fetchOneChunk(my.since, my.until))
+            const t0 = Date.now() - startedAt
+            const result = await fetchOneChunk(my.since, my.until)
+            chunkTimings.push({ since: my.since, until: my.until, startMs: t0, endMs: Date.now() - startedAt, rows: result.rows.length })
+            chunkResults.push(result)
           }
         }
         await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker))
         const rows = chunkResults.flatMap(c => c.rows)
         const remainingRanges = chunkResults.filter(c => c.truncated).map(c => ({ since: c.since, until: c.until, cursor: c.cursor }))
+        if (req.query.debugChunkTiming === '1') return res.status(200).json({ rows, truncated: remainingRanges.length > 0, remainingRanges, fromCache: false, chunkTimings })
         // A truncated result is never cached and never labeled fromCache -- it is
         // incomplete by construction, so it must never be handed to a later caller as
         // if it were the whole answer. remainingRanges names exactly which chunk(s)
@@ -5152,11 +5157,11 @@ export default async function handler(req, res) {
     const origStatus = res.status.bind(res)
     let statusCode = 200
     res.status = (c) => { statusCode = c; return { json: res.json } }
-    req.query = Object.assign({}, req.query, { source: 'bigquery', mode: 'overall_bq_rows' })
+    req.query = Object.assign({}, req.query, { source: 'bigquery', mode: 'overall_bq_rows', debugChunkTiming: '1' })
     await handleBigQuery(req, res, { role: 'admin', email: 'temp-diag' })
     const ms = Date.now() - t0
     const body = chunks[chunks.length - 1] || {}
-    return origJson({ ms, statusCode, rowCount: Array.isArray(body.rows) ? body.rows.length : null, truncated: !!body.truncated, error: body.error || null })
+    return origJson({ ms, statusCode, rowCount: Array.isArray(body.rows) ? body.rows.length : null, truncated: !!body.truncated, error: body.error || null, chunkTimings: body.chunkTimings || null })
   }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
