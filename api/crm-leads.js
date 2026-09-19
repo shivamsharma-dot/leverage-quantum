@@ -5101,9 +5101,9 @@ export default async function handler(req, res) {
   if ((req.query && req.query.mode) === 'tmp_prefs_probe_20260919' && req.headers['x-tmp-diag'] === 'prefs-check-7b3e') {
     try {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
-      const r = await supabaseAdmin('app_preferences?select=key&order=key.asc')
+      const r = await supabaseAdmin("app_preferences?select=key,value&key=in.(custom_data_sources,sheet_url_b2c)")
       const rows = r.ok ? await r.json() : null
-      return res.status(200).json({ ok: r.ok, status: r.status, count: Array.isArray(rows) ? rows.length : null, keys: Array.isArray(rows) ? rows.map(x => x.key) : null })
+      return res.status(200).json({ ok: r.ok, status: r.status, rows })
     } catch (e) {
       return res.status(200).json({ error: String(e?.message || e) })
     }
