@@ -153,9 +153,10 @@ export default function NotAttemptedDashboard() {
   const rangeLabel = range.since === range.until ? range.since : `${range.since} → ${range.until}`
 
   return (
-    <div className="lq-page-shell" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)', fontFamily: FONT }}>
+    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)', fontFamily: FONT }}>
       <Sidebar />
-      <div style={{ flex: 1, minWidth: 0, padding: '28px 0 40px' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flexShrink: 0, padding: '28px 0 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '0 28px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>Not Attempted</div>
@@ -246,7 +247,9 @@ export default function NotAttemptedDashboard() {
             More opportunities exist than this page could fetch in full ({fmtN(data.totalFetched)} fetched) — numbers below reflect only what was retrieved, surfaced honestly rather than silently capped.
           </div>
         )}
+        </div>
 
+        <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading && !data ? (
           <div style={{ padding: '0 28px', marginTop: 20 }}><DashboardSkeleton /></div>
         ) : (
@@ -297,6 +300,7 @@ export default function NotAttemptedDashboard() {
             </div>
           </div>
         )}
+        </div>
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
