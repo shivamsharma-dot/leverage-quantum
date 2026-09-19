@@ -3225,9 +3225,10 @@ async function handleLeadSquared(req, res, me) {
       const raw = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
         OpportunityEventCode: 12003,
         AdvancedSearch: search,
-        Paging: { PageIndex: 1, PageSize: 3 },
+        Paging: { PageIndex: 1, PageSize: 2 },
         Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-        Columns: { Include_CSV: 'OpportunityId,Owner,CreatedOn,Status,mx_Custom_100,mx_Custom_58,RelatedProspectId' },
+        // No Columns/Include_CSV at all this time -- full default field set, to find
+        // whatever the real Opportunity-id-bearing field is actually called here.
       })
       return res.status(200).json({ recordCount: raw && raw.RecordCount, sample: raw && raw.List })
     }
