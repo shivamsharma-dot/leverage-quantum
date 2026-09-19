@@ -5307,7 +5307,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               </div>
               {sortedFilteredRows.length > 0 && (
                 <div style={{ fontSize:12.5, color:C.muted, textAlign:'center', marginTop:10 }}>
-                  {rowLimit === 'all'
+                  {rowLimit === 'all' || summaryTotalPages <= 1
                     ? `Showing all ${sortedFilteredRows.length.toLocaleString('en-IN')} rows`
                     : `Showing ${(summarySafePage * rowLimit + 1).toLocaleString('en-IN')}–${Math.min((summarySafePage + 1) * rowLimit, sortedFilteredRows.length).toLocaleString('en-IN')} of ${sortedFilteredRows.length.toLocaleString('en-IN')} — use the page arrows above to see more`}
                 </div>
