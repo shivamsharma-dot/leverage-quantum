@@ -27,6 +27,7 @@ export const COMPONENT_IMPORTS = {
   LeadsAssignedDashboard: () => import('../pages/LeadsAssignedDashboard'),
   LeadSquaredDashboard: () => import('../pages/LeadSquaredDashboard'),
   LiveQLsDashboard: () => import('../pages/LiveQLsDashboard'),
+  NotAttemptedDashboard: () => import('../pages/NotAttemptedDashboard'),
   TeamMappingDashboard: () => import('../pages/TeamMappingDashboard'),
   SuperTrackerDashboard: () => import('../pages/SuperTrackerDashboard'),
   AskAI: () => import('../pages/AskAI'),

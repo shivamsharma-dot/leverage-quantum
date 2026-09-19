@@ -142,6 +142,7 @@ export const NAV = [
         ]
       },
       { to: '/dashboard/live-qls', icon: <LiveQLsIcon />, label: 'Live QLs', end: false },
+      { to: '/dashboard/not-attempted', icon: <NotAttemptedIcon />, label: 'Not Attempted', end: false },
       { to: '/dashboard/team-mapping', icon: <TeamMappingIcon />, label: 'Team Mapping', end: false },
       { to: '/dashboard/super-tracker', icon: <SuperTrackerIcon />, label: 'Super Tracker', end: false },
     ]
@@ -226,6 +227,19 @@ function LiveQLsIcon() {
     </svg>
   )
 }
+// A clock with an exclamation mark -- distinct from LiveQLsIcon's plain pulsing
+// dot, since this page is specifically about leads still WAITING on a first
+// attempt, not the live-QL count itself.
+function NotAttemptedIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="13" r="7.2" opacity="0.55" />
+      <path d="M11 9v4l2.6 1.6" />
+      <line x1="16.6" y1="4.6" x2="19.6" y2="7.6" opacity="0.55" />
+      <circle cx="19.5" cy="6.5" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
 // Org-chart glyph (three people, one linked above the other two) -- distinct
 // from LeadSquaredIcon's brand mark since this page is Quantum's own manual
 // mapping layer, not another LeadSquared-native view.
@@ -269,7 +283,7 @@ const ICON_MAP = {
   'Conversions': <CheckCircleIcon/>, 'Devices': <DeviceIcon/>, 'Locations': <PinIcon/>,
   'Audiences': <PeopleIcon/>, 'Schedule': <ClockIcon/>, 'Assets': <FolderIcon/>,
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
-  'LeadSquared': <LeadSquaredIcon/>, 'Live QLs': <LiveQLsIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
+  'LeadSquared': <LeadSquaredIcon/>, 'Live QLs': <LiveQLsIcon/>, 'Not Attempted': <NotAttemptedIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
   'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>, 'Create Opportunity': <CreateOpportunityIcon/>,
   'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }

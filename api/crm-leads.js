@@ -893,6 +893,76 @@ async function fetchLeadSquaredUserGroupsMap(creds) {
   return byId
 }
 
+// "Not Attempted" -- Opportunities whose own Last Disposition field (mx_Custom_100
+// Human / mx_Custom_58 AI) is still sitting on one of Futwork's own queue-status
+// placeholder strings, meaning the lead was routed to Futwork/Futwork AI but no
+// actual call has ever come back with a real disposition yet. Confirmed live
+// 2026-09-11/12 (see fetchLiveQlOpportunityOwners's own history) that these
+// "Call queued successfully at ..." strings are real values LeadSquared writes into
+// these same two Opportunity fields alongside genuine dispositions -- this reuses
+// that exact field pair, just matching a different, narrower set of values.
+const NOT_ATTEMPTED_HUMAN_VALUES = ['Call queued successfully at Futwork']
+const NOT_ATTEMPTED_AI_VALUES = ['Call queued successfully at Futwork AI', 'Call queued successfully at AI Futwork']
+const NOT_ATTEMPTED_MAX_PAGES = 30
+
+function buildNotAttemptedOpportunitySearch() {
+  // Base filter is ActivityEvent=12003 alone (no CreatedOn condition) -- confirmed
+  // working shape, same as fetchLiveQlOpportunityOwners's own bulk search below.
+  // A CreatedOn "between" RowCondition on this exact endpoint is CONFIRMED BROKEN
+  // (400s -- see fetchLeadSquaredOpportunities's own comment above), so date
+  // scoping is deliberately done client-side after a full fetch instead, matching
+  // that same established, working pattern on this endpoint.
+  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+  ] }]
+  NOT_ATTEMPTED_HUMAN_VALUES.forEach(v => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+    { SubConOp: 'And', LSO: 'mx_Custom_100', LSO_Type: 'String', Operator: 'eq', RSO: v },
+  ] }))
+  NOT_ATTEMPTED_AI_VALUES.forEach(v => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+    { SubConOp: 'And', LSO: 'mx_Custom_58', LSO_Type: 'String', Operator: 'eq', RSO: v },
+  ] }))
+  return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
+}
+
+async function fetchNotAttemptedOpportunities(creds, { since, until }) {
+  const advancedSearch = buildNotAttemptedOpportunitySearch()
+  const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
+    OpportunityEventCode: 12003,
+    AdvancedSearch: advancedSearch,
+    Paging: { PageIndex: pageIndex, PageSize: pageSize },
+    Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+    Columns: { Include_CSV: 'OpportunityId,Owner,CreatedOn,Status,mx_Custom_100,mx_Custom_58,RelatedProspectId' },
+  }).then(data => (Array.isArray(data && data.List) ? data.List : []))
+  const [{ rows: raw, truncated }, ownerMap, groupsMap] = await Promise.all([
+    fetchAllPages(fetchPage, NOT_ATTEMPTED_MAX_PAGES),
+    fetchLeadSquaredUsersMap(creds),
+    fetchLeadSquaredUserGroupsMap(creds),
+  ])
+  const contactNames = await fetchLeadSquaredContactNames(creds, raw.map(r => r.RelatedProspectId)).catch(() => ({}))
+  let rows = raw.map(r => {
+    const humanQueued = NOT_ATTEMPTED_HUMAN_VALUES.includes(r.mx_Custom_100)
+    const aiQueued = NOT_ATTEMPTED_AI_VALUES.includes(r.mx_Custom_58)
+    return {
+      opportunityId: r.OpportunityId,
+      prospectId: r.RelatedProspectId || null,
+      contactName: r.RelatedProspectId ? (contactNames[r.RelatedProspectId] || null) : null,
+      createdOn: r.CreatedOn || null,
+      status: r.Status || null,
+      channel: humanQueued && aiQueued ? 'Human + AI' : humanQueued ? 'Human' : 'AI',
+      humanDisposition: r.mx_Custom_100 || null,
+      aiDisposition: r.mx_Custom_58 || null,
+      ownerId: r.Owner || null,
+      ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
+      ownerSalesGroups: r.Owner ? (groupsMap[r.Owner] || []).join(', ') : null,
+    }
+  })
+  if (since) rows = rows.filter(r => !r.createdOn || r.createdOn >= since + ' 00:00:00')
+  if (until) rows = rows.filter(r => !r.createdOn || r.createdOn <= until + ' 23:59:59')
+  return { rows, totalFetched: raw.length, truncated }
+}
+
 const LIVE_QL_OWNER_BULK_MAX = 500
 async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
   const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_BULK_MAX)
@@ -2894,7 +2964,11 @@ async function handleLeadSquared(req, res, me) {
   // it for Region/Call Transfer, and that tab is readable by anyone with
   // team_mapping access, same as team_users/team_groups.
   const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', 'team_cache_lookup', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES, ...TEAM_CREATE_USER_MODES]
-  const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
+  // Not Attempted gets its own page id (unlike live_ql_metrics, which is gated on
+  // the shared 'leadsquared' id for historical reasons) so its own frontend
+  // route/nav grant and this backend gate never drift apart.
+  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities']
+  const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : NOT_ATTEMPTED_MODES.includes(mode) ? 'not_attempted' : 'leadsquared'
   const { canAccessDashboard } = await import('../lib/auth.mjs')
   // activity_types is read by BOTH the main LeadSquared page (gated on
   // 'leadsquared') and the Field Schema page (gated on 'lq_field_schema',
@@ -3145,6 +3219,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
+    if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null }))
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
