@@ -1800,10 +1800,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // (activeDrillDownRange above). 'apps' does the same for the Applications KPI
   // card, embedding the real Apps page instead.
   const [qlDrillOpen, setQlDrillOpen] = useState(null) // null | 'human' | 'ai' | 'apps'
-  // Whether the "steady" (non-attention) KPI tiles are expanded below the ranked
-  // headline row -- see the KPI headline/attention-ranking block below. Not persisted;
-  // a fresh page load should always default to the calm, ranked view.
-  const [showAllKpis, setShowAllKpis] = useState(false)
   const qlDrillModalRef = useRef(null)
   useModalA11y(!!qlDrillOpen, useCallback(() => setQlDrillOpen(null), []), qlDrillModalRef)
   // Off by default -- Source/Spend only stay fixed while scrolling when the user
@@ -5010,137 +5006,85 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </div>
           )}
 
-          {/* ── KPI headline + attention ranking (2026-09-19) ──────────────────────
-              20 equal-weight tiles buried real signal -- e.g. Superbot Queued moving
-              2->4 (a "+100%" swing) sat at the identical visual weight as Spend's real
-              +34.3%. Reuses the EXACT same cur/prev pairs each tile already computes
-              its own delta from below -- no second aggregation, so a headline can never
-              disagree with what its own tile shows. `tier` is a fixed, manually-assigned
-              "does this matter for a real spend decision" weight, not derived from the
-              data -- Superbot Queued/QLs are tier 3 on purpose (near-zero absolute
-              volume in this account's real usage), core funnel/cost/revenue metrics are
-              tier 1. A tier-3 metric can swing however wildly without ever outranking a
-              real tier-1 move. Ranking uses raw deltaPct (not the kpiDelta/'new'-floor
-              wrapper each tile's own delta PILL uses for display) -- matching this
-              file's own established convention that deltaPct, not kpiDelta, is what
-              sorting/ranking logic should read (see the C12 comment on kpiDelta above). */}
-          {(() => {
-            const TIER_WEIGHT = { 1: 3, 2: 1.5, 3: 0.3 }
-            const scoreOf = (tier, delta) => (delta == null || isNaN(delta)) ? 0 : TIER_WEIGHT[tier] * Math.min(Math.abs(delta), 300)
-            const money = v => <span title={fmtINR(v)}>{fmtINRShort(v)}</span>
-            const cards = [
-              { key:'estSrRevenue', label:'Est. SR Revenue', tier:1, delta: deltaPct(estSrRevenue, prevEstSrRevenue), text: fmtINRShort(estSrRevenue),
-                node: <PremKPI label="EST. SR REVENUE" value={money(estSrRevenue)} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} /> },
-              { key:'spend', label:'Spend', tier:1, delta: deltaPct(kpis.spend, prevKpis.spend), text: fmtINRShort(kpis.spend),
-                node: <PremKPI label="SPEND" value={money(kpis.spend)} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} /> },
-              { key:'leads', label:'Total Leads', tier:1, delta: deltaPct(kpis.leads, prevKpis.leads), text: fmtN(kpis.leads),
-                node: <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={kpiDelta(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} /> },
-              { key:'floorQueued', label:'Floor Queued', tier:2, delta: deltaPct(kpis.floorQueued, prevKpis.floorQueued), text: fmtN(kpis.floorQueued),
-                node: <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={kpiDelta(kpis.floorQueued, prevKpis.floorQueued)} prevValue={fmtN(prevKpis.floorQueued)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} /> },
-              { key:'futworkQueued', label:'Futwork Queued', tier:2, delta: deltaPct(totalFutworkQ, prevTotalFutworkQ), text: fmtN(totalFutworkQ),
-                node: <PremKPI label="FUTWORK QUEUED" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={kpiDelta(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} /> },
-              { key:'humanQueued', label:'Human Queued', tier:2, delta: deltaPct(kpis.futworkHumanQ, prevKpis.futworkHumanQ), text: fmtN(kpis.futworkHumanQ),
-                node: <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} /> },
-              { key:'aiQueued', label:'AI Queued', tier:2, delta: deltaPct(kpis.futworkAiQ, prevKpis.futworkAiQ), text: fmtN(kpis.futworkAiQ),
-                node: <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} /> },
-              { key:'superbotQueued', label:'Superbot Queued', tier:3, delta: deltaPct(kpis.superbotQ, prevKpis.superbotQ), text: fmtN(kpis.superbotQ),
-                node: <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} /> },
-              { key:'totalQL', label:'Total QLs', tier:1, delta: deltaPct(kpis.totalQL, prevKpis.totalQL), text: fmtN(kpis.totalQL),
-                node: <HighlightKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} /> },
-              { key:'humanQL', label:'Human QLs', tier:2, delta: deltaPct(kpis.humanQL, prevKpis.humanQL), text: fmtN(kpis.humanQL),
-                /* onClickCapture, not onClick: kpiVariants.jsx's own "click to reveal the
-                   previous-period value" toggle calls e.stopPropagation() on click, which
-                   silently ate a plain onClick here before it ever bubbled up -- confirmed
-                   live. Capture-phase fires top-down before that stopPropagation runs. */
-                node: <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying Human QL records"
-                  onClickCapture={() => setQlDrillOpen('human')}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
-                  <HighlightKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} />
-                </div> },
-              { key:'aiQL', label:'AI QLs', tier:2, delta: deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl), text: fmtN(kpis.futworkAiQl),
-                node: <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
-                  onClickCapture={() => setQlDrillOpen('ai')}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
-                  <HighlightKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} />
-                </div> },
-              { key:'superbotQL', label:'Superbot QLs', tier:3, delta: deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl), text: fmtN(kpis.superbotAiQl),
-                node: <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} /> },
-              { key:'cpl', label:'CPL', tier:1, delta: deltaPct(cpl, prevCpl), text: fmtINRShort(cpl), invert:true,
-                node: <PremKPI label="CPL" value={money(cpl)} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} /> },
-              { key:'cpql', label:'CPQL', tier:1, delta: deltaPct(cpql, prevCpql), text: fmtINRShort(cpql), invert:true,
-                node: <PremKPI label="CPQL" value={money(cpql)} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} /> },
-              { key:'apps', label:'Applications', tier:1, delta: deltaPct(kpis.apps, prevKpis.apps), text: fmtN(kpis.apps),
-                node: <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying application records (Apps page)"
-                  onClickCapture={() => setQlDrillOpen('apps')}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('apps') } }}>
-                  <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={kpiDelta(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
-                </div> },
-              { key:'cpa', label:'CPA', tier:1, delta: deltaPct(cpa, prevCpa), text: fmtINRShort(cpa), invert:true,
-                node: <PremKPI label="CPA" value={money(cpa)} sub="cost per application" delta={deltaPct(cpa, prevCpa)} prevValue={fmtINR(prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} /> },
-              { key:'offers', label:'Offers', tier:2, delta: deltaPct(kpis.offers, prevKpis.offers), text: fmtN(kpis.offers),
-                node: <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={kpiDelta(kpis.offers, prevKpis.offers)} prevValue={fmtN(prevKpis.offers)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} /> },
-              { key:'deposits', label:'Deposits', tier:2, delta: deltaPct(kpis.deposits, prevKpis.deposits), text: fmtN(kpis.deposits),
-                node: <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={kpiDelta(kpis.deposits, prevKpis.deposits)} prevValue={fmtN(prevKpis.deposits)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} /> },
-              { key:'raus', label:'Total RAUs', tier:2, delta: deltaPct(kpis.raus, prevKpis.raus), text: fmtN(kpis.raus),
-                node: <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub={'Est. RAUs ' + fmtN(estimatedRaus)} delta={kpiDelta(kpis.raus, prevKpis.raus)} prevValue={fmtN(prevKpis.raus)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} /> },
-              { key:'roas', label:'ROAS', tier:1, delta: deltaPct(actualRoas, prevActualRoas), text: actualRoas.toFixed(2) + 'x',
-                node: <PremKPI label="ROAS" value={actualRoas.toFixed(2) + 'x'} sub={'Est. ROAS ' + estimatedRoas.toFixed(2) + 'x'} delta={deltaPct(actualRoas, prevActualRoas)} prevValue={prevActualRoas.toFixed(2) + 'x'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} /> },
-            ]
-            const scored = cards.map(c => ({ ...c, score: scoreOf(c.tier, c.delta) }))
-            const ATTENTION_FLOOR = 8 // matches TIER_WEIGHT[2] * ~5.3% -- below this a move reads as noise, not signal
-            const ranked = [...scored].sort((a, b) => b.score - a.score)
-            const attention = ranked.filter(c => c.score >= ATTENTION_FLOOR).slice(0, 6)
-            const attentionKeys = new Set(attention.map(c => c.key))
-            const steady = cards.filter(c => !attentionKeys.has(c.key))
+          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas. Both rows carry
+              exactly 10 cards each (rebalanced from an earlier 12/8 split that made an
+              auto-fit grid size cards differently row to row — "thick vs thin"), so an
+              auto-fit grid is safe again: same item count -> same column count on both
+              rows at any width. A fixed repeat(10, minmax(120px,1fr)) was tried instead
+              and reliably overflowed the container by 300-900px at every width between
+              the 768px and ~1310px breakpoints, forcing the whole page to scroll
+              sideways -- auto-fit degrades to fewer, wider columns there instead.
+              Floor raised 150px -> 190px: at 150px, a 100% Chrome zoom settled into 8
+              columns per row (never a clean 10, 5, or 2), and labels like FUTWORK
+              QUEUED / SUPERBOT QUEUED truncated to "...QUE…" in the narrower cards --
+              190px is wide enough for every current label at the KPI card's own
+              uppercase/bold/letter-spaced type, confirmed by measuring the widest
+              label against the card's real inner width (card width minus its 20px
+              side padding), not guessed.
+              Widening the floor to 190px traded that 8-column remainder for a 6-column
+              one instead -- a real desktop content width of ~1200-1400px (measured
+              live: 1276px, a common laptop-with-sidebar size, not an edge case) computes
+              exactly 6 columns for 10 items, leaving 4 real cards plus 2 genuinely empty
+              trailing cells every time -- flagged live via a screenshot circling the
+              dead space. minmax(max(190px, calc((100% - 4*gap)/5)), 1fr) caps this at 5
+              columns max (10 only divides evenly by 1/2/5/10 in any plausible range) --
+              the minimum column width scales up to claim a full 1/5 of the row on a wide
+              screen, so 6+ columns can never form; below that width it degrades to fewer
+              columns exactly like plain auto-fit (same overflow-safety as before). */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:12 }}>
+            <PremKPI label="EST. SR REVENUE" value={<span title={fmtINR(estSrRevenue)}>{fmtINRShort(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="SPEND" value={<span title={fmtINR(kpis.spend)}>{fmtINRShort(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
+            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={kpiDelta(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={kpiDelta(kpis.floorQueued, prevKpis.floorQueued)} prevValue={fmtN(prevKpis.floorQueued)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="FUTWORK QUEUED" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={kpiDelta(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            <HighlightKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} />
+            {/* Human/AI QLs — same drill-down as the funnel bars below (setQlDrillOpen),
+                since this is literally the same figure (kpis.humanQL / kpis.futworkAiQl).
+                Total QLs and Superbot QLs are deliberately NOT wired: Total QLs sums
+                three sources (Human + AI + Superbot) and there's no single detail page
+                that covers all three, and there's no Superbot QL detail page anywhere
+                in the app -- so a click on either would have nowhere honest to go.
+                onClickCapture, not onClick: kpiVariants.jsx's own "click to reveal the
+                previous-period value" toggle calls e.stopPropagation() on click, which
+                silently ate a plain onClick here before it ever bubbled up -- confirmed
+                live (a click landed, the internal toggle fired, the modal never opened).
+                Capture-phase fires top-down before that stopPropagation runs, so it's
+                unaffected either way. */}
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying Human QL records"
+              onClickCapture={() => setQlDrillOpen('human')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
+              <HighlightKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} />
+            </div>
+          </div>
 
-            // Headline sentence -- deterministic, computed from the SAME numbers the
-            // cards above already show, same discipline as Marketing Review's own
-            // buildInsights(). Two rules: name the single biggest real mover, then
-            // check the one correlated pair worth calling out on its own even when
-            // neither crosses the attention floor alone -- spend growing faster than
-            // the QLs it's meant to buy is a real efficiency signal a flat "biggest
-            // mover" ranking can miss entirely (this exact gap was flagged directly:
-            // "Spend +34.3% against CPQL +31.1%" never showing up anywhere on the page).
-            const spendDelta = deltaPct(kpis.spend, prevKpis.spend)
-            const qlDelta = deltaPct(kpis.totalQL, prevKpis.totalQL)
-            const cpqlDelta = deltaPct(cpql, prevCpql)
-            const EFFICIENCY_GAP_FLOOR = 10
-            let headline
-            const top = ranked[0]
-            if (!top || top.score < ATTENTION_FLOOR) {
-              headline = 'Figures are steady this period -- nothing moved enough to call out.'
-            } else {
-              const dir = top.delta >= 0 ? 'up' : 'down'
-              headline = `${top.label} is ${dir} ${Math.abs(top.delta).toFixed(1)}% to ${top.text} this period.`
-            }
-            if (spendDelta != null && qlDelta != null && (spendDelta - qlDelta) > EFFICIENCY_GAP_FLOOR) {
-              headline += ` Spend (${spendDelta >= 0 ? '+' : ''}${spendDelta.toFixed(1)}%) is outpacing Total QL (${qlDelta >= 0 ? '+' : ''}${qlDelta.toFixed(1)}%)${cpqlDelta != null ? ` -- CPQL is up ${cpqlDelta.toFixed(1)}%` : ''}, so efficiency is worsening.`
-            }
-
-            return (
-              <>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:10, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, padding:'12px 16px', marginBottom:14 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, marginTop:2 }}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                  <div style={{ fontSize:14.5, fontWeight:600, color:C.text, lineHeight:1.45 }}>{headline}</div>
-                </div>
-                <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom: attention.length ? 12 : 0 }}>
-                  {attention.map(c => <React.Fragment key={c.key}>{c.node}</React.Fragment>)}
-                </div>
-                {attention.length > 0 && attention.length < cards.length && (
-                  <button type="button" onClick={() => setShowAllKpis(v => !v)}
-                    style={{ display:'inline-flex', alignItems:'center', gap:6, background:'none', border:'none', cursor:'pointer', padding:'0 0 12px', fontSize:13, fontWeight:700, color:C.blue, fontFamily:FONT }}>
-                    {showAllKpis ? 'Hide the other ' + steady.length + ' steady KPIs' : 'Show all ' + cards.length + ' KPIs (' + steady.length + ' steady, unchanged)'}
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showAllKpis ? 'rotate(180deg)' : 'none' }}><polyline points="6 9 12 15 18 9" /></svg>
-                  </button>
-                )}
-                {(showAllKpis || attention.length === 0) && (
-                  <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:20 }}>
-                    {steady.map(c => <React.Fragment key={c.key}>{c.node}</React.Fragment>)}
-                  </div>
-                )}
-              </>
-            )
-          })()}
+          {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
+              Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:20 }}>
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
+              onClickCapture={() => setQlDrillOpen('ai')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
+              <HighlightKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} />
+            </div>
+            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="CPQL" value={<span title={fmtINR(cpql)}>{fmtINRShort(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
+            {/* onClickCapture, not onClick -- see the identical comment on the Human/AI
+                QLs cards above for why (kpiVariants.jsx's own prev-value toggle calls
+                stopPropagation() on click and would otherwise eat this). */}
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying application records (Apps page)"
+              onClickCapture={() => setQlDrillOpen('apps')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('apps') } }}>
+              <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={kpiDelta(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            </div>
+            <PremKPI label="CPA" value={<span title={fmtINR(cpa)}>{fmtINRShort(cpa)}</span>} sub="cost per application" delta={deltaPct(cpa, prevCpa)} prevValue={fmtINR(prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={kpiDelta(kpis.offers, prevKpis.offers)} prevValue={fmtN(prevKpis.offers)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={kpiDelta(kpis.deposits, prevKpis.deposits)} prevValue={fmtN(prevKpis.deposits)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub={'Est. RAUs ' + fmtN(estimatedRaus)} delta={kpiDelta(kpis.raus, prevKpis.raus)} prevValue={fmtN(prevKpis.raus)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="ROAS" value={actualRoas.toFixed(2) + 'x'} sub={'Est. ROAS ' + estimatedRoas.toFixed(2) + 'x'} delta={deltaPct(actualRoas, prevActualRoas)} prevValue={prevActualRoas.toFixed(2) + 'x'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} />
+          </div>
 
           {/* FUNNEL + STAGE CONVERSION */}
           <Card>
