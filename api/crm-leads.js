@@ -3145,64 +3145,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
-    // TEMPORARY, one-off (2026-09-19): open Opportunities whose last recorded Futwork
-    // disposition (Human: mx_Custom_100, AI: mx_Custom_58) is a non-QL value, and which
-    // NEVER got a QL disposition from the other channel either. Pushes the "touched by a
-    // non-QL value" filter server-side (an OR-chain over the exhaustive known value list)
-    // to shrink the 354k-row Open set down to something pagination-sized first, then
-    // does the exact QL-exclusion check client-side on that much smaller set.
-    // headOnly=1 just returns the narrowed RecordCount, to size it before paginating.
-    // Remove after use.
-    if (mode === 'live_ql_open_nonql_debug') {
-      const HUMAN_QL = new Set(['Interested in Call Back', 'Call Transferred To Counsellor', 'Discover Future Intent', 'Low Intent Lead'])
-      const AI_QL = new Set(['Interested in Callback', 'Discover Future Intent', 'Low Intent Lead', 'Interested spoken to parents'])
-      const HUMAN_NONQL = ['Not Connected', 'Not Interested', 'Redial', 'Voicemail', 'Busy or Improper Response', 'Schedule Call Back', 'Language Barrier', 'Disqualified', 'Wrong Number', 'Alternate Details Collected', 'Interested in IVY100', 'Already Enrolled With Leverage', 'Require Loan Assistance']
-      const AI_NONQL = ['Not Connected', 'Busy or Improper Response', 'Not Interested', 'Voicemail', 'Disqualified', 'Language Barrier', 'Schedule Call Back', 'Wrong Number', 'NA', 'Already Enrolled with Leverage']
-      const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
-        { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
-        { SubConOp: 'And', LSO: 'Status', LSO_Type: 'String', Operator: 'eq', RSO: 'Open' },
-      ] }]
-      HUMAN_NONQL.forEach(v => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
-        { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
-        { SubConOp: 'And', LSO: 'mx_Custom_100', LSO_Type: 'String', Operator: 'eq', RSO: v },
-      ] }))
-      AI_NONQL.forEach(v => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
-        { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
-        { SubConOp: 'And', LSO: 'mx_Custom_58', LSO_Type: 'String', Operator: 'eq', RSO: v },
-      ] }))
-      const search = JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
-      if (req.query.headOnly === '1') {
-        const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
-          OpportunityEventCode: 12003, AdvancedSearch: search,
-          Paging: { PageIndex: 1, PageSize: 1 }, Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-        })
-        return res.status(200).json({ recordCount: (data && data.RecordCount) || 0 })
-      }
-      const maxPages = Number(req.query.maxPages) || 80
-      const fetchPage = async (pageIndex, pageSize) => {
-        const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
-          OpportunityEventCode: 12003, AdvancedSearch: search,
-          Paging: { PageIndex: pageIndex, PageSize: pageSize },
-          Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-          Columns: { Include_CSV: 'OpportunityId,mx_Custom_100,mx_Custom_58' },
-        })
-        return (data && data.List) || []
-      }
-      const { rows, truncated } = await fetchAllPages(fetchPage, maxPages)
-      let openNonQlTouched = 0
-      const dispCounts = {}
-      rows.forEach(r => {
-        const h = r.mx_Custom_100 || null
-        const a = r.mx_Custom_58 || null
-        const isQL = (h && HUMAN_QL.has(h)) || (a && AI_QL.has(a))
-        if (!isQL) {
-          openNonQlTouched++
-          const key = h && a ? `H:${h} / AI:${a}` : h ? `H:${h}` : `AI:${a}`
-          dispCounts[key] = (dispCounts[key] || 0) + 1
-        }
-      })
-      return res.status(200).json({ totalFetched: rows.length, truncated, openNonQlTouched, dispCounts })
-    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
