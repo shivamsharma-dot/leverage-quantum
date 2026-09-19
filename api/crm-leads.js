@@ -5156,7 +5156,7 @@ export default async function handler(req, res) {
     await handleBigQuery(req, res, { role: 'admin', email: 'temp-diag' })
     const ms = Date.now() - t0
     const body = chunks[chunks.length - 1] || {}
-    return origJson({ ms, statusCode, rowCount: Array.isArray(body.rows) ? body.rows.length : null, truncated: !!body.truncated })
+    return origJson({ ms, statusCode, rowCount: Array.isArray(body.rows) ? body.rows.length : null, truncated: !!body.truncated, error: body.error || null })
   }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
