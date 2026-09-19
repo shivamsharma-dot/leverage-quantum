@@ -5142,6 +5142,22 @@ async function handleSuperTracker(req, res, me) {
 }
 
 export default async function handler(req, res) {
+  // TEMPORARY diagnostic (2026-09-19) -- timing the just-shipped parallel-chunk
+  // overall_bq_rows fetch against a real MTD-sized range. REMOVE right after use.
+  if ((req.query && req.query.mode) === 'tmp_bq_speed_20260919' && req.headers['x-tmp-diag'] === 'bq-speed-9c41') {
+    const t0 = Date.now()
+    const chunks = []
+    const origJson = res.json.bind(res)
+    res.json = (body) => { chunks.push(body); return res }
+    const origStatus = res.status.bind(res)
+    let statusCode = 200
+    res.status = (c) => { statusCode = c; return { json: res.json } }
+    req.query = Object.assign({}, req.query, { source: 'bigquery', mode: 'overall_bq_rows' })
+    await handleBigQuery(req, res, { role: 'admin', email: 'temp-diag' })
+    const ms = Date.now() - t0
+    const body = chunks[chunks.length - 1] || {}
+    return origJson({ ms, statusCode, rowCount: Array.isArray(body.rows) ? body.rows.length : null, truncated: !!body.truncated })
+  }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
   // Deliberately checked BEFORE getSessionUser: an automation with no human
