@@ -5094,6 +5094,20 @@ async function handleSuperTracker(req, res, me) {
 }
 
 export default async function handler(req, res) {
+  // TEMPORARY diagnostic (2026-09-19) -- app_preferences reads 0 rows via the
+  // public anon key; checking whether the SERVICE-ROLE (server-side) read
+  // sees real rows, to tell apart "table genuinely empty" from "RLS re-
+  // enabled, blocking only the anon key." REMOVE right after use.
+  if ((req.query && req.query.mode) === 'tmp_prefs_probe_20260919' && req.headers['x-tmp-diag'] === 'prefs-check-7b3e') {
+    try {
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      const r = await supabaseAdmin('app_preferences?select=key&order=key.asc')
+      const rows = r.ok ? await r.json() : null
+      return res.status(200).json({ ok: r.ok, status: r.status, count: Array.isArray(rows) ? rows.length : null, keys: Array.isArray(rows) ? rows.map(x => x.key) : null })
+    } catch (e) {
+      return res.status(200).json({ error: String(e?.message || e) })
+    }
+  }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
   // Deliberately checked BEFORE getSessionUser: an automation with no human
