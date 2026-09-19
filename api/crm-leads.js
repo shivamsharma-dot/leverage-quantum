@@ -3145,6 +3145,50 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
+    // TEMPORARY, one-off (2026-09-19): discover the REAL distinct values of the two
+    // Opportunity-level "Last Disposition" fields for Opportunities CREATED this month
+    // (not scoped by activity dispositions at all -- the user suspects values like
+    // "Unprocessed" that never appear on the Activity-level disposition field). Also
+    // tests whether Opportunity CreatedOn accepts the same opt-* keywords Activity
+    // search does. Remove after use.
+    if (mode === 'live_ql_opp_field_values_debug') {
+      const dateKeyword = LIVE_QL_DATE_KEYWORDS[req.query.date] || LIVE_QL_DATE_KEYWORDS.this_month
+      const search = JSON.stringify({
+        GrpConOp: 'And',
+        Conditions: [{
+          Type: 'Activity', ConOp: 'and', IsFilterCondition: true,
+          RowCondition: [
+            { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
+            { SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword },
+          ],
+        }],
+        QueryTimeZone: 'India Standard Time',
+      })
+      const headData = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
+        OpportunityEventCode: 12003, AdvancedSearch: search,
+        Paging: { PageIndex: 1, PageSize: 1 }, Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+      })
+      const recordCount = (headData && headData.RecordCount) || 0
+      if (req.query.headOnly === '1') return res.status(200).json({ recordCount })
+      const maxPages = Number(req.query.maxPages) || 80
+      const fetchPage = async (pageIndex, pageSize) => {
+        const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
+          OpportunityEventCode: 12003, AdvancedSearch: search,
+          Paging: { PageIndex: pageIndex, PageSize: pageSize },
+          Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+          Columns: { Include_CSV: 'OpportunityId,Status,mx_Custom_100,mx_Custom_58' },
+        })
+        return (data && data.List) || []
+      }
+      const { rows, truncated } = await fetchAllPages(fetchPage, maxPages)
+      const statusCounts = {}, humanValCounts = {}, aiValCounts = {}
+      rows.forEach(r => {
+        statusCounts[r.Status || '(blank)'] = (statusCounts[r.Status || '(blank)'] || 0) + 1
+        humanValCounts[r.mx_Custom_100 || '(blank)'] = (humanValCounts[r.mx_Custom_100 || '(blank)'] || 0) + 1
+        aiValCounts[r.mx_Custom_58 || '(blank)'] = (aiValCounts[r.mx_Custom_58 || '(blank)'] || 0) + 1
+      })
+      return res.status(200).json({ recordCount, totalFetched: rows.length, truncated, statusCounts, humanValCounts, aiValCounts })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
