@@ -3220,6 +3220,17 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null }))
+    if (mode === 'not_attempted_debug_raw') {
+      const search = buildNotAttemptedOpportunitySearch()
+      const raw = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
+        OpportunityEventCode: 12003,
+        AdvancedSearch: search,
+        Paging: { PageIndex: 1, PageSize: 3 },
+        Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+        Columns: { Include_CSV: 'OpportunityId,Owner,CreatedOn,Status,mx_Custom_100,mx_Custom_58,RelatedProspectId' },
+      })
+      return res.status(200).json({ recordCount: raw && raw.RecordCount, sample: raw && raw.List })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
