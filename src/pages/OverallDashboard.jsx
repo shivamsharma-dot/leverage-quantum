@@ -874,6 +874,19 @@ const FUTWORK_GROUP_KEYS = ['floorQueued', 'queued', 'futworkHumanQ', 'futworkAi
 // picture stays legible on a phone. The CSV posted next to it still carries
 // every column, so nothing is lost.
 const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'cpl', 'totalQL', 'cpql', 'apps', 'cpa', 'deposits']
+// A fresh device (no saved localStorage) used to default to ALL 31 columns visible
+// at once -- confirmed the real root cause of "too many columns, hard to scan"
+// (2026-09-19). This is only ever the DEFAULT for a device that has never touched
+// the Columns picker -- anyone with an existing saved lq_overall_summary_visible_cols
+// preference keeps exactly what they already chose, untouched. Everything left out
+// here is still one click away via "Columns"; nothing is removed from the app,
+// only from what's checked by default. Picked for the funnel's own core efficiency
+// story (spend -> volume -> cost -> outcome), leaving channel-split detail
+// (Floor/Human/AI/Superbot Queued, the QL split, Contribution %, both rate
+// variants, Offers/Deposits/Estimated RAU, the SR Revenue/ROAS split) opt-in.
+const DEFAULT_VISIBLE_SUMMARY_KEYS = [
+  'spend', 'leads', 'queued', 'totalQL', 'cpl', 'cpql', 'cpa', 'apps', 'raus', 'estSrRevenue', 'roas',
+]
 // Paid means we hand a platform money for the click. Everything else --
 // remarketing, content, referral, offline, affiliate partner, NA -- is banded
 // separately so paid efficiency is not diluted by organic volume.
@@ -1041,6 +1054,30 @@ const LABEL_COL_W = 170
 // state), off by default, so an unpinned table behaves exactly like a normal scrolling
 // table with no sticky positioning at all.
 const stickyLabelStyle = (pin, bg) => (pin ? { position:'sticky', left:0, zIndex:2, background:bg, minWidth:LABEL_COL_W, width:LABEL_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' } : {})
+
+// Funnel Summary table's real prev/next pagination (2026-09-19) -- same spec as
+// LiveQLsDashboard.jsx's own PaginationControl (circular icon buttons either side
+// of a "Page X of Y" label), kept as its own copy since every version in this
+// codebase is self-contained per file by convention.
+function SummaryPagination({ page, totalPages, onPrev, onNext }) {
+  const btnStyle = enabled => ({
+    width: 26, height: 26, borderRadius: 7, border: '1px solid ' + C.border,
+    background: 'var(--bg3,#F8FAFC)', color: enabled ? C.navy : C.muted,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: enabled ? 'pointer' : 'default', flexShrink: 0,
+  })
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <button type="button" disabled={page === 0} onClick={onPrev} style={btnStyle(page > 0)} title="Previous page">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <span style={{ fontSize: 12, fontWeight: 700, color: C.muted, minWidth: 68, textAlign: 'center', fontFamily: FONT }}>Page {page + 1} of {totalPages}</span>
+      <button type="button" disabled={page >= totalPages - 1} onClick={onNext} style={btnStyle(page < totalPages - 1)} title="Next page">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
+    </div>
+  )
+}
 
 // Small expand/collapse indicator for the Source view's tree rows (Source -> Sub Source ->
 // Campaign). Rotates 90deg open, matching the caret convention already used by Dropdown.
@@ -1657,6 +1694,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [sortKey, setSortKey] = useState('leads')
   const [sortDir, setSortDir] = useState('desc')
   const [rowLimit, setRowLimit] = useState(25)
+  const [tablePage, setTablePage] = useState(0)
   const [showColsPicker, setShowColsPicker] = useState(false)
   const [showRatesPicker, setShowRatesPicker] = useState(false)
   // C9 fix -- see useModalA11y's own comment above ColumnsPicker for what this does and
@@ -1735,15 +1773,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     // Newly-added columns (not in a previously-saved list) default to visible, same as
     // colOrder below -- otherwise a brand new column silently never appears for a device
     // that already has a saved visibleCols list from before that column existed.
+    //
+    // A genuinely NEW device (never touched the Columns picker at all) now starts on
+    // DEFAULT_VISIBLE_SUMMARY_KEYS instead of "all 31 columns" (2026-09-19, direct ask
+    // -- "too many columns, hard to scan"). Deliberately NOT applied to the
+    // summarySchemaStale branch below, which is a different case (someone who WAS
+    // already customized, but a real column re-sequencing invalidated their saved
+    // order) -- narrowing what they'd already broadened would be a real regression for
+    // them, not a fix; "show everything" stays the safe neutral fallback there.
     if (summarySchemaStale) return SUMMARY_COLUMN_KEYS
     try {
       const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY)
       const parsed = s ? JSON.parse(s) : null
-      if (!Array.isArray(parsed)) return SUMMARY_COLUMN_KEYS
+      if (!Array.isArray(parsed)) return DEFAULT_VISIBLE_SUMMARY_KEYS
       const base = parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k))
       const missing = SUMMARY_COLUMN_KEYS.filter(k => !base.includes(k))
       return [...base, ...missing]
-    } catch { return SUMMARY_COLUMN_KEYS }
+    } catch { return DEFAULT_VISIBLE_SUMMARY_KEYS }
   })
   const [colOrder, setColOrder] = useState(() => {
     // A real re-sequencing of SUMMARY_COLUMNS (not just a new column) bumps
@@ -3191,9 +3237,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     })
   }, [groupedWithRevenue, tableSearch, sortKey, sortDir, contribMetric])
 
+  // Real pagination (2026-09-19, direct ask -- "too many rows to scroll through"):
+  // rowLimit is now a PAGE size, not a hard cap -- the old behavior left no way to
+  // see anything past the cutoff short of picking "All" and scrolling through
+  // everything at once (confirmed by the "increase Show above to see more" hint
+  // this replaces). safePage is a clamp, not a stateful reset-on-filter-change --
+  // same fix already proven on Live QLs (2026-09-06): structurally impossible to
+  // land on a page that no longer exists once a search/sort/grouping change
+  // shrinks the result set, with no dependency list to keep in sync.
+  const summaryTotalPages = rowLimit === 'all' ? 1 : Math.max(1, Math.ceil(sortedFilteredRows.length / rowLimit))
+  const summarySafePage = Math.min(tablePage, summaryTotalPages - 1)
   const tableRows = useMemo(() => (
-    rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(0, rowLimit)
-  ), [sortedFilteredRows, rowLimit])
+    rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(summarySafePage * rowLimit, (summarySafePage + 1) * rowLimit)
+  ), [sortedFilteredRows, rowLimit, summarySafePage])
 
   // Totals row. Deliberately built over sortedFilteredRows (every row matching the
   // current search) rather than tableRows, so the "Show 10/25/50" display-density
@@ -4945,7 +5001,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               action={
                 <div style={{ display:'flex', gap:6 }}>
                   {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
-                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : 'var(--card-border,#E5E7EB)'), background: grpBy === v ? C.navy : 'var(--card,#fff)', color: grpBy === v ? '#fff' : 'var(--text2,#374151)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
+                    <button key={v} onClick={() => { setGrpBy(v); setTablePage(0) }} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : 'var(--card-border,#E5E7EB)'), background: grpBy === v ? C.navy : 'var(--card,#fff)', color: grpBy === v ? '#fff' : 'var(--text2,#374151)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
               }
@@ -4962,10 +5018,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:14 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', flex:'1 1 200px', minWidth:160, maxWidth:280 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-                  <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${grpByLabel.toLowerCase()}…`}
+                  <input value={tableSearch} onChange={e => { setTableSearch(e.target.value); setTablePage(0) }} placeholder={`Search ${grpByLabel.toLowerCase()}…`}
                     style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:14, fontWeight:600, color:C.text, width:'100%' }} />
                   {tableSearch && (
-                    <button onClick={() => setTableSearch('')} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
+                    <button onClick={() => { setTableSearch(''); setTablePage(0) }} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                     </button>
                   )}
@@ -4974,9 +5030,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                   <span style={{ fontSize:13.5, color:C.muted, fontFamily:FONT }}>Show</span>
                   {[10, 25, 50, 'all'].map(n => (
-                    <button key={n} onClick={() => setRowLimit(n)} style={{ padding:'7px 12px', borderRadius:7, border:'none', cursor:'pointer', fontSize:14, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
+                    <button key={n} onClick={() => { setRowLimit(n); setTablePage(0) }} style={{ padding:'7px 12px', borderRadius:7, border:'none', cursor:'pointer', fontSize:14, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
                   ))}
                 </div>
+
+                {summaryTotalPages > 1 && (
+                  <SummaryPagination page={summarySafePage} totalPages={summaryTotalPages}
+                    onPrev={() => setTablePage(summarySafePage - 1)} onNext={() => setTablePage(summarySafePage + 1)} />
+                )}
 
                 <div style={{ position:'relative' }}>
                   <Button
@@ -5064,9 +5125,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </div>
               </div>
 
-              <div style={{ overflowX:'auto' }}>
+              {/* Bounded height + its own vertical scroll, sticky header (2026-09-19,
+                  direct ask: table felt "too long to scroll through") -- a real page of
+                  rows (up to 50) plus "All" for a wide Campaign/Corridor view no longer
+                  means losing track of which column is which the moment you scroll past
+                  the first screenful. maxHeight is roughly 14-15 data rows -- enough to
+                  see real structure at a glance without the table swallowing the page. */}
+              <div style={{ overflow:'auto', maxHeight:640, border:`0.5px solid ${C.border}`, borderRadius:10 }}>
                 <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
-                  <thead>
+                  <thead style={{ position:'sticky', top:0, zIndex:3 }}>
                     <tr style={{ background:'var(--bg3,#F8FAFC)', borderBottom:'2px solid var(--card-border,#E2E8F0)' }}>
                       <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : 'var(--text2,#64748B)', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...stickyLabelStyle(pinCols, 'var(--bg3,#F8FAFC)') }}>
                         {/* C10 fix: was a bare onClick on the <th> itself -- no tabIndex, no role,
@@ -5238,8 +5305,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   </tbody>
                 </table>
               </div>
-              {grouped.length > tableRows.length && (
-                <div style={{ fontSize:12.5, color:C.muted, textAlign:'center', marginTop:10 }}>Showing {tableRows.length} of {grouped.length} — increase "Show" above to see more.</div>
+              {sortedFilteredRows.length > 0 && (
+                <div style={{ fontSize:12.5, color:C.muted, textAlign:'center', marginTop:10 }}>
+                  {rowLimit === 'all'
+                    ? `Showing all ${sortedFilteredRows.length.toLocaleString('en-IN')} rows`
+                    : `Showing ${(summarySafePage * rowLimit + 1).toLocaleString('en-IN')}–${Math.min((summarySafePage + 1) * rowLimit, sortedFilteredRows.length).toLocaleString('en-IN')} of ${sortedFilteredRows.length.toLocaleString('en-IN')} — use the page arrows above to see more`}
+                </div>
               )}
             </Card>
           </div>
