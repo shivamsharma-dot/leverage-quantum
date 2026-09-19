@@ -3968,48 +3968,96 @@ async function handleBigQuery(req, res, me) {
         ]
         const select = columns.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
         const PAGE = 1000
-        const rows = []
-        let cursor = null
         // A wide range against overall_bq_daily (raw, one row per campaign -- unlike
-        // the small agg table) can need far more sequential pages than this function's
-        // own 60s ceiling (export const maxDuration below) allows -- confirmed live
-        // 2026-09-08: a 2-month range against the raw table genuinely timed out here,
-        // where the OLD client-side version had no such ceiling and would just take
-        // longer. Rather than let Vercel kill the function outright (a hard failure
-        // that the old design never had), bail out cleanly at a safe budget and say so
-        // -- overallBqCache.js falls back to fetching the rest directly from Supabase
-        // itself for exactly this case, so a wide query still succeeds, just without
+        // the small agg table) can need far more pages than this function's own 60s
+        // ceiling (export const maxDuration below) allows -- confirmed live 2026-09-08:
+        // a 2-month range against the raw table genuinely timed out here, where the OLD
+        // client-side version had no such ceiling and would just take longer. Rather
+        // than let Vercel kill the function outright, bail out cleanly at a safe budget
+        // and say so -- overallBqCache.js falls back to fetching the rest directly from
+        // Supabase for exactly this case, so a wide query still succeeds, just without
         // the caching benefit for its own tail end.
         const startedAt = Date.now()
         const TIME_BUDGET_MS = 40000
-        let truncated = false
-        for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
-          if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break }
-          let path = table + '?select=' + encodeURIComponent(select + ',row_key')
-            + '&lead_date_iso=gte.' + since + '&lead_date_iso=lte.' + until
-            + '&order=row_key.asc&limit=' + PAGE
-          if (sourceList.length) {
-            const list = '(' + sourceList.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
-            path += '&Source=in.' + encodeURIComponent(list)
+        // Split [since,until] into calendar-month chunks and fetch them CONCURRENTLY
+        // (2026-09-19, asked for directly -- the page was taking 20-30s to load).
+        // Was a single sequential keyset-pagination loop across the whole range --
+        // a normal MTD view alone spans the current month PLUS the prior month (for
+        // the delta %s), often 50,000+ rows at 1,000/page = ~50 round trips paid one
+        // at a time. A parallel-fetch attempt on 2026-09-13 tried to speed this up by
+        // asking Postgres for an exact COUNT(*) first (to know how many offset/limit
+        // batches to fire) -- that COUNT itself started timing out (57014) under real
+        // load and had to be reverted. This avoids that failure mode entirely: no
+        // COUNT query anywhere. Splitting by calendar month is a boundary the caller
+        // already controls, so each chunk just runs the SAME proven keyset-pagination
+        // loop as before, independently -- N of them at once instead of one long queue.
+        // Concurrency capped at 3, matching the limit that already fixed this exact
+        // class of Postgres contention on this same table's WRITE side (2026-09-06,
+        // overall-bq-sync.yml: 16-way concurrent upserts caused 57014s, 3-way didn't).
+        function splitIntoMonthChunks(sinceStr, untilStr) {
+          const [, um0, ] = untilStr.split('-')
+          let [cy, cm] = sinceStr.split('-').map(Number)
+          const uy = Number(untilStr.split('-')[0]), um = Number(um0)
+          const chunks = []
+          let curStart = sinceStr
+          while (cy < uy || (cy === uy && cm <= um)) {
+            const isLast = cy === uy && cm === um
+            const lastDay = new Date(cy, cm, 0).getDate() // cm is 1-indexed, so day 0 of it = last day of that month
+            const curEnd = isLast ? untilStr : cy + '-' + String(cm).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0')
+            chunks.push({ since: curStart, until: curEnd })
+            cm++
+            if (cm > 12) { cm = 1; cy++ }
+            curStart = cy + '-' + String(cm).padStart(2, '0') + '-01'
           }
-          if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
-          const r = await supabaseAdmin(path)
-          if (!r.ok) {
-            const detail = await r.text().catch(() => '')
-            return res.status(502).json({ error: table + ' read failed (' + r.status + '): ' + detail.slice(0, 300) })
-          }
-          const page = await r.json()
-          if (!Array.isArray(page) || page.length === 0) break
-          for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
-          if (page.length < PAGE) break
-          cursor = page[page.length - 1].row_key
+          return chunks
         }
+        async function fetchOneChunk(chunkSince, chunkUntil, cursorIn) {
+          const rows = []
+          let cursor = cursorIn || null
+          let truncated = false
+          for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
+            if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break }
+            let path = table + '?select=' + encodeURIComponent(select + ',row_key')
+              + '&lead_date_iso=gte.' + chunkSince + '&lead_date_iso=lte.' + chunkUntil
+              + '&order=row_key.asc&limit=' + PAGE
+            if (sourceList.length) {
+              const list = '(' + sourceList.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
+              path += '&Source=in.' + encodeURIComponent(list)
+            }
+            if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
+            const r = await supabaseAdmin(path)
+            if (!r.ok) {
+              const detail = await r.text().catch(() => '')
+              throw new Error(table + ' read failed (' + r.status + '): ' + detail.slice(0, 300))
+            }
+            const page = await r.json()
+            if (!Array.isArray(page) || page.length === 0) break
+            for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+            if (page.length < PAGE) break
+            cursor = page[page.length - 1].row_key
+          }
+          return { since: chunkSince, until: chunkUntil, rows, truncated, cursor: truncated ? cursor : null }
+        }
+        const chunks = splitIntoMonthChunks(since, until)
+        const CONCURRENCY = 3
+        const chunkResults = []
+        let nextChunkIdx = 0
+        async function worker() {
+          while (nextChunkIdx < chunks.length) {
+            const my = chunks[nextChunkIdx++]
+            chunkResults.push(await fetchOneChunk(my.since, my.until))
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker))
+        const rows = chunkResults.flatMap(c => c.rows)
+        const remainingRanges = chunkResults.filter(c => c.truncated).map(c => ({ since: c.since, until: c.until, cursor: c.cursor }))
         // A truncated result is never cached and never labeled fromCache -- it is
         // incomplete by construction, so it must never be handed to a later caller as
-        // if it were the whole answer. cursor is the last row_key actually fetched, so
-        // the client's fallback can resume from exactly there instead of re-fetching
-        // (and re-billing egress for) rows this call already retrieved.
-        if (truncated) return res.status(200).json({ rows, truncated: true, cursor, fromCache: false })
+        // if it were the whole answer. remainingRanges names exactly which chunk(s)
+        // didn't finish and where each left off, so the client's fallback can resume
+        // precisely there instead of re-fetching (and re-billing egress for) rows this
+        // call already retrieved.
+        if (remainingRanges.length) return res.status(200).json({ rows, truncated: true, remainingRanges, fromCache: false })
         payload = { rows }
       }
       overallBqCacheSet(cacheKey, payload)

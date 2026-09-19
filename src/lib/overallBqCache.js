@@ -27,19 +27,30 @@
 // sequential keyset pages than the server function's own 60-second ceiling allows --
 // the OLD direct-from-browser version had no such ceiling and would just take longer.
 // A 2-month range genuinely timed out (502) the first time this shipped. Fixed by
-// having the server bail out cleanly at a safe time budget with `truncated:true` plus
-// the cursor of the last row it actually fetched, and having fetchOverallBqRows /
-// fetchOverallBqAggRows below pick up EXACTLY there via the same direct-to-Supabase
-// pagination the old version always used -- so a wide query still always succeeds,
-// it just does not get the caching benefit for whatever tail the server couldn't
-// finish in time. The two rules that direct path had to learn the hard way still
-// apply here: PostgREST caps every response at 1000 rows regardless of 'limit', and
-// paging must be keyed on row_key (the table's primary key) or page boundaries are
-// not stable.
+// having the server bail out cleanly at a safe time budget with `truncated:true`, and
+// having fetchRowsWithFallback below pick up exactly where it left off via the same
+// direct-to-Supabase pagination the old version always used -- so a wide query still
+// always succeeds, it just does not get the caching benefit for whatever tail the
+// server couldn't finish in time. The two rules that direct path had to learn the hard
+// way still apply here: PostgREST caps every response at 1000 rows regardless of
+// 'limit', and paging must be keyed on row_key (the table's primary key) or page
+// boundaries are not stable.
+//
+// 2026-09-19 -- the server side of this (api/crm-leads.js's handleBigQuery) now splits
+// a wide [since,until] range into calendar-month chunks and fetches them CONCURRENTLY
+// (capped at 3 at once) instead of one long sequential pagination -- cut a normal MTD
+// load (current month + prior month for the delta %s, often 50,000+ rows) roughly in
+// half. If the shared time budget still runs out, the server reports each incomplete
+// CHUNK's own [since,until,cursor] as `remainingRanges` (a chunk's own range may not
+// reach the overall `until`) instead of one flat cursor -- fetchRowsWithFallback below
+// fetches each of those tails in parallel too. No COUNT(*) query anywhere in this --
+// an earlier parallel attempt (2026-09-13) needed one to plan offset/limit batches, and
+// that COUNT itself started timing out under real load; splitting by a boundary the
+// caller already controls (calendar months) sidesteps that class of failure entirely.
 //
 // Every exported function below keeps its EXACT original name, arguments and return
 // shape, so OverallDashboard.jsx (the only consumer) needed zero changes for any of
-// this -- caching or the fallback.
+// this -- caching, the chunking, or the fallback.
 
 const API = '/api/crm-leads?source=bigquery'
 
@@ -127,10 +138,21 @@ async function fetchRowsWithFallback(mode, table, columns, { since, until, sourc
   const j = await apiGet(mode, { since, until, sources: list.join(',') }, signal)
   const rows = Array.isArray(j.rows) ? j.rows : []
   if (!j.truncated) return rows
-  // The server got through `rows` before hitting its own time budget -- pick up
-  // exactly where it left off (j.cursor) instead of re-fetching them.
-  const tail = await fetchTailDirect({ table, columns, since, until, sources, cursor: j.cursor, signal })
-  return rows.concat(tail)
+  // The server now fetches the requested range as several calendar-month chunks IN
+  // PARALLEL (2026-09-19, to cut the page's load time) instead of one long sequential
+  // pagination -- see api/crm-leads.js's own comment for why (a COUNT-based parallel
+  // attempt on 2026-09-13 caused real Postgres timeouts and was reverted; this one
+  // never needs a COUNT at all). If the shared time budget still runs out, the server
+  // reports each INCOMPLETE chunk's own [since,until,cursor] separately
+  // (remainingRanges), since a truncated chunk's own range may not even reach the
+  // overall `until` -- fetch each of those tails directly from Supabase in parallel too,
+  // same proven keyset-pagination technique as before. Falls back to the older single-
+  // cursor shape if an unbusted server response ever sends it instead.
+  const ranges = Array.isArray(j.remainingRanges) && j.remainingRanges.length
+    ? j.remainingRanges
+    : [{ since, until, cursor: j.cursor }]
+  const tails = await Promise.all(ranges.map(rr => fetchTailDirect({ table, columns, since: rr.since, until: rr.until, sources, cursor: rr.cursor, signal })))
+  return rows.concat(...tails)
 }
 
 // since / until are inclusive 'YYYY-MM-DD' strings, matched server-side against
