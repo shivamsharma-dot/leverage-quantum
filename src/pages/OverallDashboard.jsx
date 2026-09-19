@@ -2465,47 +2465,82 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // no view of this page that can safely skip campaign-level rows, so the fast
   // aggregated table (fetchOverallBqAggRows, supabase/sql/overall_bq_agg_setup.sql)
   // is left unused here for now rather than partially applied and unsafe.
+  // IndexedDB-backed instant-open, same recipe as the Sheet-mode CSV loader above
+  // (IDB_CSV_KEY) -- added 2026-09-19, direct ask: "every time I click on overall
+  // big query page it takes 40 sec to 1 min ... it should open up instantly." The
+  // in-memory bqRowsCacheRef below only survives while this component stays
+  // mounted in the SAME tab -- reloading the page, or navigating away and back
+  // (which unmounts it), always started completely cold, so "every time I click"
+  // genuinely meant every time, not just the first. IDB survives both. Keyed by a
+  // SINGLE fixed key (not per-range, unlike bqRowsCacheRef) -- it only ever holds
+  // the last range actually fetched, matching the CSV cache's own "one blob"
+  // convention; painted instantly ONLY when it matches the CURRENTLY requested
+  // since/until/sources exactly, which covers the dominant real case (reopening
+  // the page to its own default view, e.g. MTD, day after day) without risking a
+  // mismatched range flashing on screen for a genuinely new selection.
+  const IDB_BQ_ROWS_KEY = 'overall_bq_rows_v1'
+  const IDB_BQ_ROWS_TTL = 24 * 60 * 60 * 1000
   useEffect(() => {
     if (!bqMode || !bqSince || !bqUntil) return
     const cacheKey = bqSince + '|' + bqUntil + '|' + (sourceIsAll ? 'ALL' : [...selectedSources].sort().join(','))
     const cached = bqRowsCacheRef.current.get(cacheKey)
+    const paint = (raw, sourceOpts) => {
+      setBqRows(raw.map(mapRow))
+      setBqRowCount(raw.length)
+      if (sourceIsAll && sourceOpts) setBqSourceOpts(sourceOpts)
+      setBqError(null)
+    }
     if (cached) {
       // Re-insert to the end so this key counts as most-recently-used for the eviction
       // below, then serve it -- same branches the network path takes on success, just
       // synchronous.
       bqRowsCacheRef.current.delete(cacheKey)
       bqRowsCacheRef.current.set(cacheKey, cached)
-      setBqRows(cached.raw.map(mapRow))
-      setBqRowCount(cached.raw.length)
-      if (sourceIsAll) setBqSourceOpts(cached.sourceOpts)
-      setBqError(null)
+      paint(cached.raw, cached.sourceOpts)
       setBqBusy(false)
       setLoading(false)
       return
     }
     let dead = false
-    // Real bug found live (2026-09-08): bqRange can briefly compute a full-history
-    // fallback range on a cold load (its own month-lookup table hasn't populated yet),
-    // fire a request for it, then moments later recompute the correct narrow range and
-    // fire a second, better one -- but with no way to actually cancel the first, it
-    // kept paging through the whole ~1.5-year table in the background even after its
-    // result became irrelevant, stalling the page for 40+ seconds on real Supabase/
-    // Vercel resources shared with the fetch that mattered. The AbortController below
-    // genuinely cancels a superseded fetch from this same cleanup that already flips
-    // `dead`, instead of merely discarding its eventual result.
     const controller = new AbortController()
-    setBqBusy(true)
-    const fetcher = fetchOverallBqRows
-    retryFetch(() => fetcher({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources, signal: controller.signal }))
-      .then(raw => {
+    // The IDB check has to be AWAITED before deciding whether to show the busy
+    // spinner at all -- an earlier version set `setBqBusy(true)` synchronously
+    // right after firing off the (necessarily async) IDB read, which always ran
+    // before the read could resolve and made the "skip the spinner on a hit"
+    // check permanently false. Doing the whole sequence -- IDB check, then
+    // real fetch -- inside one async function, in order, is what actually
+    // fixes that.
+    ;(async () => {
+      let paintedFromIdb = false
+      try {
+        const idbHit = await idbGet(IDB_BQ_ROWS_KEY)
         if (dead) return
-        setBqRows(raw.map(mapRow))
-        setBqRowCount(raw.length)
+        if (idbHit && idbHit.cacheKey === cacheKey && (Date.now() - idbHit.ts) < IDB_BQ_ROWS_TTL) {
+          paint(idbHit.raw, idbHit.sourceOpts)
+          setBqBusy(false)
+          setLoading(false)
+          setBgRefreshing(true)
+          paintedFromIdb = true
+        }
+      } catch (_) { /* fall through to the normal loading state */ }
+      if (dead) return
+      // Real bug found live (2026-09-08): bqRange can briefly compute a full-history
+      // fallback range on a cold load (its own month-lookup table hasn't populated yet),
+      // fire a request for it, then moments later recompute the correct narrow range and
+      // fire a second, better one -- but with no way to actually cancel the first, it
+      // kept paging through the whole ~1.5-year table in the background even after its
+      // result became irrelevant, stalling the page for 40+ seconds on real Supabase/
+      // Vercel resources shared with the fetch that mattered. The AbortController's
+      // cleanup below genuinely cancels a superseded fetch, instead of merely
+      // discarding its eventual result.
+      if (!paintedFromIdb) setBqBusy(true)
+      try {
+        const raw = await retryFetch(() => fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources, signal: controller.signal }))
+        if (dead) return
         // Only ever refresh the Source options from a read that had NO Source filter on
         // it, or the dropdown would shrink to whatever is currently selected.
         const sourceOpts = sourceIsAll ? ['All', ...[...new Set(raw.map(r => (r.Source || '').trim() || 'Unknown'))].sort()] : null
-        if (sourceOpts) setBqSourceOpts(sourceOpts)
-        setBqError(null)
+        paint(raw, sourceOpts)
         const cache = bqRowsCacheRef.current
         // sourceOpts is only ever non-null when this fetch was itself sourceIsAll (a
         // filtered fetch never recomputes the dropdown, per the comment above) -- and a
@@ -2513,15 +2548,22 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         // by `if (sourceIsAll)` there too), so null here is simply "not applicable."
         cache.set(cacheKey, { raw, sourceOpts })
         while (cache.size > BQ_ROWS_CACHE_MAX) cache.delete(cache.keys().next().value)
-      })
-      .catch(e => {
+        // Only ever persisted for an unfiltered (sourceIsAll) read -- a Source-filtered
+        // fetch's own sourceOpts is null (see above), and painting a filtered snapshot
+        // back on a later COLD load, before the user has picked that same filter again,
+        // would show a silently-narrowed page with no filter chip explaining why.
+        if (sourceIsAll) idbSet(IDB_BQ_ROWS_KEY, { cacheKey, raw, sourceOpts, ts: Date.now() })
+      } catch (e) {
         if (dead || (e && e.name === 'AbortError')) return
         // Fall back to the sheet instead of showing a broken page. loadData() is
         // session-cached, so this is instant if the CSV was already parsed once.
-        setBqError(e.message)
-        loadData()
-      })
-      .finally(() => { if (!dead) { setBqBusy(false); setLoading(false) } })
+        // A snapshot painted from IDB moments ago is still more useful than an error
+        // banner -- same "stale beats blank" rule the CSV loader already follows.
+        if (!paintedFromIdb) { setBqError(e.message); loadData() }
+      } finally {
+        if (!dead) { setBqBusy(false); setLoading(false); setBgRefreshing(false) }
+      }
+    })()
     return () => { dead = true; controller.abort() }
   }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData])
 
