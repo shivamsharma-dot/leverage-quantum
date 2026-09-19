@@ -734,6 +734,86 @@ jobs:
                     'complete this run (or was skipped after an upsert failure), so a '
                     'different-than-expected count is expected, not an error.')
 
+          # Prewarm the Overall (BigQuery) page's own DEFAULT view (2026-09-19,
+          # asked for directly: "on first click or refresh ... it should open up
+          # instantly"). A plain page load with nothing else selected always needs
+          # "previous calendar month + current month so far" -- read that back from
+          # overall_bq_daily (already just synced/pruned above -- real Supabase
+          # data, no second BigQuery query) and write it as ONE row, so a user's
+          # first click of the day reads one fast row instead of paginating through
+          # tens of thousands live. See supabase/sql/overall_bq_prewarm_setup.sql
+          # and api/crm-leads.js's overall_bq_prewarm mode. Best-effort, wrapped so
+          # a failure here can NEVER fail the real sync above, which already
+          # succeeded by this point regardless of what happens next.
+          #
+          # Rows are stored POSITIONALLY (an array of arrays in PW_COLUMNS' own
+          # fixed order, not one JSON object per row) -- two months of per-campaign
+          # data is 50,000-100,000+ rows, and repeating 18 verbose column names
+          # ("Queued on Futwork Human", etc.) on every single row would roughly
+          # double the payload for no reason. The client zips each array back
+          # against the identical column order (kept in sync by convention, the
+          # same way this exact column list is already duplicated in three other
+          # places in this codebase: overallBqCache.js's BQ_COLUMNS, and twice more
+          # in api/crm-leads.js's own overall_bq_rows/agg_rows branch).
+          try:
+              PW_COLUMNS = [
+                  'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
+                  'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human',
+                  'Queued on Futwork AI', 'Queued on Superbot', 'Futwork Human QL',
+                  'Futwork AI QL', 'Superbot AI QL', 'Total_Spends', 'Total Apps',
+                  'Total Offers', 'Total Deposits', 'Total RAUs',
+              ]
+              pw_select = ','.join(c if re.match(r'^[a-z_]+$', c) else '"' + c + '"' for c in PW_COLUMNS)
+
+              # IST, not UTC -- this repo's own established convention for every
+              # "what month/day is it right now" computation (matches CUTOFF's own
+              # use of real-world dates elsewhere in this file).
+              now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+              pw_cur_month_start = now_ist.replace(day=1)
+              pw_prev_month_end = pw_cur_month_start - timedelta(days=1)
+              pw_since = pw_prev_month_end.replace(day=1).strftime('%Y-%m-%d')
+              pw_until = now_ist.strftime('%Y-%m-%d')
+
+              pw_rows = []
+              pw_cursor = None
+              for _pw_guard in range(2000):  # 1,00,00,000-row safety valve
+                  p = ('select=' + urllib.parse.quote(pw_select) + ',row_key'
+                       + '&lead_date_iso=gte.' + pw_since + '&lead_date_iso=lte.' + pw_until
+                       + '&order=row_key.asc&limit=5000')
+                  if pw_cursor:
+                      p += '&row_key=gt.' + urllib.parse.quote(pw_cursor)
+                  req = sb(SB_URL + '/rest/v1/' + TABLE + '?' + p, 'GET')
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      page = json.loads(r.read())
+                  if not page:
+                      break
+                  for row in page:
+                      pw_rows.append([row.get(c) for c in PW_COLUMNS])
+                  if len(page) < 5000:
+                      break
+                  pw_cursor = page[-1].get('row_key')
+
+              pw_body = json.dumps([{
+                  'key': 'default', 'since': pw_since, 'until': pw_until,
+                  'row_count': len(pw_rows), 'rows': pw_rows,
+                  'synced_at': now_iso,
+              }]).encode('utf-8')
+              req = sb(SB_URL + '/rest/v1/overall_bq_prewarm?on_conflict=key', 'POST', pw_body,
+                        {'Prefer': 'resolution=merge-duplicates,return=minimal'})
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  r.read()
+              print('Prewarmed overall_bq_prewarm: default =', pw_since, 'to', pw_until,
+                    '(', len(pw_rows), 'rows )')
+          except Exception as e:
+              detail = ''
+              try:
+                  if hasattr(e, 'read'):
+                      detail = ' | body: ' + e.read().decode('utf-8')[:500]
+              except Exception:
+                  pass
+              print('WARNING: overall_bq_prewarm step failed (non-fatal -- the real sync '
+                    'above already succeeded regardless):', repr(e) + detail)
+
           # Log this sync's own BigQuery job into bigquery_jobs, so Settings >
           # Data > BigQuery Usage reflects every real job Quantum triggers --
           # not just the ones fired through lib/bigquery.mjs (Leverage Careers /

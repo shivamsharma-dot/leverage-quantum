@@ -169,6 +169,32 @@ export async function fetchOverallBqRows({ since, until, sources, signal }) {
   return fetchRowsWithFallback('overall_bq_rows', 'overall_bq_daily', BQ_COLUMNS, { since, until, sources, signal })
 }
 
+// The Overall (BigQuery) page's own DEFAULT-view snapshot (2026-09-19) -- see
+// overall_bq_prewarm_setup.sql and the sync workflow's own comment for the full
+// story. ONE fast Supabase read (a single row, not a paginated per-campaign
+// scan), so a genuinely first-ever click of the day can be fast too, not just a
+// repeat visit (which the IndexedDB cache in OverallDashboard.jsx already covers).
+// Rows come back POSITIONAL (an array of arrays in BQ_COLUMNS' own fixed order,
+// written that way by the sync to avoid repeating 18 verbose column names on
+// every one of 50,000-100,000+ rows) -- zipped back into the same keyed-object
+// shape fetchOverallBqRows already returns, so callers need no special-casing.
+// Returns null (never throws) on any failure or an empty/missing prewarm row --
+// this is purely a speed optimisation the caller can always safely skip.
+export async function fetchOverallBqPrewarm(signal) {
+  try {
+    const j = await apiGet('overall_bq_prewarm', {}, signal)
+    if (!j || !Array.isArray(j.rows) || !j.since || !j.until) return null
+    const rows = j.rows.map(arr => {
+      const o = {}
+      BQ_COLUMNS.forEach((col, i) => { o[col] = arr[i] })
+      return o
+    })
+    return { since: j.since, until: j.until, rows }
+  } catch (_) {
+    return null
+  }
+}
+
 // Same contract as fetchOverallBqRows, against the pre-aggregated day+Source
 // companion table instead -- callers that only need Source/Month/Day-level numbers
 // (not per-campaign) get the same date-range behaviour, just fast regardless of how

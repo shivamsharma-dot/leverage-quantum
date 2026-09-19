@@ -32,7 +32,7 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 // source this page instance reads is now fixed by the `dataSource` prop (two
 // separate routes/pages -- see App.jsx), not a per-device Settings toggle.
 import {
-  fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
+  fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt, fetchOverallBqPrewarm,
 } from '../lib/overallBqCache'
 // Just the MTD application count for the "MTD Scorecard" Slack report (2026-09-10) --
 // see the mtdScorecard effect below.
@@ -2535,7 +2535,31 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // discarding its eventual result.
       if (!paintedFromIdb) setBqBusy(true)
       try {
-        const raw = await retryFetch(() => fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources, signal: controller.signal }))
+        // Try the pre-warmed default-view snapshot first (2026-09-19, direct ask:
+        // "on first click or refresh ... it should open up instantly") -- written by
+        // overall-bq-sync.yml's own last step, a single fast Supabase row instead of
+        // the live per-campaign pagination below. Only usable for an UNFILTERED
+        // (sourceIsAll) request whose own [bqSince,bqUntil] falls entirely inside
+        // the prewarm's stored [since,until] -- current-month-plus-comparison-window
+        // views (the overwhelming majority of a plain page load) satisfy this; a
+        // custom range reaching further back, or Trend/Compare's wider spans, don't,
+        // and fall straight through to the unchanged live fetch below exactly as
+        // before. Never throws -- a miss or a failure here just means `raw` stays
+        // unset and the live fetch runs, so this can never make the page WORSE.
+        let raw = null
+        if (sourceIsAll) {
+          const pw = await fetchOverallBqPrewarm(controller.signal)
+          if (dead) return
+          if (pw && pw.since <= bqSince && pw.until >= bqUntil) {
+            raw = pw.rows.filter(r => {
+              const d = parseD(r.lead_date)
+              if (!d) return false
+              const k = dayKey(d)
+              return k >= bqSince && k <= bqUntil
+            })
+          }
+        }
+        if (!raw) raw = await retryFetch(() => fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources, signal: controller.signal }))
         if (dead) return
         // Only ever refresh the Source options from a read that had NO Source filter on
         // it, or the dropdown would shrink to whatever is currently selected.

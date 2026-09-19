@@ -3822,7 +3822,7 @@ function overallBqCacheSet(key, data) {
 async function handleBigQuery(req, res, me) {
   const auth = await import('../lib/auth.mjs')
   const mode = (req.query && req.query.mode) || 'ping'
-  const gateId = mode === 'careers_leads' ? 'leverage_careers' : mode === 'ql_split_totals' ? 'overall' : 'settings'
+  const gateId = mode === 'careers_leads' ? 'leverage_careers' : (mode === 'ql_split_totals' || mode === 'overall_bq_prewarm') ? 'overall' : 'settings'
   if (!auth.canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -3918,6 +3918,34 @@ async function handleBigQuery(req, res, me) {
       return res.status(200).json(await fetchQlSplitSheetTotals(since, until))
     } catch (err) {
       return res.status(502).json({ error: String((err && err.message) || err) })
+    }
+  }
+  // Overall (BigQuery) page's own DEFAULT-view prewarm (2026-09-19, direct ask:
+  // "on first click or refresh ... it should open up instantly"). ONE row, written
+  // by .github/workflows/overall-bq-sync.yml's own last step -- see that file's
+  // comment and supabase/sql/overall_bq_prewarm_setup.sql for the full story of
+  // why this exists (no amount of making the LIVE fetch faster removes the fact
+  // that someone has to wait for it; this removes the wait entirely for the one
+  // view -- current month + prior month, unfiltered -- that a plain page load
+  // always needs). Deliberately a single unconditional read, no since/until
+  // params: the CLIENT decides whether the stored [since,until] actually covers
+  // what it currently needs (OverallDashboard.jsx checks this before using it),
+  // this endpoint just hands back whatever the last sync computed.
+  if (mode === 'overall_bq_prewarm') {
+    try {
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      const r = await supabaseAdmin("overall_bq_prewarm?select=since,until,row_count,rows,synced_at&key=eq.default")
+      if (!r.ok) throw new Error('overall_bq_prewarm read failed (' + r.status + ')')
+      const rows = await r.json()
+      const hit = rows[0] || null
+      return res.status(200).json(hit ? {
+        since: hit.since, until: hit.until, rowCount: hit.row_count,
+        rows: hit.rows, syncedAt: hit.synced_at,
+      } : { rows: null })
+    } catch (err) {
+      // Best-effort -- a missing/failed prewarm just means the caller falls
+      // through to the existing live-fetch path, exactly as it always has.
+      return res.status(200).json({ rows: null, error: String((err && err.message) || err) })
     }
   }
   const OVERALL_BQ_READ_MODES = ['overall_bq_rows', 'overall_bq_agg_rows', 'overall_bq_bounds', 'overall_bq_synced_at']
