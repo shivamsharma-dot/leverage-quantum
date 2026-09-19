@@ -3921,26 +3921,31 @@ async function handleBigQuery(req, res, me) {
     }
   }
   // Overall (BigQuery) page's own DEFAULT-view prewarm (2026-09-19, direct ask:
-  // "on first click or refresh ... it should open up instantly"). ONE row, written
-  // by .github/workflows/overall-bq-sync.yml's own last step -- see that file's
-  // comment and supabase/sql/overall_bq_prewarm_setup.sql for the full story of
-  // why this exists (no amount of making the LIVE fetch faster removes the fact
-  // that someone has to wait for it; this removes the wait entirely for the one
-  // view -- current month + prior month, unfiltered -- that a plain page load
-  // always needs). Deliberately a single unconditional read, no since/until
-  // params: the CLIENT decides whether the stored [since,until] actually covers
-  // what it currently needs (OverallDashboard.jsx checks this before using it),
-  // this endpoint just hands back whatever the last sync computed.
+  // "on first click or refresh ... it should open up instantly"). Written by
+  // .github/workflows/overall-bq-sync.yml's own last step -- see that file's
+  // comment for the full story of why this exists (no amount of making the LIVE
+  // fetch faster removes the fact that someone has to wait for it; this removes
+  // the wait entirely for the one view -- current month + prior month,
+  // unfiltered -- that a plain page load always needs). Deliberately a single
+  // unconditional read, no since/until params: the CLIENT decides whether the
+  // stored [since,until] actually covers what it currently needs
+  // (OverallDashboard.jsx checks this before using it), this endpoint just
+  // hands back whatever the last sync computed.
+  //
+  // Stored under app_preferences (key 'overall_bq_prewarm_default'), not a
+  // dedicated table -- a new table needs a one-time manual SQL-editor step,
+  // which was explicitly declined for this feature; app_preferences already
+  // exists with RLS already disabled, so this needs no setup at all.
   if (mode === 'overall_bq_prewarm') {
     try {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
-      const r = await supabaseAdmin("overall_bq_prewarm?select=since,until,row_count,rows,synced_at&key=eq.default")
-      if (!r.ok) throw new Error('overall_bq_prewarm read failed (' + r.status + ')')
+      const r = await supabaseAdmin("app_preferences?select=value&key=eq.overall_bq_prewarm_default")
+      if (!r.ok) throw new Error('overall_bq_prewarm_default read failed (' + r.status + ')')
       const rows = await r.json()
-      const hit = rows[0] || null
-      return res.status(200).json(hit ? {
-        since: hit.since, until: hit.until, rowCount: hit.row_count,
-        rows: hit.rows, syncedAt: hit.synced_at,
+      const v = rows[0] && rows[0].value
+      return res.status(200).json(v && Array.isArray(v.rows) ? {
+        since: v.since, until: v.until, rowCount: v.row_count,
+        rows: v.rows, syncedAt: v.synced_at,
       } : { rows: null })
     } catch (err) {
       // Best-effort -- a missing/failed prewarm just means the caller falls

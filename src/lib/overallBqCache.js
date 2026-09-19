@@ -170,8 +170,10 @@ export async function fetchOverallBqRows({ since, until, sources, signal }) {
 }
 
 // The Overall (BigQuery) page's own DEFAULT-view snapshot (2026-09-19) -- see
-// overall_bq_prewarm_setup.sql and the sync workflow's own comment for the full
-// story. ONE fast Supabase read (a single row, not a paginated per-campaign
+// the sync workflow's own comment for the full story (stored under
+// app_preferences, key 'overall_bq_prewarm_default' -- not a dedicated table,
+// to avoid needing a manual one-time SQL-editor step). ONE fast Supabase read
+// (a single row, not a paginated per-campaign
 // scan), so a genuinely first-ever click of the day can be fast too, not just a
 // repeat visit (which the IndexedDB cache in OverallDashboard.jsx already covers).
 // Rows come back POSITIONAL (an array of arrays in BQ_COLUMNS' own fixed order,

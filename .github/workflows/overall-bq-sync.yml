@@ -741,10 +741,20 @@ jobs:
           # overall_bq_daily (already just synced/pruned above -- real Supabase
           # data, no second BigQuery query) and write it as ONE row, so a user's
           # first click of the day reads one fast row instead of paginating through
-          # tens of thousands live. See supabase/sql/overall_bq_prewarm_setup.sql
-          # and api/crm-leads.js's overall_bq_prewarm mode. Best-effort, wrapped so
-          # a failure here can NEVER fail the real sync above, which already
-          # succeeded by this point regardless of what happens next.
+          # tens of thousands live. See api/crm-leads.js's overall_bq_prewarm mode.
+          # Best-effort, wrapped so a failure here can NEVER fail the real sync
+          # above, which already succeeded by this point regardless of what
+          # happens next.
+          #
+          # Stored in the EXISTING app_preferences table (key
+          # 'overall_bq_prewarm_default'), not a new table -- a new table would
+          # need a manual one-time SQL-editor step (supabase/sql/*_setup.sql,
+          # this repo's own established pattern), and that step was explicitly
+          # declined for this feature. app_preferences already exists, already
+          # has RLS disabled, and already has read/write via the same JSON-value
+          # shape every other admin-configurable setting in this app uses -- so
+          # this needs zero manual setup, at the cost of everything living under
+          # one more app_preferences key instead of its own table.
           #
           # Rows are stored POSITIONALLY (an array of arrays in PW_COLUMNS' own
           # fixed order, not one JSON object per row) -- two months of per-campaign
@@ -793,16 +803,19 @@ jobs:
                       break
                   pw_cursor = page[-1].get('row_key')
 
-              pw_body = json.dumps([{
-                  'key': 'default', 'since': pw_since, 'until': pw_until,
+              pw_value = {
+                  'since': pw_since, 'until': pw_until,
                   'row_count': len(pw_rows), 'rows': pw_rows,
                   'synced_at': now_iso,
+              }
+              pw_body = json.dumps([{
+                  'key': 'overall_bq_prewarm_default', 'value': pw_value, 'updated_by': 'overall-bq-sync',
               }]).encode('utf-8')
-              req = sb(SB_URL + '/rest/v1/overall_bq_prewarm?on_conflict=key', 'POST', pw_body,
+              req = sb(SB_URL + '/rest/v1/app_preferences?on_conflict=key', 'POST', pw_body,
                         {'Prefer': 'resolution=merge-duplicates,return=minimal'})
               with urllib.request.urlopen(req, timeout=120) as r:
                   r.read()
-              print('Prewarmed overall_bq_prewarm: default =', pw_since, 'to', pw_until,
+              print('Prewarmed overall_bq_prewarm_default: since', pw_since, 'until', pw_until,
                     '(', len(pw_rows), 'rows )')
           except Exception as e:
               detail = ''
@@ -811,8 +824,8 @@ jobs:
                       detail = ' | body: ' + e.read().decode('utf-8')[:500]
               except Exception:
                   pass
-              print('WARNING: overall_bq_prewarm step failed (non-fatal -- the real sync '
-                    'above already succeeded regardless):', repr(e) + detail)
+              print('WARNING: overall_bq_prewarm_default step failed (non-fatal -- the real '
+                    'sync above already succeeded regardless):', repr(e) + detail)
 
           # Log this sync's own BigQuery job into bigquery_jobs, so Settings >
           # Data > BigQuery Usage reflects every real job Quantum triggers --
