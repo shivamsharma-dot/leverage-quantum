@@ -3971,12 +3971,17 @@ async function handleBigQuery(req, res, me) {
         // regardless of what a caller asked for. The Supabase project's Data API "Max
         // rows" setting was raised to 10,000 (2026-09-19, directly to cut this page's
         // real round-trip count -- a normal MTD view's ~50,000 rows needed ~50 pages at
-        // 1,000/page; at 10,000/page it's ~5), so this can now actually ask for more per
-        // request and get it. Kept well under the new 10,000 ceiling itself so a single
-        // page's own transfer/serialize time doesn't become the new bottleneck in its
-        // place -- 5,000 is a real, moderate step up, not "ask for the max just because
-        // the cap allows it."
-        const PAGE = 5000
+        // 1,000/page), so this can now actually ask for more per request and get it.
+        // First tried 5,000 -- live-tested against 4 real month-wide ranges and 2 of
+        // the 4 came back with a genuine `57014 canceling statement due to statement
+        // timeout`, not just slow -- a real regression, the exact failure class this
+        // file's own history already hit once before (2026-09-13, from an expensive
+        // COUNT query; this time from the page size itself, on a table where the date
+        // filter can't be satisfied by the row_key index alone, forcing a wider scan
+        // that scales with how many matching rows a single page has to collect).
+        // Backed off to 2,000, which is still a real 2x cut in round trips over the
+        // 1,000 baseline, without reproducing the timeout in the same live retest.
+        const PAGE = 2000
         // A wide range against overall_bq_daily (raw, one row per campaign -- unlike
         // the small agg table) can need far more pages than this function's own 60s
         // ceiling (export const maxDuration below) allows -- confirmed live 2026-09-08:
