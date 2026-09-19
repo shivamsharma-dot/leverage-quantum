@@ -4,6 +4,13 @@ name: Overall BigQuery Cache Sync
 # BigQuery Console) into public.overall_bq_daily, row for row, at the full
 # date x source x campaign grain. Nothing is aggregated away.
 #
+# Windowed by default (2026-09-19): a normal run only queries/upserts the
+# trailing 21 days (WINDOW_DAYS below), not the full history -- see the SQL
+# block's own comment for why. Tick "full_resync" on a manual run (Actions >
+# Run workflow) to pull the complete history instead; do this once after
+# adding a new column to the query, since a windowed run will never backfill
+# a new column into rows outside its own window.
+#
 # This is a NEW, ADDITIVE pipeline. It never reads or writes overall_funnel_daily
 # and it does not touch .github/workflows/overall-funnel-sync.yml -- Ask AI's
 # contribution tool, the Marketing Performance report and both agents depend on
@@ -42,6 +49,16 @@ name: Overall BigQuery Cache Sync
 # "Manually run by shivamsharma-dot").
 on:
   workflow_dispatch:
+    inputs:
+      full_resync:
+        description: >-
+          Full history resync (slow, ~20-30 min). Leave unchecked for the
+          normal fast run (last 21 days only, a few minutes). Only check this
+          after adding a new column to the query, or to backfill/repair older
+          history -- routine 3x/day runs should never use this.
+        required: false
+        type: boolean
+        default: false
 
 # One sync at a time. Two overlapping runs would interleave their sync_id stamps
 # and the loser's prune step would delete the winner's freshly written rows.
@@ -58,6 +75,7 @@ jobs:
         env:
           SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
           SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          FULL_RESYNC: ${{ github.event.inputs.full_resync }}
           BQ_CLIENT_ID: ${{ secrets.BIGQUERY_CLIENT_ID }}
           BQ_CLIENT_SECRET: ${{ secrets.BIGQUERY_CLIENT_SECRET }}
           BQ_REFRESH_TOKEN: ${{ secrets.BIGQUERY_REFRESH_TOKEN }}
@@ -67,7 +85,7 @@ jobs:
           python3 << 'PYEOF'
           import json, os, re, time, hashlib
           import urllib.request, urllib.parse, urllib.error
-          from datetime import datetime, timezone
+          from datetime import datetime, timezone, timedelta
 
           SB_URL = os.environ['SB_URL']
           SB_KEY = os.environ['SB_KEY']
@@ -109,6 +127,29 @@ jobs:
           # match this same SQL. If the saved query is ever edited again, edit
           # this too. The schema guard below fails loudly on a changed column
           # list, but it cannot see a changed WHERE.
+          #
+          # Windowed vs full resync (2026-09-19): re-fetching and re-upserting
+          # the ENTIRE history (400K+ rows) on every one of the 3x/day runs was
+          # the whole reason a sync took 15-30 minutes -- months-old campaign
+          # data never changes, so there was nothing to gain from re-writing it
+          # every single run. The default run now only asks BigQuery for the
+          # trailing WINDOW_DAYS (generous enough to cover the "yesterday's
+          # numbers were still settling" lag already confirmed live on
+          # 2026-09-17), which is a few thousand rows instead of 400K+ and
+          # should finish in a few minutes. A full_resync run (workflow_dispatch
+          # input, or the FULL_RESYNC env var) still exists and pulls the
+          # complete history -- use it once after adding a new column to this
+          # query (a windowed run will NEVER backfill a new column into rows
+          # outside its own window) or to repair/backfill older history.
+          WINDOW_DAYS = 21
+          FULL_RESYNC = (os.environ.get('FULL_RESYNC') or '').strip().lower() in ('1', 'true', 'yes')
+          if FULL_RESYNC:
+              CUTOFF = '2024-12-31'
+              print('FULL_RESYNC requested -- querying the complete history (since', CUTOFF, ').')
+          else:
+              CUTOFF = (datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS)).strftime('%Y-%m-%d')
+              print('Windowed run -- querying the trailing', WINDOW_DAYS, 'days (since', CUTOFF, ').')
+
           SQL = '''
           SELECT
               FORMAT_DATE('%d-%b-%Y', DATE(date_of_transaction)) AS lead_date,
@@ -135,8 +176,8 @@ jobs:
               count_deposit_snapshot AS `Total Deposits`,
               count_rau_snapshot AS `Total RAUs`
           FROM `chatbot_marketing.marketing_table_v1`
-          WHERE DATE(date_of_transaction) > '2024-12-31';
-          '''
+          WHERE DATE(date_of_transaction) > '__CUTOFF__';
+          '''.replace('__CUTOFF__', CUTOFF)
 
           EXPECTED = [
               'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
@@ -495,12 +536,20 @@ jobs:
           # problem than silently skipping the agg table's refresh entirely, and
           # self-heals the moment a later sync's prune succeeds. So this is now
           # caught and logged, not allowed to abort the rest of the script.
+          # Scoped to the SAME cutoff the SQL query itself used (lead_date_iso is
+          # the real ISO date column derived from BigQuery's lead_date above).
+          # Critical for a windowed run: without this, prune's "not stamped with
+          # this sync_id" check would match every row OUTSIDE the window too
+          # (correctly untouched this run) and delete the entire rest of history.
+          # A full_resync run's cutoff covers everything anyway, so this same
+          # scoping is a no-op there -- one code path, both modes.
+          date_scope = '&lead_date_iso=gt.' + urllib.parse.quote(CUTOFF)
           prune_url = (SB_URL + '/rest/v1/' + TABLE + '?or=(sync_id.neq.'
-                       + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
+                       + urllib.parse.quote(sync_id) + ',sync_id.is.null)' + date_scope)
           pruned_ok = True
           try:
               delete_with_retry(prune_url, TABLE)
-              print('Pruned every row not stamped with this sync_id.')
+              print('Pruned every row not stamped with this sync_id (within the synced window).')
           except Exception as e:
               pruned_ok = False
               print('WARNING:', TABLE, 'prune failed after all retries -- some stale '
@@ -508,20 +557,22 @@ jobs:
                     'succeeds. Continuing to the agg-table sync regardless, since the '
                     'real data upsert above already landed. Error:', repr(e))
 
-          # Final proof, server-side: the table must now hold exactly as many rows
-          # as BigQuery returned. This is the cheap always-on version of the
-          # month-by-month fidelity check. Only meaningful when the prune above
-          # actually ran -- if it didn't, a higher-than-expected count is exactly
-          # what a lingering stale row looks like, not a new bug to flag.
-          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1', 'GET',
-                   None, {'Prefer': 'count=exact', 'Range': '0-0'})
+          # Final proof, server-side: the WINDOW must now hold exactly as many
+          # rows as BigQuery returned -- scoped the same way (lead_date_iso >
+          # CUTOFF), never a whole-table count, since a windowed run's `records`
+          # only covers a few weeks while the table holds the full history.
+          # Only meaningful when the prune above actually ran -- if it didn't, a
+          # higher-than-expected count is exactly what a lingering stale row
+          # looks like, not a new bug to flag.
+          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1' + date_scope,
+                   'GET', None, {'Prefer': 'count=exact', 'Range': '0-0'})
           with urllib.request.urlopen(req, timeout=60) as r:
               r.read()
               content_range = r.headers.get('Content-Range') or ''
           after = content_range.split('/')[-1]
-          print('Rows in', TABLE, 'after sync:', after, '| expected:', len(records))
+          print('Rows in', TABLE, 'within the synced window after sync:', after, '| expected:', len(records))
           if pruned_ok and after.isdigit() and int(after) != len(records):
-              raise SystemExit('Post-sync row count mismatch: table holds %s, expected %d.'
+              raise SystemExit('Post-sync row count mismatch: window holds %s, expected %d.'
                                % (after, len(records)))
           elif not pruned_ok:
               print('Skipping the exact row-count check for', TABLE, '-- prune did not '
@@ -647,8 +698,11 @@ jobs:
           # would delete perfectly good data (from an earlier run) for exactly
           # the rows this run couldn't refresh, turning a "stale but present"
           # row into a "missing" one, which is strictly worse.
+          # Same window scoping as the raw table's prune above, and for the
+          # same reason: without it, a windowed run would delete every
+          # (date, Source) row outside its own window on the very first prune.
           agg_prune_url = (SB_URL + '/rest/v1/' + AGG_TABLE + '?or=(sync_id.neq.'
-                           + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
+                           + urllib.parse.quote(sync_id) + ',sync_id.is.null)' + date_scope)
           agg_pruned_ok = True
           if not agg_upsert_ok:
               agg_pruned_ok = False
@@ -658,22 +712,22 @@ jobs:
           else:
               try:
                   delete_with_retry(agg_prune_url, AGG_TABLE)
-                  print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
+                  print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id (within the synced window).')
               except Exception as e:
                   agg_pruned_ok = False
                   print('WARNING:', AGG_TABLE, 'prune failed after all retries -- some stale '
                         'rows from a previous sync may linger until a later sync\'s prune '
                         'succeeds. Error:', repr(e))
 
-          req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1', 'GET',
-                   None, {'Prefer': 'count=exact', 'Range': '0-0'})
+          req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1' + date_scope,
+                   'GET', None, {'Prefer': 'count=exact', 'Range': '0-0'})
           with urllib.request.urlopen(req, timeout=60) as r:
               r.read()
               content_range = r.headers.get('Content-Range') or ''
           after_agg = content_range.split('/')[-1]
-          print('Rows in', AGG_TABLE, 'after sync:', after_agg, '| expected:', len(agg_records))
+          print('Rows in', AGG_TABLE, 'within the synced window after sync:', after_agg, '| expected:', len(agg_records))
           if agg_pruned_ok and after_agg.isdigit() and int(after_agg) != len(agg_records):
-              raise SystemExit('Post-sync row count mismatch in %s: table holds %s, expected %d.'
+              raise SystemExit('Post-sync row count mismatch in %s: window holds %s, expected %d.'
                                % (AGG_TABLE, after_agg, len(agg_records)))
           elif not agg_pruned_ok:
               print('Skipping the exact row-count check for', AGG_TABLE, '-- prune did not '
