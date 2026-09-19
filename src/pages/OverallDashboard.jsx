@@ -1146,6 +1146,18 @@ const DEEP_JOINABLE_DIMS = new Set(['source', 'campaign', 'corridor'])
 // same as a real open->false transition.
 function useModalA11y(open, onClose, ref) {
   const prevFocusRef = useRef(null)
+  // onClose is read through a ref, not a dependency -- every caller passes a fresh inline
+  // arrow function on every render of ITS OWN parent (e.g. ColumnsPicker's onClose={() =>
+  // setShowColsPicker(false)}), so if onClose were a dependency here, any state change
+  // inside an already-open dialog (checking a box, clicking Move up/down) would tear down
+  // and re-run this whole effect -- which calls .focus() on the dialog's first focusable
+  // element every time, and the browser auto-scrolls that element into view. On a long
+  // list (Columns' 31 rows) that snaps the panel's own scroll back to the top on every
+  // single click, making whatever row you just touched appear to "jump" -- a real, live
+  // bug found 2026-09-19. This effect must only run once per genuine open/close
+  // transition, never on an interaction that merely changes state while already open.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
     if (!open) return
     prevFocusRef.current = document.activeElement
@@ -1155,7 +1167,7 @@ function useModalA11y(open, onClose, ref) {
     const first = focusables()[0]
     ;(first || ref.current)?.focus?.()
     const onKeyDown = e => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose() }
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current() }
       else if (e.key === 'Tab') {
         const els = focusables()
         if (!els.length) { e.preventDefault(); return }
@@ -1169,7 +1181,8 @@ function useModalA11y(open, onClose, ref) {
       document.removeEventListener('keydown', onKeyDown, true)
       if (prevFocusRef.current && document.contains(prevFocusRef.current)) prevFocusRef.current.focus()
     }
-  }, [open, onClose, ref])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ref])
 }
 
 // Show/hide + reorder popover for the summary table's columns.
