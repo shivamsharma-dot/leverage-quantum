@@ -175,6 +175,7 @@
   .info-panel{
     position:fixed; background:var(--text-1); color:var(--bg); font-size:12.5px; line-height:1.55;
     padding:11px 13px; border-radius:10px; box-shadow:var(--shadow); max-width:280px; z-index:60; font-weight:500;
+    white-space:pre-line;
   }
 
   /* ---------- click-through interactivity ---------- */
@@ -446,7 +447,9 @@
 
   <section class="panels">
     <div class="panel">
-      <h2>By senior manager<button class="info-btn" data-tip="Coaches rolled up to their SSM (from the TeamMapping tab) — NPS computed the same formula as the headline number, just scoped to that SSM’s coaches. Sorted by response volume, highest first. Click a row to filter the coach leaderboard below to just that SSM.">i</button></h2>
+      <h2>By senior manager<button class="info-btn" data-tip="Coaches rolled up to their SSM (from the TeamMapping tab) — NPS computed the same formula as the headline number, just scoped to that SSM’s coaches. Sorted by response volume, highest first. Click a row to filter the coach leaderboard below to just that SSM.
+
+P / Pa / D = Promoters (rated 9–10) / Passives (rated 7–8) / Detractors (rated 0–6) — the three buckets every rating falls into. The pill on the right is that SSM’s NPS: (% Promoters) minus (% Detractors).">i</button></h2>
       <p class="hint">NPS rolled up to SSM level &middot; click a row to filter the leaderboard</p>
       <div class="ssm-list" id="ssmList"></div>
     </div>
