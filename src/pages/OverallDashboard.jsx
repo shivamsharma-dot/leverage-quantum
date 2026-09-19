@@ -860,6 +860,24 @@ const SUMMARY_COLUMNS = [
   { key:'estimatedRoas', label:'Est. ROAS' },
 ]
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
+// Purely a browsing aid inside the Columns picker (2026-09-19, "grouped sections" ask) --
+// a section-label header is inserted wherever the group changes while walking the LIST'S
+// OWN CURRENT ORDER (colOrder), so the picker always shows the columns in the exact order
+// they'll appear in the table, never a second, independent grouped ordering that could
+// silently disagree with it. SUMMARY_COLUMNS' own declared order already keeps each group
+// contiguous, so a fresh/reset layout shows one clean header per group; a user who has
+// manually dragged columns into an interleaved order may see the same header repeat more
+// than once further down the list -- an honest reflection of their own custom order, not
+// a bug to prevent.
+const SUMMARY_COLUMN_GROUPS = {
+  corridor: 'Dimensions', source: 'Dimensions', subSource: 'Dimensions',
+  spend: 'Volume & spend', leads: 'Volume & spend', contribPct: 'Volume & spend',
+  floorQueued: 'Queued by channel', queued: 'Queued by channel', futworkHumanQ: 'Queued by channel', futworkAiQ: 'Queued by channel', superbotQ: 'Queued by channel',
+  humanQL: 'Qualified (QL)', futworkAiQl: 'Qualified (QL)', superbotAiQl: 'Qualified (QL)', totalQL: 'Qualified (QL)', futworkQlPct: 'Qualified (QL)', futworkHumanQlPct: 'Qualified (QL)', futworkAiQlPct: 'Qualified (QL)', avgQlPerDay: 'Qualified (QL)',
+  apps: 'Apps -> RAU funnel', offers: 'Apps -> RAU funnel', deposits: 'Apps -> RAU funnel', raus: 'Apps -> RAU funnel', estimatedRaus: 'Apps -> RAU funnel', qlPct: 'Apps -> RAU funnel', appPct: 'Apps -> RAU funnel', depositPct: 'Apps -> RAU funnel',
+  cpl: 'Cost', cpql: 'Cost', cpa: 'Cost',
+  estSrRevenue: 'Revenue & ROAS', actSrRevenue: 'Revenue & ROAS', roas: 'Revenue & ROAS', estimatedRoas: 'Revenue & ROAS',
+}
 // Every column that belongs to "the Futwork/Superbot story" -- queued by channel, QL'd by
 // channel, and the rate columns derived from those two. Declared adjacent in SUMMARY_COLUMNS
 // above (so a fresh column order already groups them), but a live user's saved colOrder can
@@ -895,12 +913,12 @@ const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 const PIN_COLS_STORAGE_KEY = 'lq_overall_summary_pin_cols'
-// Named presets of {colOrder, visibleCols, sortKey, sortDir} -- same shape/localStorage
-// pattern as the "Saved views" feature already shipped on AI/Human QL Detail and Meta Ads
-// Creatives. Only one global layout persisted per device otherwise, despite 30 columns and
-// heavy per-user customization -- e.g. no way to keep a "CEO view" and an "Ops view" both
-// ready without overwriting one every time you switch to the other.
-const SUMMARY_VIEWS_KEY = 'lq_overall_summary_views'
+// Named presets of {colOrder, visibleCols, sortKey, sortDir} -- server-backed (Supabase
+// app_preferences key `overall_summary_table_views`, shared with everyone who opens this
+// page -- see the `tableViews` state below), not per-device localStorage. Lets a whole
+// custom layout (order + visibility + sort) be named and switched back to instantly,
+// e.g. a "CEO view" and an "Ops view" both ready without overwriting one every time you
+// switch to the other.
 // Curated subset shown on a phone instead of the full customizable column set -- 30 columns
 // of horizontal scroll past a sticky label column is technically usable but not genuinely
 // usable on a small screen. Reuses the exact set already hand-picked for the Slack CEO image
@@ -1185,57 +1203,112 @@ function useModalA11y(open, onClose, ref) {
   }, [open, ref])
 }
 
-// Show/hide + reorder popover for the summary table's columns.
-function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset, views, onSaveView, onLoadView, onDeleteView }) {
+// Show/hide + reorder popover for the summary table's columns. 2026-09-19 rebuild --
+// search (30+ columns is genuinely hard to scan as one flat list), select-all/none
+// (scoped to whatever the search has narrowed to, or everything with no search),
+// grouped section headers (SUMMARY_COLUMN_GROUPS, purely a labeling aid over the
+// list's own real order -- see that constant's comment), and drag-to-reorder rows
+// directly (in addition to the existing Move up/down arrows, kept for precision and
+// keyboard/no-drag accessibility) reusing the exact same reorderColumns() the table's
+// own header-drag already uses, so there is only ever one reordering code path.
+function ColumnsPicker({ order, visible, onToggle, onMove, onReorder, onClose, onReset, views, viewsLoaded, viewsSaving, onSaveView, onLoadView, onDeleteView }) {
   const panelRef = useRef(null)
   useModalA11y(true, onClose, panelRef)
   const viewNames = views ? Object.keys(views) : []
+  const [query, setQuery] = useState('')
+  const [dragKey, setDragKey] = useState(null)
+  const [dragOverKey, setDragOverKey] = useState(null)
+  const q = query.trim().toLowerCase()
+  const shownOrder = q
+    ? order.filter(k => { const c = SUMMARY_COLUMNS.find(c => c.key === k); return c && c.label.toLowerCase().includes(q) })
+    : order
+  const allShownVisible = shownOrder.length > 0 && shownOrder.every(k => visible.includes(k))
+  const toggleAllShown = () => shownOrder.forEach(k => {
+    const isVisible = visible.includes(k)
+    if (allShownVisible && isVisible) onToggle(k)
+    if (!allShownVisible && !isVisible) onToggle(k)
+  })
+  let lastGroup = null
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns — show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:440, overflowY:'auto' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns — show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:270, maxWidth:300, maxHeight:480, overflowY:'auto' }}>
         {/* Saved views -- lets a whole custom layout (order + visibility + sort) be named and
-            switched back to instantly, rather than the one global layout this table otherwise
-            keeps. Same pattern/localStorage shape already shipped on AI/Human QL Detail and Meta
-            Ads Creatives, so it behaves like a feature a returning user may already know. */}
+            switched back to instantly. Server-backed and shared with everyone who opens this
+            page (see the `tableViews` state in OverallDashboard for the full reasoning) --
+            same {name:{...}} shape already used by AI/Human QL Detail and Meta Ads Creatives'
+            own (per-device) "Saved views", so it behaves like a feature a returning user may
+            already know, just no longer stuck on one browser. */}
         {onSaveView && (
           <div style={{ padding:'4px 8px 8px', borderBottom:`0.5px solid ${C.border}`, marginBottom:6 }}>
-            <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:6 }}>Saved views</div>
+            <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:6 }}>Saved views · shared with everyone</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
-              {viewNames.length === 0 && <span style={{ fontSize:12, color:C.muted }}>None yet</span>}
-              {viewNames.map(name => (
+              {!viewsLoaded && <span style={{ fontSize:12, color:C.muted }}>Loading…</span>}
+              {viewsLoaded && viewNames.length === 0 && <span style={{ fontSize:12, color:C.muted }}>None yet</span>}
+              {viewsLoaded && viewNames.map(name => (
                 <span key={name} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:7, padding:'3px 4px 3px 9px' }}>
                   <button type="button" onClick={() => { onLoadView(name); onClose() }} style={{ border:'none', background:'transparent', cursor:'pointer', fontSize:12, fontWeight:600, color:C.text, padding:0 }}>{name}</button>
-                  <button type="button" onClick={() => onDeleteView(name)} title="Delete view" style={{ border:'none', background:'transparent', cursor:'pointer', fontSize:13, color:C.muted, padding:'0 4px', lineHeight:1 }}>×</button>
+                  <button type="button" onClick={() => onDeleteView(name)} title="Delete view (removes it for everyone)" style={{ border:'none', background:'transparent', cursor:'pointer', fontSize:13, color:C.muted, padding:'0 4px', lineHeight:1 }}>×</button>
                 </span>
               ))}
             </div>
-            <Button onClick={onSaveView} size="sm" variant="secondary" style={{ width:'100%' }}>+ Save current as view</Button>
+            <Button onClick={onSaveView} size="sm" variant="secondary" style={{ width:'100%' }} disabled={viewsSaving}>{viewsSaving ? 'Saving…' : '+ Save current as view'}</Button>
           </div>
         )}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 8px' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 4px' }}>
           <span style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
           <Button onClick={onReset} variant="ghost" size="sm" style={{ padding:'2px 8px' }}>Reset</Button>
         </div>
-        {order.map((key, i) => {
+        <div style={{ padding:'0 8px 8px', display:'flex', gap:6 }}>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search columns…"
+            style={{ flex:1, minWidth:0, padding:'6px 9px', borderRadius:8, border:`0.5px solid ${C.border}`, fontSize:13, fontFamily:FONT, color:C.text }} />
+          <button type="button" onClick={toggleAllShown} disabled={shownOrder.length === 0}
+            title={(allShownVisible ? 'Hide' : 'Show') + (q ? ' every column matching your search' : ' every column')}
+            style={{ padding:'0 10px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--bg3)', fontSize:12, fontWeight:700, color: shownOrder.length === 0 ? '#CBD5E1' : C.navy, cursor: shownOrder.length === 0 ? 'default' : 'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+            {allShownVisible ? 'None' : 'All'}
+          </button>
+        </div>
+        {shownOrder.length === 0 && (
+          <div style={{ padding:'18px 8px', textAlign:'center', color:C.muted, fontSize:13 }}>No columns match "{query}"</div>
+        )}
+        {shownOrder.map((key) => {
           const col = SUMMARY_COLUMNS.find(c => c.key === key)
           if (!col) return null
+          const globalIdx = order.indexOf(key)
           const isVisible = visible.includes(key)
+          const group = SUMMARY_COLUMN_GROUPS[key] || 'Other'
+          const showGroupHeader = !q && group !== lastGroup
+          lastGroup = group
+          const isDragOver = dragOverKey === key && dragKey !== key
           return (
-            <div key={key} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', borderRadius:8 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:8, flex:1, cursor:'pointer', minWidth:0 }}>
-                <input type="checkbox" checked={isVisible} onChange={() => onToggle(key)} style={{ width:14, height:14, cursor:'pointer', accentColor:C.navy, flexShrink:0 }} />
-                <span style={{ fontSize:14, fontWeight: isVisible ? 600 : 400, color: isVisible ? C.text : C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{col.label}</span>
-              </label>
-              <div style={{ display:'flex', gap:2, flexShrink:0 }}>
-                <button onClick={() => onMove(key, -1)} disabled={i === 0} title="Move up" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: i === 0 ? '#CBD5E1' : C.muted, cursor: i === 0 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
-                </button>
-                <button onClick={() => onMove(key, 1)} disabled={i === order.length - 1} title="Move down" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: i === order.length - 1 ? '#CBD5E1' : C.muted, cursor: i === order.length - 1 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                </button>
+            <React.Fragment key={key}>
+              {showGroupHeader && (
+                <div style={{ padding:'10px 8px 4px', fontSize:10.5, fontWeight:800, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.06em' }}>{group}</div>
+              )}
+              <div
+                draggable
+                onDragStart={e => { setDragKey(key); e.dataTransfer.effectAllowed = 'move' }}
+                onDragOver={e => { e.preventDefault(); if (dragOverKey !== key) setDragOverKey(key) }}
+                onDragLeave={() => setDragOverKey(k => (k === key ? null : k))}
+                onDrop={e => { e.preventDefault(); if (dragKey && dragKey !== key) onReorder(dragKey, key); setDragKey(null); setDragOverKey(null) }}
+                onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', borderRadius:8, opacity: dragKey === key ? 0.4 : 1, boxShadow: isDragOver ? `inset 0 2px 0 ${C.navy}` : 'none' }}
+              >
+                <span title="Drag to reorder" style={{ color:'#CBD5E1', fontSize:13, lineHeight:1, cursor:'grab', flexShrink:0, userSelect:'none' }}>⠿</span>
+                <label style={{ display:'flex', alignItems:'center', gap:8, flex:1, cursor:'pointer', minWidth:0 }}>
+                  <input type="checkbox" checked={isVisible} onChange={() => onToggle(key)} style={{ width:14, height:14, cursor:'pointer', accentColor:C.navy, flexShrink:0 }} />
+                  <span style={{ fontSize:14, fontWeight: isVisible ? 600 : 400, color: isVisible ? C.text : C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{col.label}</span>
+                </label>
+                <div style={{ display:'flex', gap:2, flexShrink:0 }}>
+                  <button onClick={() => onMove(key, -1)} disabled={globalIdx === 0} title="Move up" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: globalIdx === 0 ? '#CBD5E1' : C.muted, cursor: globalIdx === 0 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+                  </button>
+                  <button onClick={() => onMove(key, 1)} disabled={globalIdx === order.length - 1} title="Move down" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: globalIdx === order.length - 1 ? '#CBD5E1' : C.muted, cursor: globalIdx === order.length - 1 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
+                </div>
               </div>
-            </div>
+            </React.Fragment>
           )
         })}
       </div>
@@ -1848,19 +1921,51 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }
   const resetCols = () => { setVisibleCols(SUMMARY_COLUMN_KEYS); setColOrder(SUMMARY_COLUMN_KEYS) }
 
-  // Saved column-layout presets -- same {name: {...}} object-in-localStorage pattern already
-  // used by AIQLDetailDashboard.jsx / HumanQLDetailDashboard.jsx / MetaAdsDashboard.jsx's own
-  // "Saved views", so this behaves identically to a pattern users may already know from those
-  // pages instead of a bespoke one just for this table.
-  const [tableViews, setTableViews] = useState(() => {
-    try { const v = JSON.parse(localStorage.getItem(SUMMARY_VIEWS_KEY) || 'null'); return v && typeof v === 'object' ? v : {} }
-    catch { return {} }
-  })
-  useEffect(() => { try { localStorage.setItem(SUMMARY_VIEWS_KEY, JSON.stringify(tableViews)) } catch {} }, [tableViews])
+  // Saved column-layout presets -- {name: {colOrder, visibleCols, sortKey, sortDir}}.
+  // Was a per-browser localStorage blob (matching AIQLDetailDashboard.jsx /
+  // HumanQLDetailDashboard.jsx / MetaAdsDashboard.jsx's own "Saved views"); moved to
+  // Supabase (2026-09-19, direct ask: "is it getting recorded somewhere" + "shared
+  // with everyone") under app_preferences key `overall_summary_table_views` -- any
+  // signed-in user can now save/load/delete a view and every other viewer of this
+  // page sees the same shared list (api/preferences.mjs's own narrow, explicit
+  // exception to its usual admin-only write gate). Loaded once on mount; every
+  // write is optimistic (updates local state immediately) and reverts on a failed
+  // save, same pattern already established for overallAcSales/overallAcSalesSaving
+  // just below. A genuine simplification worth stating plainly: this is a single
+  // shared JSON blob, so two people saving/deleting a view at the exact same
+  // moment can overwrite each other's write (last write wins) -- acceptable for a
+  // low-frequency, non-critical layout preset, not attempted to solve with real
+  // conflict resolution.
+  const [tableViews, setTableViews] = useState({})
+  const [tableViewsLoaded, setTableViewsLoaded] = useState(false)
+  const [tableViewsSaving, setTableViewsSaving] = useState(false)
+  useEffect(() => {
+    let dead = false
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => {
+        if (dead) return
+        const v = data.prefs?.overall_summary_table_views
+        setTableViews(v && typeof v === 'object' ? v : {})
+      })
+      .catch(() => { if (!dead) setTableViews({}) })
+      .finally(() => { if (!dead) setTableViewsLoaded(true) })
+    return () => { dead = true }
+  }, [])
+  const persistTableViews = (next, prev) => {
+    setTableViews(next)
+    setTableViewsSaving(true)
+    fetch('/api/preferences', {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'overall_summary_table_views', value: next }),
+    }).then(r => { if (!r.ok) throw new Error('save failed') })
+      .catch(() => setTableViews(prev))
+      .finally(() => setTableViewsSaving(false))
+  }
   const saveTableView = () => {
-    const name = window.prompt('Name this view:')
+    const name = window.prompt('Name this view (visible to everyone who opens this page):')
     if (!name || !name.trim()) return
-    setTableViews(prev => ({ ...prev, [name.trim()]: { colOrder, visibleCols, sortKey, sortDir } }))
+    persistTableViews({ ...tableViews, [name.trim()]: { colOrder, visibleCols, sortKey, sortDir } }, tableViews)
   }
   const loadTableView = name => {
     const v = tableViews[name]
@@ -1870,7 +1975,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (v.sortKey) setSortKey(v.sortKey)
     if (v.sortDir) setSortDir(v.sortDir)
   }
-  const deleteTableView = name => setTableViews(prev => { const next = { ...prev }; delete next[name]; return next })
+  const deleteTableView = name => {
+    const next = { ...tableViews }; delete next[name]
+    persistTableViews(next, tableViews)
+  }
 
   // Curated column set on a phone -- see MOBILE_TABLE_BREAKPOINT/CEO_IMAGE_KEYS above. Tracks
   // real viewport width (not just a CSS media query) because it changes WHICH DATA renders,
@@ -5064,8 +5172,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     {isMobileTable ? 'Compact view' : 'Columns'}
                   </Button>
                   {showColsPicker && !isMobileTable && (
-                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} onReset={resetCols}
-                      views={tableViews} onSaveView={saveTableView} onLoadView={loadTableView} onDeleteView={deleteTableView} />
+                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onReorder={reorderColumns} onClose={() => setShowColsPicker(false)} onReset={resetCols}
+                      views={tableViews} viewsLoaded={tableViewsLoaded} viewsSaving={tableViewsSaving} onSaveView={saveTableView} onLoadView={loadTableView} onDeleteView={deleteTableView} />
                   )}
                 </div>
 

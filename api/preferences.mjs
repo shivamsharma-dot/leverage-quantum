@@ -118,24 +118,29 @@ export default async function handler(req, res) {
     // just admins -- same precedent as affiliate_spend_manual just above it.
     // (ac_sales_manual itself no longer needs to be here: only Marketing Review reads/
     // writes it now, and that page is admin-only already.)
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries'])
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries', 'overall_summary_table_views'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))
     return res.status(200).json({ prefs, meta })
   }
 
-  // POST/PATCH — admin only
+  // POST/PATCH — admin only, with one narrow, explicit exception: the Overall
+  // dashboard's Funnel Summary table "Saved views" (column layout presets) are a
+  // deliberately shared-with-everyone, non-sensitive feature (2026-09-19, direct
+  // ask) -- any signed-in user may create/update/delete a view there, not just
+  // admins, since a viewer of that page should be able to contribute a layout the
+  // whole team can reuse. Every other key is untouched (admin-only, as before).
   if (!['POST', 'PATCH'].includes(req.method)) {
     res.setHeader('Allow', 'GET, POST, PATCH')
     return res.status(405).json({ error: 'Method not allowed' })
   }
-  if (me.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin only' })
-  }
-
   const { key, value } = req.body || {}
   if (!key) return res.status(400).json({ error: 'key is required' })
+  const SHARED_WRITE_KEYS = new Set(['overall_summary_table_views'])
+  if (me.role !== 'admin' && !SHARED_WRITE_KEYS.has(key)) {
+    return res.status(403).json({ error: 'Admin only' })
+  }
   if (SECRET_KEYS.has(key)) return res.status(403).json({ error: 'That key is only settable through its own endpoint' })
 
   // Upsert into app_preferences
