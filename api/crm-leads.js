@@ -4041,19 +4041,14 @@ async function handleBigQuery(req, res, me) {
         const chunks = splitIntoMonthChunks(since, until)
         const CONCURRENCY = 3
         const chunkResults = []
-        const chunkTimings = [] // TEMPORARY (2026-09-19, round 2) -- remove with tmp_bq_speed2
         let nextChunkIdx = 0
         async function worker() {
           while (nextChunkIdx < chunks.length) {
             const my = chunks[nextChunkIdx++]
-            const t0 = Date.now() - startedAt
-            const result = await fetchOneChunk(my.since, my.until)
-            chunkTimings.push({ since: my.since, until: my.until, startMs: t0, endMs: Date.now() - startedAt, rows: result.rows.length })
-            chunkResults.push(result)
+            chunkResults.push(await fetchOneChunk(my.since, my.until))
           }
         }
         await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker))
-        if (req.query.debugChunkTiming2 === '1') return res.status(200).json({ rows: chunkResults.flatMap(c => c.rows).length, chunkTimings, fromCache: false })
         const rows = chunkResults.flatMap(c => c.rows)
         const remainingRanges = chunkResults.filter(c => c.truncated).map(c => ({ since: c.since, until: c.until, cursor: c.cursor }))
         // A truncated result is never cached and never labeled fromCache -- it is
@@ -5147,20 +5142,6 @@ async function handleSuperTracker(req, res, me) {
 }
 
 export default async function handler(req, res) {
-  // TEMPORARY diagnostic (2026-09-19, round 2) -- confirming real chunk-level
-  // concurrency for the EXACT range the live page just used. REMOVE right after use.
-  if ((req.query && req.query.mode) === 'tmp_bq_speed2' && req.headers['x-tmp-diag'] === 'bq-speed2-4f8a') {
-    const t0 = Date.now()
-    const chunks = []
-    const origJson = res.json.bind(res)
-    res.json = (body) => { chunks.push(body); return res }
-    res.status = () => ({ json: res.json })
-    req.query = Object.assign({}, req.query, { source: 'bigquery', mode: 'overall_bq_rows', debugChunkTiming2: '1' })
-    await handleBigQuery(req, res, { role: 'admin', email: 'temp-diag' })
-    const ms = Date.now() - t0
-    const body = chunks[chunks.length - 1] || {}
-    return origJson({ ms, rowCount: body.rows, chunkTimings: body.chunkTimings || null })
-  }
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
   // Deliberately checked BEFORE getSessionUser: an automation with no human
