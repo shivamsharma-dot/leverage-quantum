@@ -3145,6 +3145,37 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
+    // TEMPORARY, one-off (2026-09-19): list every real disposition value seen on
+    // "Post call response" activities (Note=postNote, no disposition filter) for both
+    // channels, over a wide window. Remove after use.
+    if (mode === 'live_ql_all_dispositions_debug') {
+      const dateKeyword = LIVE_QL_DATE_KEYWORDS[req.query.date] || LIVE_QL_DATE_KEYWORDS.this_month
+      async function forChannel(channelKey) {
+        const ch = LIVE_QL_CHANNELS[channelKey]
+        const search = JSON.stringify({
+          GrpConOp: 'And',
+          Conditions: [{
+            Type: 'Activity', ConOp: 'and', IsFilterCondition: true,
+            RowCondition: [
+              { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(ch.code) },
+              { SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword },
+              { SubConOp: 'And', LSO: 'ActivityEvent_Note', LSO_Type: 'String', Operator: 'eq', RSO: ch.postNote },
+            ],
+          }],
+          QueryTimeZone: 'India Standard Time',
+        })
+        const includeCsv = ['ProspectActivityId', ch.dispositionField].join(',')
+        const { recordCount, rows } = await runActivityAdvancedSearchAll(creds, ch.code, search, includeCsv, LIVE_QL_MAX_PAGES)
+        const counts = {}
+        rows.forEach(r => {
+          const v = r[ch.dispositionField] || '(blank)'
+          counts[v] = (counts[v] || 0) + 1
+        })
+        return { recordCount, totalRows: rows.length, truncated: recordCount > rows.length, counts }
+      }
+      const [human, ai] = await Promise.all([forChannel('human'), forChannel('ai')])
+      return res.status(200).json({ human, ai })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
