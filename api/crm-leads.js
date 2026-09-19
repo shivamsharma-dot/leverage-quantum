@@ -3227,7 +3227,7 @@ async function handleLeadSquared(req, res, me) {
         AdvancedSearch: search,
         Paging: { PageIndex: 1, PageSize: 2 },
         Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-        Columns: { Include_CSV: 'mx_Custom_100,mx_Custom_58' },
+        Columns: { Include_CSV: 'Owner,Status,mx_Custom_100,mx_Custom_58' },
       })
       return res.status(200).json({ recordCount: raw && raw.RecordCount, sample: raw && raw.List })
     }
