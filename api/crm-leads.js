@@ -1111,6 +1111,55 @@ async function fetchAttemptedNotClosedOpportunities(creds, { since, until, dateP
   return { rows, totalFetched: raw.length, truncated }
 }
 
+// "Disposition Status" -- an ACTIVITY-level field (not Opportunity), confirmed live
+// 2026-09-21 via GetActivitySetting: mx_Custom_29 on Human (234), mx_Custom_10 on AI
+// (253) -- same DisplayName, different schema key per activity type, same pattern as
+// every other custom field pair in this file. Used on the "Attempted, Not Closed"
+// table to show the real disposition-status value straight off the specific
+// post-call Activity that set the Opportunity's current disposition, matched to each
+// row by contact (RelatedProspectId) + channel. Fetched lazily/in the background from
+// the frontend (see disposition_status_lookup dispatch below), never eagerly for
+// every row up front -- same reasoning as every other bulk enrichment in this file.
+const DISPOSITION_STATUS_FIELD = { human: 'mx_Custom_29', ai: 'mx_Custom_10' }
+const DISPOSITION_STATUS_BULK_MAX = 500
+
+function buildDispositionStatusSearch(code, postNote, ids) {
+  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+    { SubConOp: 'And', LSO: 'ActivityEvent_Note', LSO_Type: 'String', Operator: 'eq', RSO: postNote },
+  ] }]
+  ids.forEach(id => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+    { SubConOp: 'And', LSO: 'RelatedProspectId', LSO_Type: 'String', Operator: 'eq', RSO: id },
+  ] }))
+  return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
+}
+
+async function fetchDispositionStatusMap(creds, channelKey, prospectIds) {
+  const ch = LIVE_QL_CHANNELS[channelKey]
+  const field = DISPOSITION_STATUS_FIELD[channelKey]
+  const ids = [...new Set((prospectIds || []).filter(Boolean))]
+  if (!ch || !field || !ids.length) return {}
+  const chunks = []
+  for (let i = 0; i < ids.length; i += DISPOSITION_STATUS_BULK_MAX) chunks.push(ids.slice(i, i + DISPOSITION_STATUS_BULK_MAX))
+  const results = await Promise.all(chunks.map(chunk => {
+    const search = buildDispositionStatusSearch(ch.code, ch.postNote, chunk)
+    return runActivityAdvancedSearchAll(creds, ch.code, search, `RelatedProspectId,CreatedOn,${field}`, LIVE_QL_MAX_PAGES)
+  }))
+  // A prospect can have more than one post-call Activity of this type over time
+  // (re-queued and called again later) -- keep only the most recent per prospect.
+  const latestByProspect = {}
+  results.forEach(r => (r.rows || []).forEach(row => {
+    const pid = row.RelatedProspectId
+    if (!pid) return
+    const existing = latestByProspect[pid]
+    if (!existing || (row.CreatedOn || '') > (existing.CreatedOn || '')) latestByProspect[pid] = row
+  }))
+  const out = {}
+  Object.keys(latestByProspect).forEach(pid => { out[pid] = latestByProspect[pid][field] || null })
+  return out
+}
+
 const LIVE_QL_OWNER_BULK_MAX = 500
 async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
   const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_BULK_MAX)
@@ -3115,7 +3164,7 @@ async function handleLeadSquared(req, res, me) {
   // Not Attempted gets its own page id (unlike live_ql_metrics, which is gated on
   // the shared 'leadsquared' id for historical reasons) so its own frontend
   // route/nav grant and this backend gate never drift apart.
-  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities']
+  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup']
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : NOT_ATTEMPTED_MODES.includes(mode) ? 'not_attempted' : 'leadsquared'
   const { canAccessDashboard } = await import('../lib/auth.mjs')
   // activity_types is read by BOTH the main LeadSquared page (gated on
@@ -3369,6 +3418,11 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
     if (mode === 'attempted_not_closed_opportunities') return res.status(200).json(await fetchAttemptedNotClosedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
+    if (mode === 'disposition_status_lookup') {
+      const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
+      const ids = String(req.query.ids || '').split(',').filter(Boolean)
+      return res.status(200).json({ map: await fetchDispositionStatusMap(creds, channelKey, ids) })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
