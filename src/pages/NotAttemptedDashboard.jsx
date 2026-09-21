@@ -144,7 +144,8 @@ export default function NotAttemptedDashboard() {
     }
     setLoading(true); setError(null)
     try {
-      const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=${view.mode}&since=${range.since}&until=${range.until}`)
+      const presetParam = datePreset !== 'custom' ? `&datePreset=${datePreset}` : ''
+      const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=${view.mode}&since=${range.since}&until=${range.until}${presetParam}`)
       setData(d)
       const ts = new Date()
       setSession(cacheKey, { result: d, ts })

@@ -156,6 +156,37 @@ async function fetchAllPages(fetchPage, maxPages) {
   return { rows, truncated }
 }
 
+// Same contract as fetchAllPages, but fires the "rest of the pages" in bounded
+// concurrent BATCHES (chunkSize at a time) instead of all at once. Needed once a
+// caller's maxPages gets large enough that firing every remaining page
+// simultaneously risks tripping LeadSquared's own real per-account rate limit
+// (confirmed live elsewhere in this file: "429: API calls exceeded the limit of 72
+// in 5 second(s)" -- a related feature was removed after hitting exactly this).
+// fetchAllPages itself is left untouched since most of its callers use a small
+// enough maxPages that this was never a real risk for them.
+async function fetchAllPagesChunked(fetchPage, maxPages, chunkSize) {
+  const first = await fetchPage(1, LSQ_PAGE_SIZE)
+  if (first.length < LSQ_PAGE_SIZE) return { rows: first, truncated: false }
+  if (maxPages <= 1) return { rows: first, truncated: true }
+  let rows = first.slice()
+  let truncated = true
+  let pageIndex = 2
+  while (pageIndex <= maxPages) {
+    const batchEnd = Math.min(pageIndex + chunkSize - 1, maxPages)
+    const batchIndexes = []
+    for (let i = pageIndex; i <= batchEnd; i++) batchIndexes.push(i)
+    const batchResults = await Promise.all(batchIndexes.map(i => fetchPage(i, LSQ_PAGE_SIZE)))
+    let hitRealEnd = false
+    for (const page of batchResults) {
+      rows = rows.concat(page)
+      if (page.length < LSQ_PAGE_SIZE) { truncated = false; hitRealEnd = true; break }
+    }
+    if (hitRealEnd) break
+    pageIndex = batchEnd + 1
+  }
+  return { rows, truncated }
+}
+
 // Last 7 complete days -- the default window for the by-event-code activity feed below.
 function defaultRecentWindow() {
   const toIso = d => d.toISOString().slice(0, 10)
@@ -904,17 +935,25 @@ async function fetchLeadSquaredUserGroupsMap(creds) {
 const NOT_ATTEMPTED_HUMAN_VALUES = ['Call queued successfully at Futwork']
 const NOT_ATTEMPTED_AI_VALUES = ['Call queued successfully at Futwork AI', 'Call queued successfully at AI Futwork']
 const NOT_ATTEMPTED_MAX_PAGES = 30
+// Custom range has no opt-* keyword to scope it server-side, so it still needs a
+// broad, unscoped-by-date fetch -- raised well past the preset case's needs, but
+// fetched in safe chunks (see fetchAllPagesChunked) rather than firing every page
+// at once, to stay well clear of LeadSquared's own real rate limit.
+const NOT_ATTEMPTED_CUSTOM_MAX_PAGES = 100
+const NOT_ATTEMPTED_CHUNK_SIZE = 8
 
-function buildNotAttemptedOpportunitySearch() {
-  // Base filter is ActivityEvent=12003 alone (no CreatedOn condition) -- confirmed
-  // working shape, same as fetchLiveQlOpportunityOwners's own bulk search below.
-  // A CreatedOn "between" RowCondition on this exact endpoint is CONFIRMED BROKEN
-  // (400s -- see fetchLeadSquaredOpportunities's own comment above), so date
-  // scoping is deliberately done client-side after a full fetch instead, matching
-  // that same established, working pattern on this endpoint.
-  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
-    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
-  ] }]
+function buildNotAttemptedOpportunitySearch(dateKeyword) {
+  // Base filter is ActivityEvent=12003, optionally plus a CreatedOn=opt-* keyword
+  // condition -- confirmed live elsewhere in this file (the Opportunity-field-values
+  // investigation) that LeadSquared's opt-today/opt-this-month/etc keywords DO scope
+  // this exact endpoint's search server-side, even though a literal CreatedOn
+  // "between" two explicit dates 400s (see fetchLeadSquaredOpportunities's own
+  // comment above). When no keyword is given (a custom range), no CreatedOn
+  // condition is added at all and the caller filters by since/until client-side
+  // after a broader, unscoped fetch instead.
+  const baseRow = [{ SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' }]
+  if (dateKeyword) baseRow.push({ SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword })
+  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: baseRow }]
   NOT_ATTEMPTED_HUMAN_VALUES.forEach(v => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
     { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
     { SubConOp: 'And', LSO: 'mx_Custom_100', LSO_Type: 'String', Operator: 'eq', RSO: v },
@@ -926,8 +965,9 @@ function buildNotAttemptedOpportunitySearch() {
   return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
 }
 
-async function fetchNotAttemptedOpportunities(creds, { since, until }) {
-  const advancedSearch = buildNotAttemptedOpportunitySearch()
+async function fetchNotAttemptedOpportunities(creds, { since, until, datePreset }) {
+  const dateKeyword = datePreset && LIVE_QL_DATE_KEYWORDS[datePreset]
+  const advancedSearch = buildNotAttemptedOpportunitySearch(dateKeyword)
   const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
     OpportunityEventCode: 12003,
     AdvancedSearch: advancedSearch,
@@ -944,8 +984,11 @@ async function fetchNotAttemptedOpportunities(creds, { since, until }) {
     // below without ever being named in this list.
     Columns: { Include_CSV: 'Owner,Status,mx_Custom_100,mx_Custom_58' },
   }).then(data => (Array.isArray(data && data.List) ? data.List : []))
+  const pageFetch = dateKeyword
+    ? fetchAllPages(fetchPage, NOT_ATTEMPTED_MAX_PAGES)
+    : fetchAllPagesChunked(fetchPage, NOT_ATTEMPTED_CUSTOM_MAX_PAGES, NOT_ATTEMPTED_CHUNK_SIZE)
   const [{ rows: raw, truncated }, ownerMap, groupsMap] = await Promise.all([
-    fetchAllPages(fetchPage, NOT_ATTEMPTED_MAX_PAGES),
+    pageFetch,
     fetchLeadSquaredUsersMap(creds),
     fetchLeadSquaredUserGroupsMap(creds),
   ])
@@ -992,14 +1035,26 @@ const ATTEMPTED_NONQL_AI_VALUES = [
   'Not Connected', 'Busy or Improper Response', 'Not Interested', 'Disqualified', 'Language Barrier',
   'Voicemail', 'Wrong Number', 'Schedule Call Back', 'Already Enrolled with Leverage', 'NA', '12th Underage',
 ]
+// This bucket is far higher-volume than Not Attempted (a real call being attempted
+// and left open is common; a lead sitting untouched at "queued" is rare) -- confirmed
+// live 2026-09-21: an unscoped fetch hit 30,000+ rows within just a ~20-day window.
+// Both preset AND custom-range paths use the chunked fetch with a raised cap here.
+const ATTEMPTED_NOT_CLOSED_PRESET_MAX_PAGES = 80
+const ATTEMPTED_NOT_CLOSED_CUSTOM_MAX_PAGES = 150
+const ATTEMPTED_NOT_CLOSED_CHUNK_SIZE = 8
 
-function buildAttemptedNotClosedOpportunitySearch() {
+function buildAttemptedNotClosedOpportunitySearch(dateKeyword) {
   // Status=Open as a RowCondition on this same base filter is confirmed working
   // (used the same way in this file's own live_ql_open_nonql_debug-style investigation).
-  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
+  // dateKeyword (an opt-* preset) is optional -- same reasoning as
+  // buildNotAttemptedOpportunitySearch above: scopes the search server-side for the
+  // 6 fixed presets, omitted entirely for a custom range.
+  const baseRow = [
     { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
     { SubConOp: 'And', LSO: 'Status', LSO_Type: 'String', Operator: 'eq', RSO: 'Open' },
-  ] }]
+  ]
+  if (dateKeyword) baseRow.push({ SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword })
+  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: baseRow }]
   ATTEMPTED_NONQL_HUMAN_VALUES.forEach(v => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
     { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
     { SubConOp: 'And', LSO: 'mx_Custom_100', LSO_Type: 'String', Operator: 'eq', RSO: v },
@@ -1011,8 +1066,9 @@ function buildAttemptedNotClosedOpportunitySearch() {
   return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
 }
 
-async function fetchAttemptedNotClosedOpportunities(creds, { since, until }) {
-  const advancedSearch = buildAttemptedNotClosedOpportunitySearch()
+async function fetchAttemptedNotClosedOpportunities(creds, { since, until, datePreset }) {
+  const dateKeyword = datePreset && LIVE_QL_DATE_KEYWORDS[datePreset]
+  const advancedSearch = buildAttemptedNotClosedOpportunitySearch(dateKeyword)
   const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
     OpportunityEventCode: 12003,
     AdvancedSearch: advancedSearch,
@@ -1022,8 +1078,13 @@ async function fetchAttemptedNotClosedOpportunities(creds, { since, until }) {
     // OpportunityId/CreatedOn/RelatedProspectId here, they come back for free.
     Columns: { Include_CSV: 'Owner,Status,mx_Custom_100,mx_Custom_58' },
   }).then(data => (Array.isArray(data && data.List) ? data.List : []))
+  const pageFetch = fetchAllPagesChunked(
+    fetchPage,
+    dateKeyword ? ATTEMPTED_NOT_CLOSED_PRESET_MAX_PAGES : ATTEMPTED_NOT_CLOSED_CUSTOM_MAX_PAGES,
+    ATTEMPTED_NOT_CLOSED_CHUNK_SIZE,
+  )
   const [{ rows: raw, truncated }, ownerMap, groupsMap] = await Promise.all([
-    fetchAllPages(fetchPage, NOT_ATTEMPTED_MAX_PAGES),
+    pageFetch,
     fetchLeadSquaredUsersMap(creds),
     fetchLeadSquaredUserGroupsMap(creds),
   ])
@@ -3306,8 +3367,8 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
-    if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null }))
-    if (mode === 'attempted_not_closed_opportunities') return res.status(200).json(await fetchAttemptedNotClosedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null }))
+    if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
+    if (mode === 'attempted_not_closed_opportunities') return res.status(200).json(await fetchAttemptedNotClosedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
