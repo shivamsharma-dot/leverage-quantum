@@ -9,6 +9,7 @@ import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN } from '../ui/dashboardKit'
 import { getSession, setSession } from '../lib/sessionLoad'
 
 const LEADSQUARED_OPPORTUNITY_URL = 'https://in21.leadsquared.com/OpportunityManagement/OpportunityDetails?opportunityId='
+const LEADSQUARED_OPPORTUNITY_EVENT = '12003'
 const LEADSQUARED_CONTACT_URL = 'https://in21.leadsquared.com/LeadManagement/LeadDetails?LeadID='
 
 const DATE_PRESETS = [
@@ -279,10 +280,10 @@ export default function NotAttemptedDashboard() {
                       {pageRows.map(r => (
                         <tr key={r.opportunityId} style={{ borderBottom: `0.5px solid ${C.border}` }}>
                           <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                            <a href={LEADSQUARED_OPPORTUNITY_URL + r.opportunityId} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
+                            <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
                           </td>
                           <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                            {r.prospectId ? <a href={LEADSQUARED_CONTACT_URL + r.prospectId} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.contactName || r.prospectId}</a> : (r.contactName || '—')}
+                            {r.prospectId ? <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.contactName || r.prospectId}</a> : (r.contactName || '—')}
                           </td>
                           <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 700, color: r.channel === 'Human + AI' ? C.navy : C.text }}>{r.channel}</td>
                           <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.humanDisposition || '—'}</td>
