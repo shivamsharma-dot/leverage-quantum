@@ -34,6 +34,45 @@ function computePreset(key) {
   return { since: fmtYmd(today), until: fmtYmd(today) }
 }
 
+const VIEWS = [
+  {
+    key: 'not_attempted',
+    mode: 'not_attempted_opportunities',
+    label: 'Not Attempted',
+    title: 'Not Attempted',
+    subtitle: 'Opportunities queued to Futwork or Futwork AI whose Last Disposition is still a "call queued" placeholder — the first call has never actually gone out.',
+    kpiLabel: 'Not Attempted',
+    kpiSub: 'Queued, no call yet',
+    emptyMessage: 'No not-attempted opportunities in this window.',
+    infoTitle: 'What "Not Attempted" means',
+    infoBody: (
+      <>
+        <div><b>Human:</b> Last Disposition from Futwork = "Call queued successfully at Futwork".</div>
+        <div><b>AI:</b> Last Disposition from Futwork AI = "Call queued successfully at Futwork AI" or "Call queued successfully at AI Futwork".</div>
+        <div style={{ marginTop: 6 }}>Either value means the lead was routed but no call has come back with a real disposition yet — not a QL, not a non-QL, just untouched.</div>
+      </>
+    ),
+  },
+  {
+    key: 'attempted_not_closed',
+    mode: 'attempted_not_closed_opportunities',
+    label: 'Attempted, Not Closed',
+    title: 'Attempted, Not Closed',
+    subtitle: 'A real call was made and a real disposition recorded (Not Connected, Disqualified, Schedule Call Back, etc.) — but the Opportunity was never closed out. Status is still Open when it should be Lost.',
+    kpiLabel: 'Attempted, Not Closed',
+    kpiSub: 'Real disposition, still Open',
+    emptyMessage: 'No attempted-but-unclosed opportunities in this window.',
+    infoTitle: 'What "Attempted, Not Closed" means',
+    infoBody: (
+      <>
+        <div>A real, terminal disposition (Not Connected, Not Interested, Disqualified, Schedule Call Back, Busy or Improper Response, Voicemail, Wrong Number, Language Barrier, and similar) is present on the Human or AI disposition field — the call genuinely happened.</div>
+        <div style={{ marginTop: 6 }}>But the Opportunity's own Status is still "Open" — the agent never moved it to "Lost" after the call. QL dispositions and the "still queued, never attempted" placeholder values are excluded from this view.</div>
+        <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account — a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
+      </>
+    ),
+  },
+]
+
 const CHANNEL_OPTIONS = [
   { value: 'all', label: 'All channels' },
   { value: 'Human', label: 'Human' },
@@ -79,6 +118,8 @@ function PaginationControl({ page, totalPages, onPrev, onNext }) {
 }
 
 export default function NotAttemptedDashboard() {
+  const [viewKey, setViewKey] = useState('not_attempted')
+  const view = VIEWS.find(v => v.key === viewKey) || VIEWS[0]
   const [datePreset, setDatePreset] = useState('this_month')
   const [customRange, setCustomRange] = useState(null) // {since, until} when datePreset === 'custom'
   const [dateMenuOpen, setDateMenuOpen] = useState(false)
@@ -96,14 +137,14 @@ export default function NotAttemptedDashboard() {
   const range = datePreset === 'custom' && customRange ? customRange : computePreset(datePreset)
 
   async function load(force) {
-    const cacheKey = 'not_attempted_v1:' + range.since + ':' + range.until
+    const cacheKey = 'not_attempted_v2:' + viewKey + ':' + range.since + ':' + range.until
     if (!force) {
       const cached = getSession(cacheKey)
       if (cached) { setData(cached.data.result); setSyncedAt(cached.data.ts); setPage(0); setLoading(false); setError(null); return }
     }
     setLoading(true); setError(null)
     try {
-      const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=not_attempted_opportunities&since=${range.since}&until=${range.until}`)
+      const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=${view.mode}&since=${range.since}&until=${range.until}`)
       setData(d)
       const ts = new Date()
       setSession(cacheKey, { result: d, ts })
@@ -116,7 +157,7 @@ export default function NotAttemptedDashboard() {
     }
   }
 
-  useEffect(() => { load(false) }, [range.since, range.until]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(false) }, [viewKey, range.since, range.until]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dateMenuOpen) return
@@ -165,11 +206,21 @@ export default function NotAttemptedDashboard() {
         <div style={{ flexShrink: 0, padding: '28px 0 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '0 28px', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>Not Attempted</div>
-            <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-              Opportunities queued to Futwork or Futwork AI whose Last Disposition is still a "call queued" placeholder — the first call has never actually gone out.
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{view.title}</div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 4, maxWidth: 760 }}>
+              {view.subtitle}
             </div>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, padding: '14px 28px 0' }}>
+          {VIEWS.map(v => (
+            <button key={v.key} onClick={() => { setViewKey(v.key); setPage(0) }} style={{
+              padding: '8px 16px', borderRadius: 9, border: `0.5px solid ${viewKey === v.key ? C.navy : C.border}`,
+              background: viewKey === v.key ? 'var(--navy-tint)' : 'var(--card)', color: viewKey === v.key ? C.navy : C.sub,
+              fontSize: 13, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
+            }}>{v.label}</button>
+          ))}
         </div>
 
         <div style={{
@@ -237,7 +288,7 @@ export default function NotAttemptedDashboard() {
             </svg>
             Refresh
           </Button>
-          <ExportButton data={exportRows} filename={`not_attempted_${range.since}_${range.until}`} />
+          <ExportButton data={exportRows} filename={`${viewKey}_${range.since}_${range.until}`} />
           <div style={{ position: 'relative' }}>
             <button onClick={() => setInfoOpen(v => !v)} style={{
               width: 30, height: 30, borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)',
@@ -248,10 +299,8 @@ export default function NotAttemptedDashboard() {
                 position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 50, width: 340, background: 'var(--card)',
                 border: `0.5px solid ${C.border}`, borderRadius: 12, boxShadow: '0 20px 60px rgba(15,23,42,0.16)', padding: 14, fontSize: 12.5, fontFamily: FONT, color: C.sub, lineHeight: 1.6,
               }}>
-                <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>What "Not Attempted" means</div>
-                <div><b>Human:</b> Last Disposition from Futwork = "Call queued successfully at Futwork".</div>
-                <div><b>AI:</b> Last Disposition from Futwork AI = "Call queued successfully at Futwork AI" or "Call queued successfully at AI Futwork".</div>
-                <div style={{ marginTop: 6 }}>Either value means the lead was routed but no call has come back with a real disposition yet — not a QL, not a non-QL, just untouched.</div>
+                <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{view.infoTitle}</div>
+                {view.infoBody}
                 <div style={{ marginTop: 6 }}>Date range filters by the <b>Opportunity's own Created On</b> date, fetched live from LeadSquared on every range change or Refresh.</div>
               </div>
             )}
@@ -276,9 +325,9 @@ export default function NotAttemptedDashboard() {
         ) : (
           <div style={{ opacity: loading ? 0.45 : 1, pointerEvents: loading ? 'none' : 'auto', transition: 'opacity .15s' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, padding: '20px 28px 0' }}>
-              <PremKPI label="Not Attempted" value={fmtN(allRows.length)} sub={rangeLabel} accent={C.navy} icon={KPI_ICONS.total} />
-              <PremKPI label="Human" value={fmtN(humanCount)} sub="Queued, no call yet" accent={C.navy} icon={KPI_ICONS.agent} />
-              <PremKPI label="AI" value={fmtN(aiCount)} sub="Queued, no call yet" accent={C.navy} icon={KPI_ICONS.agent} />
+              <PremKPI label={view.kpiLabel} value={fmtN(allRows.length)} sub={rangeLabel} accent={C.navy} icon={KPI_ICONS.total} />
+              <PremKPI label="Human" value={fmtN(humanCount)} sub={view.kpiSub} accent={C.navy} icon={KPI_ICONS.agent} />
+              <PremKPI label="AI" value={fmtN(aiCount)} sub={view.kpiSub} accent={C.navy} icon={KPI_ICONS.agent} />
             </div>
 
             <div style={{ padding: '20px 28px 0' }}>
@@ -295,7 +344,7 @@ export default function NotAttemptedDashboard() {
                     </thead>
                     <tbody>
                       {pageRows.length === 0 && (
-                        <tr><td colSpan={COLUMNS.length} style={{ padding: '20px 10px', textAlign: 'center', color: C.muted }}>No not-attempted opportunities in this window.</td></tr>
+                        <tr><td colSpan={COLUMNS.length} style={{ padding: '20px 10px', textAlign: 'center', color: C.muted }}>{view.emptyMessage}</td></tr>
                       )}
                       {pageRows.map(r => (
                         <tr key={r.opportunityId} style={{ borderBottom: `0.5px solid ${C.border}` }}>
