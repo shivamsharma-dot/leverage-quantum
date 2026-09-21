@@ -3482,6 +3482,14 @@ async function handleLeadSquared(req, res, me) {
       const ids = String(req.query.ids || '').split(',').filter(Boolean)
       return res.status(200).json({ map: await fetchAttemptCountMap(creds, channelKey, ids) })
     }
+    if (mode === 'attempt_count_raw_debug') {
+      const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
+      const ch = LIVE_QL_CHANNELS[channelKey]
+      const id = req.query.id
+      const search = buildProspectActivityHistorySearch(ch.code, [id])
+      const r = await runActivityAdvancedSearchAll(creds, ch.code, search, 'RelatedProspectId,CreatedOn,ActivityEvent_Note', LIVE_QL_MAX_PAGES)
+      return res.status(200).json({ recordCount: r.recordCount, rows: r.rows })
+    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
