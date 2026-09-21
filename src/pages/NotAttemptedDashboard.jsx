@@ -68,28 +68,228 @@ const VIEWS = [
         <div>A real, terminal disposition (Not Connected, Not Interested, Disqualified, Schedule Call Back, Busy or Improper Response, Voicemail, Wrong Number, Language Barrier, and similar) is present on the Human or AI disposition field — the call genuinely happened.</div>
         <div style={{ marginTop: 6 }}>But the Opportunity's own Status is still "Open" — the agent never moved it to "Lost" after the call. QL dispositions and the "still queued, never attempted" placeholder values are excluded from this view.</div>
         <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account — a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
+        <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) — fetched lazily per page, may show "…" briefly while loading.</div>
       </>
     ),
   },
 ]
 
-const CHANNEL_OPTIONS = [
-  { value: 'all', label: 'All channels' },
-  { value: 'Human', label: 'Human' },
-  { value: 'AI', label: 'AI' },
-]
+// Timestamp first, per direct feedback. Disposition Status only exists as a concept
+// on the Attempted-Not-Closed view (a Not Attempted row has no post-call Activity
+// yet, so there's nothing to show) -- computed per-view below.
+function columnsForView(viewKey) {
+  const cols = [
+    { key: 'createdOn', label: 'Opportunity Created On' },
+    { key: 'opportunityId', label: 'Opportunity ID' },
+    { key: 'contactName', label: 'Contact' },
+    { key: 'channel', label: 'Channel' },
+    { key: 'humanDisposition', label: 'Human Disposition' },
+    { key: 'aiDisposition', label: 'AI Disposition' },
+  ]
+  if (viewKey === 'attempted_not_closed') cols.push({ key: 'dispositionStatus', label: 'Disposition Status' })
+  cols.push({ key: 'ownerName', label: 'Opportunity Owner' }, { key: 'status', label: 'Status' })
+  return cols
+}
 
-const COLUMNS = [
+// ---- Advanced filter: same small condition-builder pattern already shipped on Live
+// QLs (field / operator / value, any number of conditions combined by one shared
+// AND/OR toggle) -- ported here per direct request ("just like Live QLs"), trimmed to
+// drop the numeric-only operators/UI since every field on this page is plain text.
+const FILTERABLE_FIELDS = [
+  { key: 'createdOn', label: 'Opportunity Created On' },
   { key: 'opportunityId', label: 'Opportunity ID' },
   { key: 'contactName', label: 'Contact' },
   { key: 'channel', label: 'Channel' },
   { key: 'humanDisposition', label: 'Human Disposition' },
   { key: 'aiDisposition', label: 'AI Disposition' },
+  { key: 'dispositionStatus', label: 'Disposition Status' },
   { key: 'ownerName', label: 'Opportunity Owner' },
-  { key: 'ownerSalesGroups', label: 'Sales Group' },
   { key: 'status', label: 'Status' },
-  { key: 'createdOn', label: 'Opportunity Created On' },
 ]
+
+const OPERATORS = [
+  { key: 'is', label: 'is', value: 'select' },
+  { key: 'is_not', label: 'is not', value: 'select' },
+  { key: 'contains', label: 'contains', value: 'text' },
+  { key: 'not_contains', label: 'does not contain', value: 'text' },
+  { key: 'starts_with', label: 'starts with', value: 'text' },
+  { key: 'ends_with', label: 'ends with', value: 'text' },
+  { key: 'defined', label: 'is defined', value: 'none' },
+  { key: 'not_defined', label: 'is not defined', value: 'none' },
+]
+const OPERATOR_MAP = Object.fromEntries(OPERATORS.map(o => [o.key, o]))
+
+function isConditionComplete(c) {
+  const op = OPERATOR_MAP[c.operator]
+  if (!c.field || !op) return false
+  if (op.value === 'none') return true
+  return (c.value || '').trim() !== ''
+}
+
+function matchesCondition(row, cond) {
+  const raw = row[cond.field]
+  if (cond.operator === 'defined') return raw != null && String(raw).trim() !== ''
+  if (cond.operator === 'not_defined') return raw == null || String(raw).trim() === ''
+  const v = raw == null ? '' : String(raw)
+  const hay = v.toLowerCase()
+  const needle = (cond.value || '').toLowerCase()
+  switch (cond.operator) {
+    case 'is': return hay === needle
+    case 'is_not': return hay !== needle
+    case 'contains': return hay.includes(needle)
+    case 'not_contains': return !hay.includes(needle)
+    case 'starts_with': return hay.startsWith(needle)
+    case 'ends_with': return hay.endsWith(needle)
+    default: return true
+  }
+}
+
+let conditionIdCounter = 0
+function newCondition() { conditionIdCounter += 1; return { id: 'c' + conditionIdCounter, field: 'channel', operator: 'is', value: '' } }
+
+function conditionSummary(c) {
+  const f = FILTERABLE_FIELDS.find(x => x.key === c.field)
+  const op = OPERATOR_MAP[c.operator]
+  if (!f || !op) return ''
+  if (op.value === 'none') return `${f.label} ${op.label}`
+  return `${f.label} ${op.label} "${c.value}"`
+}
+
+function ValueSelectPopover({ options, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 220, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search values…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+          {shown.map(o => (
+            <button key={o} type="button" onClick={() => onPick(o)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              {o}
+            </button>
+          ))}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No values</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function FieldSelectPopover({ options, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.label.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 230, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search fields…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          {shown.map(o => (
+            <button key={o.value} type="button" onClick={() => onPick(o.value)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              {o.label}
+            </button>
+          ))}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No fields</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, fieldPickerOpen, onOpenFieldPicker, onChange, onRemove }) {
+  const op = OPERATOR_MAP[cond.operator]
+  const fieldDef = FILTERABLE_FIELDS.find(f => f.key === cond.field)
+  const fieldLabel = (fieldDef || {}).label || cond.field
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative', minWidth: 150, flexShrink: 0 }}>
+        <button type="button" onClick={onOpenFieldPicker}
+          style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: FONT, background: 'var(--bg3)', color: C.text, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {fieldLabel}
+        </button>
+        {fieldPickerOpen && (
+          <FieldSelectPopover options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))}
+            onPick={v => { onChange({ field: v, operator: 'contains', value: '' }); onOpenFieldPicker() }} onClose={onOpenFieldPicker} />
+        )}
+      </div>
+      <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: '' })} minWidth={130}
+        options={OPERATORS.map(o => ({ value: o.key, label: o.label }))} />
+      {op.value === 'text' && (
+        <input type="text" value={cond.value} onChange={e => onChange({ value: e.target.value })} placeholder="Value…"
+          style={{ flex: 1, minWidth: 90, boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', background: 'var(--bg3)', color: C.text }} />
+      )}
+      {op.value === 'select' && (
+        <div style={{ position: 'relative', flex: 1, minWidth: 90 }}>
+          <button type="button" onClick={onOpenValuePicker}
+            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, background: 'var(--bg3)', color: cond.value ? C.text : C.muted, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {cond.value || 'Select value…'}
+          </button>
+          {valuePickerOpen && (
+            <ValueSelectPopover options={options} onPick={v => { onChange({ value: v }); onOpenValuePicker() }} onClose={onOpenValuePicker} />
+          )}
+        </div>
+      )}
+      {op.value === 'none' && <div style={{ flex: 1, minWidth: 90, fontSize: 11.5, color: C.muted, fontStyle: 'italic' }}>no value needed</div>}
+      <button type="button" onClick={onRemove} title="Remove condition" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', padding: 4, flexShrink: 0 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+      </button>
+    </div>
+  )
+}
+
+function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
+  const [openValueRowId, setOpenValueRowId] = useState(null)
+  const [openFieldRowId, setOpenFieldRowId] = useState(null)
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 480, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 12 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8 }}>Filters</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {conditions.map(c => (
+            <ConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
+              valuePickerOpen={openValueRowId === c.id}
+              onOpenValuePicker={() => setOpenValueRowId(v => v === c.id ? null : c.id)}
+              fieldPickerOpen={openFieldRowId === c.id}
+              onOpenFieldPicker={() => setOpenFieldRowId(v => v === c.id ? null : c.id)}
+              onChange={patch => onUpdate(c.id, patch)} onRemove={() => onRemove(c.id)} />
+          ))}
+        </div>
+        <button type="button" onClick={onAdd}
+          style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          Add Filter
+        </button>
+        {conditions.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '0.5px solid ' + C.border, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>Match</span>
+            <div style={{ display: 'flex', background: 'var(--bg3)', borderRadius: 8, padding: 2 }}>
+              {['AND', 'OR'].map(op => (
+                <button key={op} type="button" onClick={() => onSetCombinator(op)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: combinator === op ? C.navy : 'transparent', color: combinator === op ? '#fff' : C.muted }}>
+                  {op === 'AND' ? 'ALL' : 'ANY'}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 11.5, color: C.muted }}>of the conditions above</span>
+          </div>
+        )}
+        {conditions.length > 0 && (
+          <button type="button" onClick={onClearAll} style={{ marginTop: 10, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
+        )}
+      </div>
+    </>
+  )
+}
 
 async function fetchJson(url) {
   const r = await fetch(url, { credentials: 'include' })
@@ -117,21 +317,41 @@ function PaginationControl({ page, totalPages, onPrev, onNext }) {
   )
 }
 
+function renderCell(colKey, r) {
+  switch (colKey) {
+    case 'createdOn': return r.createdOn || '—'
+    case 'opportunityId':
+      return <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
+    case 'contactName':
+      return r.prospectId ? <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.contactName || r.prospectId}</a> : (r.contactName || '—')
+    case 'channel': return <span style={{ fontWeight: 700, color: r.channel === 'Human + AI' ? C.navy : C.text }}>{r.channel}</span>
+    case 'humanDisposition': return r.humanDisposition || '—'
+    case 'aiDisposition': return r.aiDisposition || '—'
+    case 'dispositionStatus': return r.dispositionStatus === 'loading' ? '…' : (r.dispositionStatus || '—')
+    case 'ownerName': return r.ownerName || '—'
+    case 'status': return r.status || '—'
+    default: return r[colKey] || '—'
+  }
+}
+
 export default function NotAttemptedDashboard() {
   const [viewKey, setViewKey] = useState('not_attempted')
   const view = VIEWS.find(v => v.key === viewKey) || VIEWS[0]
+  const columns = useMemo(() => columnsForView(viewKey), [viewKey])
   const [datePreset, setDatePreset] = useState('this_month')
   const [customRange, setCustomRange] = useState(null) // {since, until} when datePreset === 'custom'
   const [dateMenuOpen, setDateMenuOpen] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
-  const [channel, setChannel] = useState('all')
-  const [search, setSearch] = useState('')
+  const [conditions, setConditions] = useState([])
+  const [combinator, setCombinator] = useState('AND')
+  const [filterOpen, setFilterOpen] = useState(false)
   const [page, setPage] = useState(0)
   const [infoOpen, setInfoOpen] = useState(false)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [syncedAt, setSyncedAt] = useState(null)
+  const [dispositionCache, setDispositionCache] = useState({}) // `${channel}:${prospectId}` -> value | 'loading' | null
   const pickerRef = useRef(null)
 
   const range = datePreset === 'custom' && customRange ? customRange : computePreset(datePreset)
@@ -140,7 +360,7 @@ export default function NotAttemptedDashboard() {
     const cacheKey = 'not_attempted_v2:' + viewKey + ':' + range.since + ':' + range.until
     if (!force) {
       const cached = getSession(cacheKey)
-      if (cached) { setData(cached.data.result); setSyncedAt(cached.data.ts); setPage(0); setLoading(false); setError(null); return }
+      if (cached) { setData(cached.data.result); setSyncedAt(cached.data.ts); setPage(0); setDispositionCache({}); setLoading(false); setError(null); return }
     }
     setLoading(true); setError(null)
     try {
@@ -151,6 +371,7 @@ export default function NotAttemptedDashboard() {
       setSession(cacheKey, { result: d, ts })
       setSyncedAt(ts)
       setPage(0)
+      setDispositionCache({})
     } catch (e) {
       setError(e.message || 'Failed to load')
     } finally {
@@ -173,17 +394,78 @@ export default function NotAttemptedDashboard() {
 
   const allRows = data ? data.rows : []
 
+  // Disposition Status is fetched lazily/in the background (Attempted-Not-Closed only) --
+  // this merges whatever's already resolved onto each row so filtering/display/export
+  // all see the same value, without waiting for the whole dataset to finish loading.
+  const enrichedRows = useMemo(() => {
+    if (viewKey !== 'attempted_not_closed') return allRows
+    return allRows.map(r => {
+      const key = (r.humanDisposition ? 'human:' : 'ai:') + r.prospectId
+      const v = dispositionCache[key]
+      return { ...r, dispositionStatus: v }
+    })
+  }, [allRows, dispositionCache, viewKey])
+
+  // Background warm-up: resolve Disposition Status for every row in the current
+  // dataset (not just the visible page) in bulk chunks of 500 -- same reasoning as
+  // Live QLs' own owner-enrichment warm-up, so filtering by Disposition Status
+  // eventually becomes accurate across the whole loaded window, not just whatever
+  // page happens to be on screen.
+  useEffect(() => {
+    if (viewKey !== 'attempted_not_closed' || !allRows.length) return
+    let cancelled = false
+    const humanIds = [...new Set(allRows.filter(r => r.humanDisposition && r.prospectId).map(r => r.prospectId))]
+    const aiIds = [...new Set(allRows.filter(r => r.aiDisposition && r.prospectId).map(r => r.prospectId))]
+    async function warm(channelKey, ids) {
+      const CHUNK = 500
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        if (cancelled) return
+        const chunk = ids.slice(i, i + CHUNK)
+        try {
+          const res = await fetchJson(`/api/crm-leads?source=leadsquared&mode=disposition_status_lookup&channel=${channelKey}&ids=${chunk.join(',')}`)
+          if (cancelled) return
+          setDispositionCache(prev => {
+            const next = { ...prev }
+            chunk.forEach(id => { next[`${channelKey}:${id}`] = (res.map && res.map[id]) || null })
+            return next
+          })
+        } catch {
+          if (cancelled) return
+          setDispositionCache(prev => {
+            const next = { ...prev }
+            chunk.forEach(id => { next[`${channelKey}:${id}`] = null })
+            return next
+          })
+        }
+      }
+    }
+    warm('human', humanIds)
+    warm('ai', aiIds)
+    return () => { cancelled = true }
+  }, [viewKey, data]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filterOptions = useMemo(() => {
+    const out = {}
+    FILTERABLE_FIELDS.forEach(f => {
+      const seen = new Set()
+      enrichedRows.forEach(r => { const v = r[f.key]; if (v && v !== 'loading') seen.add(v) })
+      out[f.key] = Array.from(seen).sort()
+    })
+    return out
+  }, [enrichedRows])
+
+  function addCondition() { setConditions(prev => [...prev, newCondition()]) }
+  function updateCondition(id, patch) { setConditions(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c)) }
+  function removeCondition(id) { setConditions(prev => prev.filter(c => c.id !== id)) }
+
+  const activeConditions = useMemo(() => conditions.filter(isConditionComplete), [conditions])
+
   const filteredRows = useMemo(() => {
-    let rows = allRows
-    if (channel !== 'all') rows = rows.filter(r => r.channel === channel || (channel === 'Human' && r.channel === 'Human + AI') || (channel === 'AI' && r.channel === 'Human + AI'))
-    const q = search.trim().toLowerCase()
-    if (q) rows = rows.filter(r =>
-      (r.contactName || '').toLowerCase().includes(q) ||
-      (r.opportunityId || '').toLowerCase().includes(q) ||
-      (r.ownerName || '').toLowerCase().includes(q)
-    )
-    return rows
-  }, [allRows, channel, search])
+    if (!activeConditions.length) return enrichedRows
+    return enrichedRows.filter(r => combinator === 'AND'
+      ? activeConditions.every(c => matchesCondition(r, c))
+      : activeConditions.some(c => matchesCondition(r, c)))
+  }, [enrichedRows, activeConditions, combinator])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / 25))
   const safePage = Math.min(page, totalPages - 1)
@@ -194,9 +476,9 @@ export default function NotAttemptedDashboard() {
 
   const exportRows = useMemo(() => filteredRows.map(r => {
     const o = {}
-    COLUMNS.forEach(c => { o[c.label] = r[c.key] || '' })
+    columns.forEach(c => { o[c.label] = (r[c.key] === 'loading' ? '' : r[c.key]) || '' })
     return o
-  }), [filteredRows])
+  }), [filteredRows, columns])
 
   const rangeLabel = range.since === range.until ? range.since : `${range.since} → ${range.until}`
 
@@ -216,7 +498,7 @@ export default function NotAttemptedDashboard() {
 
         <div style={{ display: 'flex', gap: 6, padding: '14px 28px 0' }}>
           {VIEWS.map(v => (
-            <button key={v.key} onClick={() => { setViewKey(v.key); setPage(0) }} style={{
+            <button key={v.key} onClick={() => { setViewKey(v.key); setPage(0); setConditions([]) }} style={{
               padding: '8px 16px', borderRadius: 9, border: `0.5px solid ${viewKey === v.key ? C.navy : C.border}`,
               background: viewKey === v.key ? 'var(--navy-tint)' : 'var(--card)', color: viewKey === v.key ? C.navy : C.sub,
               fontSize: 13, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
@@ -271,12 +553,34 @@ export default function NotAttemptedDashboard() {
             )}
           </div>
           <div style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '0 2px' }} />
-          <Dropdown label="Channel" value={channel} onChange={setChannel} minWidth={140} options={CHANNEL_OPTIONS} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search contact / owner / opp id"
-            style={{
-              padding: '7px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)',
-              fontSize: 12.5, fontFamily: FONT, color: C.text, minWidth: 220,
-            }} />
+
+          <div style={{ position: 'relative' }}>
+            <button type="button" onClick={() => setFilterOpen(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              Filters
+            </button>
+            {filterOpen && (
+              <FilterBuilderPopover conditions={conditions} combinator={combinator} filterOptions={filterOptions}
+                onAdd={addCondition} onUpdate={updateCondition} onRemove={removeCondition}
+                onSetCombinator={setCombinator} onClearAll={() => setConditions([])}
+                onClose={() => setFilterOpen(false)} />
+            )}
+          </div>
+          {activeConditions.map(c => (
+            <span key={c.id} onClick={() => setFilterOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 6px 5px 10px', borderRadius: 999, background: 'var(--navy-tint)', color: C.navy, fontSize: 11.5, fontWeight: 700, fontFamily: FONT, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+              {conditionSummary(c)}
+              <button type="button" onClick={e => { e.stopPropagation(); removeCondition(c.id) }} title="Remove this filter"
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.navy, display: 'flex', alignItems: 'center', padding: 2, borderRadius: '50%' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </span>
+          ))}
+          {activeConditions.length > 0 && (
+            <button onClick={() => setConditions([])} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
+          )}
+
           <div style={{ flex: 1 }} />
           {syncedAt && (
             <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }} title={syncedAt.toLocaleString()}>
@@ -332,36 +636,26 @@ export default function NotAttemptedDashboard() {
             </div>
 
             <div style={{ padding: '20px 28px 0' }}>
-              <Card title="Records" sub={`${filteredRows.length} rows — ${COLUMNS.length} columns`}
+              <Card title="Records" sub={`${filteredRows.length} rows — ${columns.length} columns`}
                 action={totalPages > 1 ? <PaginationControl page={safePage} totalPages={totalPages} onPrev={() => setPage(safePage - 1)} onNext={() => setPage(safePage + 1)} /> : null}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, fontFamily: FONT }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                        {COLUMNS.map(c => (
+                        {columns.map(c => (
                           <th key={c.key} style={{ textAlign: 'left', padding: '8px 10px', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap' }}>{c.label}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {pageRows.length === 0 && (
-                        <tr><td colSpan={COLUMNS.length} style={{ padding: '20px 10px', textAlign: 'center', color: C.muted }}>{view.emptyMessage}</td></tr>
+                        <tr><td colSpan={columns.length} style={{ padding: '20px 10px', textAlign: 'center', color: C.muted }}>{view.emptyMessage}</td></tr>
                       )}
                       {pageRows.map(r => (
                         <tr key={r.opportunityId} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                            <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
-                          </td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                            {r.prospectId ? <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.contactName || r.prospectId}</a> : (r.contactName || '—')}
-                          </td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 700, color: r.channel === 'Human + AI' ? C.navy : C.text }}>{r.channel}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.humanDisposition || '—'}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.aiDisposition || '—'}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.ownerName || '—'}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.ownerSalesGroups || '—'}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.status || '—'}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{r.createdOn || '—'}</td>
+                          {columns.map(c => (
+                            <td key={c.key} style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{renderCell(c.key, r)}</td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>
