@@ -86,7 +86,13 @@ function columnsForView(viewKey) {
     { key: 'humanDisposition', label: 'Human Disposition' },
     { key: 'aiDisposition', label: 'AI Disposition' },
   ]
-  if (viewKey === 'attempted_not_closed') cols.push({ key: 'dispositionStatus', label: 'Disposition Status' })
+  if (viewKey === 'attempted_not_closed') {
+    cols.push(
+      { key: 'dispositionStatus', label: 'Disposition Status' },
+      { key: 'humanAttempts', label: 'Human Attempts' },
+      { key: 'aiAttempts', label: 'AI Attempts' },
+    )
+  }
   cols.push({ key: 'ownerName', label: 'Opportunity Owner' }, { key: 'status', label: 'Status' })
   return cols
 }
@@ -328,6 +334,8 @@ function renderCell(colKey, r) {
     case 'humanDisposition': return r.humanDisposition || '—'
     case 'aiDisposition': return r.aiDisposition || '—'
     case 'dispositionStatus': return r.dispositionStatus === 'loading' ? '…' : (r.dispositionStatus || '—')
+    case 'humanAttempts': return r.humanAttempts === 'loading' ? '…' : (r.humanAttempts == null ? '—' : r.humanAttempts)
+    case 'aiAttempts': return r.aiAttempts === 'loading' ? '…' : (r.aiAttempts == null ? '—' : r.aiAttempts)
     case 'ownerName': return r.ownerName || '—'
     case 'status': return r.status || '—'
     default: return r[colKey] || '—'
@@ -352,6 +360,7 @@ export default function NotAttemptedDashboard() {
   const [error, setError] = useState(null)
   const [syncedAt, setSyncedAt] = useState(null)
   const [dispositionCache, setDispositionCache] = useState({}) // `${channel}:${prospectId}` -> value | 'loading' | null
+  const [attemptCache, setAttemptCache] = useState({}) // `${channel}:${prospectId}` -> count | 'loading' | null
   const pickerRef = useRef(null)
 
   const range = datePreset === 'custom' && customRange ? customRange : computePreset(datePreset)
@@ -360,7 +369,7 @@ export default function NotAttemptedDashboard() {
     const cacheKey = 'not_attempted_v2:' + viewKey + ':' + range.since + ':' + range.until
     if (!force) {
       const cached = getSession(cacheKey)
-      if (cached) { setData(cached.data.result); setSyncedAt(cached.data.ts); setPage(0); setDispositionCache({}); setLoading(false); setError(null); return }
+      if (cached) { setData(cached.data.result); setSyncedAt(cached.data.ts); setPage(0); setDispositionCache({}); setAttemptCache({}); setLoading(false); setError(null); return }
     }
     setLoading(true); setError(null)
     try {
@@ -372,6 +381,7 @@ export default function NotAttemptedDashboard() {
       setSyncedAt(ts)
       setPage(0)
       setDispositionCache({})
+      setAttemptCache({})
     } catch (e) {
       setError(e.message || 'Failed to load')
     } finally {
@@ -471,14 +481,60 @@ export default function NotAttemptedDashboard() {
   const safePage = Math.min(page, totalPages - 1)
   const pageRows = filteredRows.slice(safePage * 25, safePage * 25 + 25)
 
+  // Attempt counts need the FULL activity history per contact (heavier than a
+  // single-latest lookup) -- confirmed with the user this is fetched lazily for
+  // whatever page is actually on screen, not the whole loaded dataset.
+  const pageIdsKey = pageRows.map(r => r.prospectId).join(',')
+  useEffect(() => {
+    if (viewKey !== 'attempted_not_closed') return
+    const humanIds = pageRows.filter(r => r.humanDisposition && r.prospectId && !(`human:${r.prospectId}` in attemptCache)).map(r => r.prospectId)
+    const aiIds = pageRows.filter(r => r.aiDisposition && r.prospectId && !(`ai:${r.prospectId}` in attemptCache)).map(r => r.prospectId)
+    if (!humanIds.length && !aiIds.length) return
+    setAttemptCache(prev => {
+      const next = { ...prev }
+      humanIds.forEach(id => { next[`human:${id}`] = 'loading' })
+      aiIds.forEach(id => { next[`ai:${id}`] = 'loading' })
+      return next
+    })
+    ;(async () => {
+      const [humanMap, aiMap] = await Promise.all([
+        humanIds.length ? fetchJson(`/api/crm-leads?source=leadsquared&mode=attempt_count_lookup&channel=human&ids=${humanIds.join(',')}`).then(r => r.map).catch(() => ({})) : {},
+        aiIds.length ? fetchJson(`/api/crm-leads?source=leadsquared&mode=attempt_count_lookup&channel=ai&ids=${aiIds.join(',')}`).then(r => r.map).catch(() => ({})) : {},
+      ])
+      setAttemptCache(prev => {
+        const next = { ...prev }
+        humanIds.forEach(id => { next[`human:${id}`] = humanMap[id] != null ? humanMap[id] : null })
+        aiIds.forEach(id => { next[`ai:${id}`] = aiMap[id] != null ? aiMap[id] : null })
+        return next
+      })
+    })()
+  }, [viewKey, pageIdsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const displayRows = useMemo(() => {
+    if (viewKey !== 'attempted_not_closed') return pageRows
+    return pageRows.map(r => ({
+      ...r,
+      humanAttempts: r.humanDisposition ? attemptCache[`human:${r.prospectId}`] : null,
+      aiAttempts: r.aiDisposition ? attemptCache[`ai:${r.prospectId}`] : null,
+    }))
+  }, [pageRows, attemptCache, viewKey])
+
   const humanCount = allRows.filter(r => r.channel === 'Human' || r.channel === 'Human + AI').length
   const aiCount = allRows.filter(r => r.channel === 'AI' || r.channel === 'Human + AI').length
 
   const exportRows = useMemo(() => filteredRows.map(r => {
     const o = {}
-    columns.forEach(c => { o[c.label] = (r[c.key] === 'loading' ? '' : r[c.key]) || '' })
+    columns.forEach(c => {
+      // Attempt counts are fetched lazily per visited page only -- export can only
+      // ever include whatever's already been resolved into attemptCache, blank for
+      // rows on a page never actually viewed. A known, deliberate tradeoff.
+      let v = r[c.key]
+      if (c.key === 'humanAttempts') v = r.humanDisposition ? attemptCache[`human:${r.prospectId}`] : null
+      if (c.key === 'aiAttempts') v = r.aiDisposition ? attemptCache[`ai:${r.prospectId}`] : null
+      o[c.label] = (v === 'loading' ? '' : v) || ''
+    })
     return o
-  }), [filteredRows, columns])
+  }), [filteredRows, columns, attemptCache])
 
   const rangeLabel = range.since === range.until ? range.since : `${range.since} → ${range.until}`
 
@@ -648,10 +704,10 @@ export default function NotAttemptedDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {pageRows.length === 0 && (
+                      {displayRows.length === 0 && (
                         <tr><td colSpan={columns.length} style={{ padding: '20px 10px', textAlign: 'center', color: C.muted }}>{view.emptyMessage}</td></tr>
                       )}
-                      {pageRows.map(r => (
+                      {displayRows.map(r => (
                         <tr key={r.opportunityId} style={{ borderBottom: `0.5px solid ${C.border}` }}>
                           {columns.map(c => (
                             <td key={c.key} style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{renderCell(c.key, r)}</td>

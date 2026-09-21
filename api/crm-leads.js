@@ -1160,6 +1160,60 @@ async function fetchDispositionStatusMap(creds, channelKey, prospectIds) {
   return out
 }
 
+// Attempt count -- "how many post-call activities came back after the most recent
+// queue event" per channel, per contact. Confirmed with the user (2026-09-21): scoped
+// PER QUEUE EPISODE, i.e. only post-call Activities that happened after the LATEST
+// queue event of that channel count -- an older attempt from before a re-queue
+// shouldn't inflate the current episode's count. Standard SOP: Human attempts up to 6
+// times before a DNP transfer to AI; AI attempts up to 8 times (fresh or transferred)
+// -- this count is what lets someone check whether a contact was actually called
+// "enough" before being left open.
+// Needs the FULL activity history per contact (not just the latest, unlike Disposition
+// Status above) -- deliberately fetched lazily for whatever page is on screen, not the
+// whole loaded dataset, since this is a heavier per-contact fetch than a single-latest
+// lookup (confirmed with the user: current-page-only is fine here).
+function buildProspectActivityHistorySearch(code, ids) {
+  const conds = [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+  ] }]
+  ids.forEach(id => conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+    { SubConOp: 'And', LSO: 'RelatedProspectId', LSO_Type: 'String', Operator: 'eq', RSO: id },
+  ] }))
+  return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
+}
+
+const ATTEMPT_COUNT_BULK_MAX = 500
+async function fetchAttemptCountMap(creds, channelKey, prospectIds) {
+  const ch = LIVE_QL_CHANNELS[channelKey]
+  const ids = [...new Set((prospectIds || []).filter(Boolean))]
+  if (!ch || !ids.length) return {}
+  const chunks = []
+  for (let i = 0; i < ids.length; i += ATTEMPT_COUNT_BULK_MAX) chunks.push(ids.slice(i, i + ATTEMPT_COUNT_BULK_MAX))
+  const results = await Promise.all(chunks.map(chunk => {
+    const search = buildProspectActivityHistorySearch(ch.code, chunk)
+    return runActivityAdvancedSearchAll(creds, ch.code, search, 'RelatedProspectId,CreatedOn,ActivityEvent_Note', LIVE_QL_MAX_PAGES)
+  }))
+  const byProspect = {}
+  results.forEach(r => (r.rows || []).forEach(row => {
+    const pid = row.RelatedProspectId
+    if (!pid) return
+    ;(byProspect[pid] = byProspect[pid] || []).push({ createdOn: row.CreatedOn || '', note: row.ActivityEvent_Note })
+  }))
+  const out = {}
+  Object.keys(byProspect).forEach(pid => {
+    const events = byProspect[pid].slice().sort((a, b) => a.createdOn.localeCompare(b.createdOn))
+    let lastQueueIdx = -1
+    events.forEach((e, i) => { if (e.note === ch.queuedNote) lastQueueIdx = i })
+    // No queue event found in this fetch (window/data edge case) -- fall back to
+    // counting every post-call activity rather than silently reporting 0.
+    const afterQueue = lastQueueIdx === -1 ? events : events.slice(lastQueueIdx + 1)
+    out[pid] = afterQueue.filter(e => e.note === ch.postNote).length
+  })
+  ids.forEach(id => { if (!(id in out)) out[id] = 0 })
+  return out
+}
+
 const LIVE_QL_OWNER_BULK_MAX = 500
 async function fetchLiveQlOpportunityOwners(creds, opportunityIds) {
   const ids = [...new Set((opportunityIds || []).filter(Boolean))].slice(0, LIVE_QL_OWNER_BULK_MAX)
@@ -3164,7 +3218,7 @@ async function handleLeadSquared(req, res, me) {
   // Not Attempted gets its own page id (unlike live_ql_metrics, which is gated on
   // the shared 'leadsquared' id for historical reasons) so its own frontend
   // route/nav grant and this backend gate never drift apart.
-  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup']
+  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup', 'attempt_count_lookup']
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : NOT_ATTEMPTED_MODES.includes(mode) ? 'not_attempted' : 'leadsquared'
   const { canAccessDashboard } = await import('../lib/auth.mjs')
   // activity_types is read by BOTH the main LeadSquared page (gated on
@@ -3422,6 +3476,11 @@ async function handleLeadSquared(req, res, me) {
       const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
       const ids = String(req.query.ids || '').split(',').filter(Boolean)
       return res.status(200).json({ map: await fetchDispositionStatusMap(creds, channelKey, ids) })
+    }
+    if (mode === 'attempt_count_lookup') {
+      const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
+      const ids = String(req.query.ids || '').split(',').filter(Boolean)
+      return res.status(200).json({ map: await fetchAttemptCountMap(creds, channelKey, ids) })
     }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
