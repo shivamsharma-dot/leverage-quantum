@@ -3488,43 +3488,6 @@ async function handleLeadSquared(req, res, me) {
       const ids = String(req.query.ids || '').split(',').filter(Boolean)
       return res.status(200).json({ map: await fetchAttemptCountMap(creds, channelKey, ids) })
     }
-    if (mode === 'attempt_count_raw_debug') {
-      const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
-      const ch = LIVE_QL_CHANNELS[channelKey]
-      const id = req.query.id
-      const search = buildProspectActivityHistorySearch(ch.code, [id])
-      const r = await runActivityAdvancedSearchAll(creds, ch.code, search, 'RelatedProspectId,CreatedOn,ActivityEvent_Note', LIVE_QL_MAX_PAGES)
-      return res.status(200).json({ recordCount: r.recordCount, rows: r.rows })
-    }
-    if (mode === 'lead_created_on_debug') {
-      const id = req.query.id
-      const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, {
-        SearchParameters: { LeadIds: [id] },
-        Columns: { Include_CSV: 'ProspectID,FirstName,LastName,CreatedOn,ModifiedOn' },
-        Paging: { PageIndex: 1, PageSize: 1 },
-      })
-      return res.status(200).json({ raw: (data && data.Leads && data.Leads[0]) || null })
-    }
-    if (mode === 'opp_created_on_debug') {
-      const id = req.query.id
-      // Minimal, independent lookup by Opportunity ID alone -- no Status/disposition
-      // conditions at all, to rule out this query's own shape interfering with CreatedOn.
-      const search = JSON.stringify({
-        GrpConOp: 'And',
-        Conditions: [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
-          { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
-          { SubConOp: 'And', LSO: 'ProspectActivityId', LSO_Type: 'String', Operator: 'eq', RSO: id },
-        ] }],
-        QueryTimeZone: 'India Standard Time',
-      })
-      const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
-        OpportunityEventCode: 12003,
-        AdvancedSearch: search,
-        Paging: { PageIndex: 1, PageSize: 1 },
-        Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-      })
-      return res.status(200).json({ raw: (data && data.List && data.List[0]) || null })
-    }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
