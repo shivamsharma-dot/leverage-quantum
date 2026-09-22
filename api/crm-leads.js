@@ -930,6 +930,48 @@ async function fetchLeadSquaredUserGroupsMap(creds) {
   return byId
 }
 
+// Both OpportunityManagement.svc's and ProspectActivity.svc's AdvancedSearch endpoints
+// return CreatedOn/ModifiedOn as a "YYYY-MM-DD HH:mm:ss" string that is actually UTC
+// wall-clock time, despite the request's own QueryTimeZone: 'India Standard Time'
+// field -- confirmed live 2026-09-22 by comparing a real Opportunity's raw CreatedOn
+// string against the SAME record's GetOpportunityDetails .NET /Date(epochMs)/ field
+// (an unambiguous absolute instant): both agree the string IS the UTC instant, not
+// IST. LeadSquared's own web UI displays these fields converted to the account's IST
+// timezone, so showing this raw string as-is reads 5.5 hours earlier than what a user
+// sees on LeadSquared's own page -- confirmed the direct cause of a user report that
+// "Attempted, Not Closed"'s Opportunity Created On column didn't match LeadSquared's
+// own page for the same Opportunity. This mirrors an identical, previously
+// investigated finding for ProspectActivity.svc's own CreatedOn (2026-09-17's "9pm
+// cutoff" investigation, Live QLs) that was never retrofitted into any live display --
+// scoped here to just the two Opportunity-level fetches that power this page.
+function lsqUtcStringToIst(v) {
+  if (!v || typeof v !== 'string') return v
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/)
+  if (!m) return v
+  const utcMs = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]))
+  const ist = new Date(utcMs + 5.5 * 60 * 60 * 1000)
+  const pad = n => String(n).padStart(2, '0')
+  return `${ist.getUTCFullYear()}-${pad(ist.getUTCMonth() + 1)}-${pad(ist.getUTCDate())} ${pad(ist.getUTCHours())}:${pad(ist.getUTCMinutes())}:${pad(ist.getUTCSeconds())}`
+}
+
+// A genuine QL outcome on either channel's own disposition field -- the SAME rule
+// already established and live-verified against LeadSquared's own UI counts for Live
+// QLs (see LIVE_QL_CONTAINS_WORDS's own comment): an exact match on that channel's
+// qualifying disposition string, or the disposition text containing one of the 4
+// confirmed substrings. Used to keep a genuinely-qualified Opportunity (QL'd on
+// EITHER channel) out of "Not Attempted"/"Attempted, Not Closed" -- both of those
+// tables' own match logic is an OR across the two channel fields, so a row can
+// otherwise be included via one channel's non-QL/placeholder value while the OTHER
+// channel's field happens to hold a real QL outcome, which a user correctly reads as
+// "why is a QL disposition showing up on a supposedly non-QL page."
+function isQlDispositionValue(channelKey, value) {
+  if (!value) return false
+  const ch = LIVE_QL_CHANNELS[channelKey]
+  if (ch && value === ch.dispositionExact) return true
+  const lower = value.toLowerCase()
+  return LIVE_QL_CONTAINS_WORDS.some(w => lower.includes(w))
+}
+
 // "Not Attempted" -- Opportunities whose own Last Disposition field (mx_Custom_100
 // Human / mx_Custom_58 AI) is still sitting on one of Futwork's own queue-status
 // placeholder strings, meaning the lead was routed to Futwork/Futwork AI but no
@@ -999,23 +1041,25 @@ async function fetchNotAttemptedOpportunities(creds, { since, until, datePreset 
     fetchLeadSquaredUserGroupsMap(creds),
   ])
   const contactNames = await fetchLeadSquaredContactNames(creds, raw.map(r => r.RelatedProspectId)).catch(() => ({}))
-  let rows = raw.map(r => {
-    const humanQueued = NOT_ATTEMPTED_HUMAN_VALUES.includes(r.mx_Custom_100)
-    const aiQueued = NOT_ATTEMPTED_AI_VALUES.includes(r.mx_Custom_58)
-    return {
-      opportunityId: r.OpportunityId,
-      prospectId: r.RelatedProspectId || null,
-      contactName: r.RelatedProspectId ? (contactNames[r.RelatedProspectId] || null) : null,
-      createdOn: r.CreatedOn || null,
-      status: r.Status || null,
-      channel: humanQueued && aiQueued ? 'Human + AI' : humanQueued ? 'Human' : 'AI',
-      humanDisposition: r.mx_Custom_100 || null,
-      aiDisposition: r.mx_Custom_58 || null,
-      ownerId: r.Owner || null,
-      ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
-      ownerSalesGroups: r.Owner ? (groupsMap[r.Owner] || []).join(', ') : null,
-    }
-  })
+  let rows = raw
+    .filter(r => !isQlDispositionValue('human', r.mx_Custom_100) && !isQlDispositionValue('ai', r.mx_Custom_58))
+    .map(r => {
+      const humanQueued = NOT_ATTEMPTED_HUMAN_VALUES.includes(r.mx_Custom_100)
+      const aiQueued = NOT_ATTEMPTED_AI_VALUES.includes(r.mx_Custom_58)
+      return {
+        opportunityId: r.OpportunityId,
+        prospectId: r.RelatedProspectId || null,
+        contactName: r.RelatedProspectId ? (contactNames[r.RelatedProspectId] || null) : null,
+        createdOn: lsqUtcStringToIst(r.CreatedOn) || null,
+        status: r.Status || null,
+        channel: humanQueued && aiQueued ? 'Human + AI' : humanQueued ? 'Human' : 'AI',
+        humanDisposition: r.mx_Custom_100 || null,
+        aiDisposition: r.mx_Custom_58 || null,
+        ownerId: r.Owner || null,
+        ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
+        ownerSalesGroups: r.Owner ? (groupsMap[r.Owner] || []).join(', ') : null,
+      }
+    })
   if (since) rows = rows.filter(r => !r.createdOn || r.createdOn >= since + ' 00:00:00')
   if (until) rows = rows.filter(r => !r.createdOn || r.createdOn <= until + ' 23:59:59')
   return { rows, totalFetched: raw.length, truncated }
@@ -1095,23 +1139,30 @@ async function fetchAttemptedNotClosedOpportunities(creds, { since, until, dateP
     fetchLeadSquaredUserGroupsMap(creds),
   ])
   const contactNames = await fetchLeadSquaredContactNames(creds, raw.map(r => r.RelatedProspectId)).catch(() => ({}))
-  let rows = raw.map(r => {
-    const humanHit = ATTEMPTED_NONQL_HUMAN_VALUES.includes(r.mx_Custom_100)
-    const aiHit = ATTEMPTED_NONQL_AI_VALUES.includes(r.mx_Custom_58)
-    return {
-      opportunityId: r.OpportunityId,
-      prospectId: r.RelatedProspectId || null,
-      contactName: r.RelatedProspectId ? (contactNames[r.RelatedProspectId] || null) : null,
-      createdOn: r.CreatedOn || null,
-      status: r.Status || null,
-      channel: humanHit && aiHit ? 'Human + AI' : humanHit ? 'Human' : 'AI',
-      humanDisposition: r.mx_Custom_100 || null,
-      aiDisposition: r.mx_Custom_58 || null,
-      ownerId: r.Owner || null,
-      ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
-      ownerSalesGroups: r.Owner ? (groupsMap[r.Owner] || []).join(', ') : null,
-    }
-  })
+  // A row can match this table's base OR-across-fields filter via one channel's
+  // genuinely non-QL/placeholder value while the OTHER channel's own field already
+  // holds a real QL outcome (the Opportunity WAS actually qualified via that other
+  // channel) -- excluded here rather than shown as if this table were only ever
+  // non-QL, matching the page's own stated definition. See isQlDispositionValue.
+  let rows = raw
+    .filter(r => !isQlDispositionValue('human', r.mx_Custom_100) && !isQlDispositionValue('ai', r.mx_Custom_58))
+    .map(r => {
+      const humanHit = ATTEMPTED_NONQL_HUMAN_VALUES.includes(r.mx_Custom_100)
+      const aiHit = ATTEMPTED_NONQL_AI_VALUES.includes(r.mx_Custom_58)
+      return {
+        opportunityId: r.OpportunityId,
+        prospectId: r.RelatedProspectId || null,
+        contactName: r.RelatedProspectId ? (contactNames[r.RelatedProspectId] || null) : null,
+        createdOn: lsqUtcStringToIst(r.CreatedOn) || null,
+        status: r.Status || null,
+        channel: humanHit && aiHit ? 'Human + AI' : humanHit ? 'Human' : 'AI',
+        humanDisposition: r.mx_Custom_100 || null,
+        aiDisposition: r.mx_Custom_58 || null,
+        ownerId: r.Owner || null,
+        ownerName: r.Owner ? resolveOwnerName(ownerMap, r.Owner) : null,
+        ownerSalesGroups: r.Owner ? (groupsMap[r.Owner] || []).join(', ') : null,
+      }
+    })
   if (since) rows = rows.filter(r => !r.createdOn || r.createdOn >= since + ' 00:00:00')
   if (until) rows = rows.filter(r => !r.createdOn || r.createdOn <= until + ' 23:59:59')
   return { rows, totalFetched: raw.length, truncated }
@@ -3224,7 +3275,7 @@ async function handleLeadSquared(req, res, me) {
   // Not Attempted gets its own page id (unlike live_ql_metrics, which is gated on
   // the shared 'leadsquared' id for historical reasons) so its own frontend
   // route/nav grant and this backend gate never drift apart.
-  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup', 'attempt_count_lookup', 'opp_single_debug', 'opp_tz_debug']
+  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup', 'attempt_count_lookup']
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : NOT_ATTEMPTED_MODES.includes(mode) ? 'not_attempted' : 'leadsquared'
   const { canAccessDashboard } = await import('../lib/auth.mjs')
   // activity_types is read by BOTH the main LeadSquared page (gated on
@@ -3482,28 +3533,6 @@ async function handleLeadSquared(req, res, me) {
       const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
       const ids = String(req.query.ids || '').split(',').filter(Boolean)
       return res.status(200).json({ map: await fetchDispositionStatusMap(creds, channelKey, ids) })
-    }
-    if (mode === 'opp_single_debug') {
-      const id = req.query.id
-      const search = JSON.stringify({
-        GrpConOp: 'And',
-        Conditions: [{ Type: 'Activity', ConOp: 'and', IsFilterCondition: true, RowCondition: [
-          { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: '12003' },
-          { SubConOp: 'And', LSO: 'ProspectActivityId', LSO_Type: 'String', Operator: 'eq', RSO: id },
-        ] }],
-        QueryTimeZone: 'India Standard Time',
-      })
-      const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
-        OpportunityEventCode: 12003,
-        AdvancedSearch: search,
-        Paging: { PageIndex: 1, PageSize: 1 },
-      })
-      return res.status(200).json({ raw: (data && data.List && data.List[0]) || null, fullData: data })
-    }
-    if (mode === 'opp_tz_debug') {
-      const id = req.query.id
-      const detail = await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: id })
-      return res.status(200).json({ detailCreatedOn: detail.createdOn, detailModifiedOn: detail.modifiedOn })
     }
     if (mode === 'attempt_count_lookup') {
       const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
