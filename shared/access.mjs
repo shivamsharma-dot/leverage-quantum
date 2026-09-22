@@ -11,9 +11,10 @@
 // browser bundle must not pull that in. Nothing in this file may import anything
 // -- it has to stay usable from both the Vercel functions and the Vite bundle.
 
-// Genuinely restricted to one person, not one role -- 'admin' still includes
-// nishant.bhatia, and this page is Shivam's own BigQuery beta.
-export const OVERALL_BIGQUERY_EMAILS = ['shivam.sharma@leverageedu.com']
+// Genuinely restricted to a named allowlist, not one role -- 'admin' still
+// includes nishant.bhatia, and this page is the BigQuery beta, opened up to
+// specific people by explicit request rather than by role/grant.
+export const OVERALL_BIGQUERY_EMAILS = ['shivam.sharma@leverageedu.com', 'chilukoti.sriteja@leverageedu.com']
 
 // Dashboards a plain 'viewer' does NOT get implicitly -- they must be granted
 // explicitly through a "viewer:<ids>" role. Also the fail-safe denial list used
