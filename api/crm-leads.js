@@ -103,8 +103,14 @@ async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, 
     // Owner enrichment) can legitimately burst past it together, not just from a runaway
     // loop. Retried with backoff (matches this file's own established pattern for
     // LeadSquared/BigQuery rate-limit errors elsewhere) rather than surfaced immediately.
+    // A plain LeadSquared 500 ("There was an error processing the request") is retried
+    // the same way -- confirmed live 2026-09-22 on the Attempted-Not-Closed page (a
+    // heavy chunked table fetch running concurrently with the Disposition Status bulk
+    // warm-up, each firing large multi-hundred-condition search bodies) -- this reads as
+    // the same class of transient backend overload as the 429 case, not a permanent
+    // failure, so the same backoff-and-retry treatment applies before giving up.
     const left = retriesLeft == null ? 3 : retriesLeft
-    if (r.status === 429 && left > 0) {
+    if ((r.status === 429 || r.status === 500) && left > 0) {
       const wait = (4 - left) * 1500 + 1000
       await new Promise(res => setTimeout(res, wait))
       return leadsquaredRequest(method, path, { accessKey, secretKey, host }, body, extraQuery, left - 1)
