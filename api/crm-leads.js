@@ -3488,6 +3488,14 @@ async function handleLeadSquared(req, res, me) {
       const ids = String(req.query.ids || '').split(',').filter(Boolean)
       return res.status(200).json({ map: await fetchAttemptCountMap(creds, channelKey, ids) })
     }
+    if (mode === 'attempt_count_raw_debug') {
+      const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
+      const ch = LIVE_QL_CHANNELS[channelKey]
+      const id = req.query.id
+      const search = buildProspectActivityHistorySearch(ch.code, [id])
+      const r = await runActivityAdvancedSearchAll(creds, ch.code, search, 'RelatedProspectId,CreatedOn,ActivityEvent_Note', LIVE_QL_MAX_PAGES)
+      return res.status(200).json({ recordCount: r.recordCount, rows: r.rows })
+    }
     if (mode === 'opp_created_on_debug') {
       const id = req.query.id
       // Minimal, independent lookup by Opportunity ID alone -- no Status/disposition
