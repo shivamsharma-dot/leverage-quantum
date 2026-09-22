@@ -3496,6 +3496,15 @@ async function handleLeadSquared(req, res, me) {
       const r = await runActivityAdvancedSearchAll(creds, ch.code, search, 'RelatedProspectId,CreatedOn,ActivityEvent_Note', LIVE_QL_MAX_PAGES)
       return res.status(200).json({ recordCount: r.recordCount, rows: r.rows })
     }
+    if (mode === 'lead_created_on_debug') {
+      const id = req.query.id
+      const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, {
+        SearchParameters: { LeadIds: [id] },
+        Columns: { Include_CSV: 'ProspectID,FirstName,LastName,CreatedOn,ModifiedOn' },
+        Paging: { PageIndex: 1, PageSize: 1 },
+      })
+      return res.status(200).json({ raw: (data && data.Leads && data.Leads[0]) || null })
+    }
     if (mode === 'opp_created_on_debug') {
       const id = req.query.id
       // Minimal, independent lookup by Opportunity ID alone -- no Status/disposition
