@@ -9,6 +9,7 @@ import { PAGE_LIST } from '../lib/pageList'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_BASELINE } from '../../shared/brandLogo.mjs'
 import { canAccessDashboard } from '../../shared/access.mjs'
 import { toast } from './ToastHost'
+import { getSidebarScroll, setSidebarScroll } from '../lib/sidebarScroll'
 
 // navKey on every expandable item is the STABLE identity for that nav group --
 // expand/collapse state and parent-active highlighting key off it, never off the
@@ -322,6 +323,19 @@ export default function Sidebar() {
   // control that opened it, matching the standard dialog contract.
   const hamburgerRef = React.useRef(null)
   const mobileDrawerRef = React.useRef(null)
+  // SCROLL-1: this Sidebar instance is destroyed and recreated on every page
+  // navigation (App.jsx keys the route wrapper by pathname), so the nav list
+  // below always used to start back at the top even if the user had it
+  // scrolled down when they clicked. A callback ref runs synchronously the
+  // moment React attaches the new <nav> node -- before the browser paints
+  // anything -- so restoring scrollTop here lands in the very first frame,
+  // with no visible jump-to-top-then-jump-back-down.
+  const navScrollRefCallback = React.useCallback((node) => {
+    if (node) node.scrollTop = getSidebarScroll()
+  }, [])
+  const handleNavScroll = React.useCallback((e) => {
+    setSidebarScroll(e.currentTarget.scrollTop)
+  }, [])
   React.useEffect(() => {
     if (!mobileOpen) return
     const closeAndReturnFocus = () => { setMobileOpen(false); hamburgerRef.current?.focus() }
@@ -649,7 +663,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className={styles.nav}>
+      <nav className={styles.nav} ref={navScrollRefCallback} onScroll={handleNavScroll}>
         {NAV.map(group => {
           // Computed once per group. This used to run groupVisible() over every
           // item twice -- once for the is-it-empty check, once for the map -- and
