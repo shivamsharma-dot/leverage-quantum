@@ -564,19 +564,41 @@ jobs:
           # Only meaningful when the prune above actually ran -- if it didn't, a
           # higher-than-expected count is exactly what a lingering stale row
           # looks like, not a new bug to flag.
-          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1' + date_scope,
-                   'GET', None, {'Prefer': 'count=exact', 'Range': '0-0'})
-          with urllib.request.urlopen(req, timeout=60) as r:
-              r.read()
-              content_range = r.headers.get('Content-Range') or ''
-          after = content_range.split('/')[-1]
-          print('Rows in', TABLE, 'within the synced window after sync:', after, '| expected:', len(records))
-          if pruned_ok and after.isdigit() and int(after) != len(records):
-              raise SystemExit('Post-sync row count mismatch: window holds %s, expected %d.'
-                               % (after, len(records)))
-          elif not pruned_ok:
-              print('Skipping the exact row-count check for', TABLE, '-- prune did not '
-                    'complete this run, so a higher-than-expected count is expected, not an error.')
+          #
+          # This is a real, exact `count=exact` PostgREST query over a
+          # date-filtered range of a 400K+ row table -- the same class of query
+          # this codebase has already found times out under load (2026-09-13,
+          # 2026-09-19 entries in CLAUDE.md), and it fires right after the prune
+          # step above has likely just been hammering the same table with retries.
+          # Confirmed live (2026-09-20 through 2026-09-23, run after run, always
+          # at the same daily 10am IST trigger): this exact query returns a
+          # genuine Postgres 57014 statement-timeout 500, and because it used to
+          # have NO try/except, that crashed the ENTIRE script right here --
+          # silently skipping the agg-table sync below every single day, even
+          # though the real upsert above had already succeeded. This is purely a
+          # verification/logging step with no side effects of its own, so a
+          # failure here must never be allowed to abort the run -- same
+          # resilience already given to the prune step just above.
+          try:
+              req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1' + date_scope,
+                       'GET', None, {'Prefer': 'count=exact', 'Range': '0-0'})
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  r.read()
+                  content_range = r.headers.get('Content-Range') or ''
+              after = content_range.split('/')[-1]
+              print('Rows in', TABLE, 'within the synced window after sync:', after, '| expected:', len(records))
+              if pruned_ok and after.isdigit() and int(after) != len(records):
+                  raise SystemExit('Post-sync row count mismatch: window holds %s, expected %d.'
+                                   % (after, len(records)))
+              elif not pruned_ok:
+                  print('Skipping the exact row-count check for', TABLE, '-- prune did not '
+                        'complete this run, so a higher-than-expected count is expected, not an error.')
+          except SystemExit:
+              raise  # a genuine, successfully-read count mismatch should still fail the run
+          except Exception as e:
+              print('WARNING: could not verify the post-sync row count for', TABLE, '-- the '
+                    'exact-count query itself failed (a known contention/timeout risk on this '
+                    'table, not a sign the real upsert/prune above failed). Error:', repr(e))
 
           # ---------------------------------------------------------------
           # Pre-aggregated day+source companion (overall_bq_daily_agg) --
@@ -719,20 +741,32 @@ jobs:
                         'rows from a previous sync may linger until a later sync\'s prune '
                         'succeeds. Error:', repr(e))
 
-          req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1' + date_scope,
-                   'GET', None, {'Prefer': 'count=exact', 'Range': '0-0'})
-          with urllib.request.urlopen(req, timeout=60) as r:
-              r.read()
-              content_range = r.headers.get('Content-Range') or ''
-          after_agg = content_range.split('/')[-1]
-          print('Rows in', AGG_TABLE, 'within the synced window after sync:', after_agg, '| expected:', len(agg_records))
-          if agg_pruned_ok and after_agg.isdigit() and int(after_agg) != len(agg_records):
-              raise SystemExit('Post-sync row count mismatch in %s: window holds %s, expected %d.'
-                               % (AGG_TABLE, after_agg, len(agg_records)))
-          elif not agg_pruned_ok:
-              print('Skipping the exact row-count check for', AGG_TABLE, '-- prune did not '
-                    'complete this run (or was skipped after an upsert failure), so a '
-                    'different-than-expected count is expected, not an error.')
+          # Same unguarded-query risk as the raw table's own check above, and the
+          # same fix -- see that block's comment for the full 2026-09-20/23
+          # confirmed-live root cause. This one hasn't been observed to crash a
+          # real run yet, but it's the identical query shape against the same
+          # database right after the same prune step, so it's just as exposed.
+          try:
+              req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1' + date_scope,
+                       'GET', None, {'Prefer': 'count=exact', 'Range': '0-0'})
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  r.read()
+                  content_range = r.headers.get('Content-Range') or ''
+              after_agg = content_range.split('/')[-1]
+              print('Rows in', AGG_TABLE, 'within the synced window after sync:', after_agg, '| expected:', len(agg_records))
+              if agg_pruned_ok and after_agg.isdigit() and int(after_agg) != len(agg_records):
+                  raise SystemExit('Post-sync row count mismatch in %s: window holds %s, expected %d.'
+                                   % (AGG_TABLE, after_agg, len(agg_records)))
+              elif not agg_pruned_ok:
+                  print('Skipping the exact row-count check for', AGG_TABLE, '-- prune did not '
+                        'complete this run (or was skipped after an upsert failure), so a '
+                        'different-than-expected count is expected, not an error.')
+          except SystemExit:
+              raise  # a genuine, successfully-read count mismatch should still fail the run
+          except Exception as e:
+              print('WARNING: could not verify the post-sync row count for', AGG_TABLE, '-- the '
+                    'exact-count query itself failed (a known contention/timeout risk on this '
+                    'table, not a sign the real upsert/prune above failed). Error:', repr(e))
 
           # Prewarm the Overall (BigQuery) page's own DEFAULT view (2026-09-19,
           # asked for directly: "on first click or refresh ... it should open up
