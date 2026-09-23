@@ -34,6 +34,23 @@ function computePreset(key) {
   return { since: fmtYmd(today), until: fmtYmd(today) }
 }
 
+// Fixed trailing window for the Call Window analysis below -- deliberately
+// INDEPENDENT of the header's own date preset/custom range, so it always answers
+// "the last 3 months" regardless of whatever narrower window the table itself is
+// showing. 3 months (not a longer lookback) is a real cost tradeoff: this endpoint's
+// CreatedOn "between" condition doesn't work server-side (see
+// fetchAttemptedNotClosedOpportunities's own comment on the backend), so a range
+// this wide has to fetch every real matching row and filter client-side --
+// "Attempted, Not Closed" is a backlog that never clears, so going back further
+// risks a genuinely slow fetch and hitting this endpoint's own pagination cap
+// (disclosed honestly via `truncated` if it happens).
+function trailingMonthsRange(months) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const s = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1)
+  return { since: fmtYmd(s), until: fmtYmd(today) }
+}
+
 const VIEWS = [
   {
     key: 'not_attempted',
@@ -70,6 +87,7 @@ const VIEWS = [
         <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account — a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
         <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) — fetched lazily per page, may show "…" briefly while loading.</div>
         <div style={{ marginTop: 6 }}><b>Call Window</b> is the Opportunity's own creation time bucketed into <b>9 AM – 9 PM</b> (green) or <b>9 PM – 9 AM</b> (red) — the window TRAI's National DND rules block unsolicited commercial calls in. The lead still gets called either way, just not in real time if it lands in the red window.</div>
+        <div style={{ marginTop: 6 }}>The <b>Call Window — Last 3 Months</b> card above the table is a fixed, independent 3-month window (not tied to the date range picker) — it exists to show a real split across enough volume to be meaningful, since the table's own range can be as narrow as a single day.</div>
       </>
     ),
   },
@@ -406,6 +424,42 @@ export default function NotAttemptedDashboard() {
   const [attemptCache, setAttemptCache] = useState({}) // `${channel}:${prospectId}` -> count | 'loading' | null
   const pickerRef = useRef(null)
 
+  // Call Window analysis -- a fixed trailing-3-month window, completely independent
+  // of the header's own date preset/custom range (see trailingMonthsRange's own
+  // comment on why 3 months and not further back). Fetched once per view, on its
+  // own schedule -- never blocks or slows the main table's load.
+  const CALL_WINDOW_TREND_MONTHS = 3
+  const [callWindowTrend, setCallWindowTrend] = useState(null) // { day, night, total, truncated, ts }
+  const [callWindowTrendLoading, setCallWindowTrendLoading] = useState(false)
+  const [callWindowTrendError, setCallWindowTrendError] = useState(null)
+
+  async function loadCallWindowTrend(force) {
+    const trendRange = trailingMonthsRange(CALL_WINDOW_TREND_MONTHS)
+    const cacheKey = 'not_attempted_call_window_trend_v1:' + trendRange.since + ':' + trendRange.until
+    if (!force) {
+      const cached = getSession(cacheKey)
+      if (cached) { setCallWindowTrend(cached.data); setCallWindowTrendError(null); return }
+    }
+    setCallWindowTrendLoading(true); setCallWindowTrendError(null)
+    try {
+      const d = await fetchJson(`/api/crm-leads?source=leadsquared&mode=attempted_not_closed_opportunities&since=${trendRange.since}&until=${trendRange.until}`)
+      let day = 0, night = 0
+      ;(d.rows || []).forEach(r => { if (callWindowBucket(r.createdOn) === '9 AM – 9 PM') day++; else night++ })
+      const result = { day, night, total: day + night, truncated: !!d.truncated, since: trendRange.since, until: trendRange.until, ts: new Date() }
+      setCallWindowTrend(result)
+      setSession(cacheKey, result)
+    } catch (e) {
+      setCallWindowTrendError(e.message || 'Failed to load')
+    } finally {
+      setCallWindowTrendLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (viewKey !== 'attempted_not_closed') return
+    loadCallWindowTrend(false)
+  }, [viewKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const range = datePreset === 'custom' && customRange ? customRange : computePreset(datePreset)
 
   async function load(force) {
@@ -734,6 +788,48 @@ export default function NotAttemptedDashboard() {
               <PremKPI label="Human" value={fmtN(humanCount)} sub={view.kpiSub} accent={C.navy} icon={KPI_ICONS.agent} />
               <PremKPI label="AI" value={fmtN(aiCount)} sub={view.kpiSub} accent={C.navy} icon={KPI_ICONS.agent} />
             </div>
+
+            {viewKey === 'attempted_not_closed' && (
+              <div style={{ padding: '20px 28px 0' }}>
+                <Card title="Call Window — Last 3 Months"
+                  sub={callWindowTrend ? `${callWindowTrend.since} → ${callWindowTrend.until} — a fixed window, independent of the date range above` : 'Fixed window, independent of the date range above'}
+                  action={
+                    <button type="button" onClick={() => loadCallWindowTrend(true)} disabled={callWindowTrendLoading}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, border: `0.5px solid ${C.border}`, background: 'var(--card)', borderRadius: 8, padding: '5px 10px', cursor: callWindowTrendLoading ? 'default' : 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, color: C.muted }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: callWindowTrendLoading ? 'spin 1s linear infinite' : 'none' }}>
+                        <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                      </svg>
+                      Refresh
+                    </button>
+                  }>
+                  {callWindowTrendError ? (
+                    <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>{callWindowTrendError}</div>
+                  ) : !callWindowTrend ? (
+                    <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>{callWindowTrendLoading ? 'Loading…' : '—'}</div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, opacity: callWindowTrendLoading ? 0.5 : 1 }}>
+                        <div style={{ padding: '14px 16px', borderRadius: 12, border: `0.5px solid ${C.border}`, background: 'var(--card)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>9 AM – 9 PM</div>
+                          <div style={{ fontSize: 26, fontWeight: 800, color: C.green, letterSpacing: '-0.5px', marginTop: 4 }}>{fmtN(callWindowTrend.day)}</div>
+                          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{callWindowTrend.total ? Math.round((callWindowTrend.day / callWindowTrend.total) * 1000) / 10 : 0}% of the window</div>
+                        </div>
+                        <div style={{ padding: '14px 16px', borderRadius: 12, border: `0.5px solid ${C.border}`, background: 'var(--card)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>9 PM – 9 AM</div>
+                          <div style={{ fontSize: 26, fontWeight: 800, color: '#DC2626', letterSpacing: '-0.5px', marginTop: 4 }}>{fmtN(callWindowTrend.night)}</div>
+                          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{callWindowTrend.total ? Math.round((callWindowTrend.night / callWindowTrend.total) * 1000) / 10 : 0}% of the window</div>
+                        </div>
+                      </div>
+                      {callWindowTrend.truncated && (
+                        <div style={{ marginTop: 10, fontSize: 12, color: C.muted, fontFamily: FONT }}>
+                          More opportunities exist in this 3-month window than could be fetched in full — these counts reflect only what was retrieved.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </Card>
+              </div>
+            )}
 
             <div style={{ padding: '20px 28px 0' }}>
               <Card title="Records" sub={`${filteredRows.length} rows — ${columns.length} columns`}
