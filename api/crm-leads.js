@@ -1265,9 +1265,17 @@ async function fetchAttemptCountMap(creds, channelKey, prospectIds) {
     // No queue event found in this fetch (window/data edge case) -- fall back to
     // counting every post-call activity rather than silently reporting 0.
     const afterQueue = lastQueueIdx === -1 ? events : events.slice(lastQueueIdx + 1)
-    out[pid] = afterQueue.filter(e => e.note === ch.postNote).length
+    const postCalls = afterQueue.filter(e => e.note === ch.postNote)
+    // lastAttemptOn -- the real timestamp of the most recent actual call attempt
+    // (a genuine "Post call response from Futwork[/AI]" activity, not a generic
+    // last-modified field), converted from this endpoint's own UTC-labeled-as-IST
+    // CreatedOn (see lsqUtcStringToIst's own comment) -- powers the "Attempts
+    // Complete / In Progress / Stalled" status column: a day with zero real calls
+    // is the actual signal, not a proxy.
+    const last = postCalls.length ? postCalls[postCalls.length - 1].createdOn : null
+    out[pid] = { count: postCalls.length, lastAttemptOn: last ? lsqUtcStringToIst(last) : null }
   })
-  ids.forEach(id => { if (!(id in out)) out[id] = 0 })
+  ids.forEach(id => { if (!(id in out)) out[id] = { count: 0, lastAttemptOn: null } })
   return out
 }
 

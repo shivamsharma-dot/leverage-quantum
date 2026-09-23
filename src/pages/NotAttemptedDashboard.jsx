@@ -88,6 +88,7 @@ const VIEWS = [
         <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) — fetched lazily per page, may show "…" briefly while loading.</div>
         <div style={{ marginTop: 6 }}><b>Call Window</b> is the Opportunity's own creation time bucketed into <b>9 AM – 9 PM</b> (green) or <b>9 PM – 9 AM</b> (red) — the window TRAI's National DND rules block unsolicited commercial calls in. The lead still gets called either way, just not in real time if it lands in the red window.</div>
         <div style={{ marginTop: 6 }}>The <b>Call Window — Last 3 Months</b> card above the table is a fixed, independent 3-month window (not tied to the date range picker) — it exists to show a real split across enough volume to be meaningful, since the table's own range can be as narrow as a single day.</div>
+        <div style={{ marginTop: 6 }}><b>Attempt Status</b> compares real attempts made (Human/AI, sourced from actual Futwork call-response activity) against the target for this row's current channel — Human 6, AI 8, Human + AI 14. <b>Attempts Complete</b> (green) means the target's been hit. <b>Stalled</b> (red) means the target isn't met AND no real call has happened since yesterday — a full day with zero calls. Otherwise it's <b>In Progress</b> (normal, still being worked).</div>
       </>
     ),
   },
@@ -115,6 +116,7 @@ function columnsForView(viewKey) {
       { key: 'dispositionStatus', label: 'Disposition Status' },
       { key: 'humanAttempts', label: 'Human Attempts' },
       { key: 'aiAttempts', label: 'AI Attempts' },
+      { key: 'attemptStatus', label: 'Attempt Status' },
     )
   }
   cols.push({ key: 'ownerName', label: 'Opportunity Owner' }, { key: 'status', label: 'Status' })
@@ -148,6 +150,50 @@ function formatCreatedOnDisplay(createdOn) {
   return `${Number(d)} ${monthShort}, ${hour}:${mi} ${ampm}`
 }
 
+// If a lead is created inside the 9 PM - 9 AM window, its first legitimate calling
+// day doesn't start until the next morning's 9 AM opening -- shifts the anchor date
+// forward by one calendar day, so a night-created lead isn't unfairly judged stalled
+// before its first real calling day has even begun. `createdOnIst` is already the
+// backend's IST-corrected Opportunity Created On (see lsqUtcStringToIst).
+function callAnchorDate(createdOnIst) {
+  const m = String(createdOnIst || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):/)
+  if (!m) return null
+  const [, y, mo, d, h] = m
+  const date = new Date(Number(y), Number(mo) - 1, Number(d))
+  const hour = Number(h)
+  if (hour >= 21 || hour < 9) date.setDate(date.getDate() + 1)
+  return date
+}
+
+// The real, direct ask: SOP is 2 calls/day until the channel's own target is hit
+// (Human 6 / AI 8 / Human + AI 6+8=14, using whatever the row's CURRENT channel is
+// -- if it later escalates to AI, the channel flips and the target self-corrects on
+// the next refresh, no need to predict escalation in advance). A full calendar day
+// with zero real calls, while short of target, is the actual red flag -- confirmed
+// directly: "regular 2 calls in a day is a must, no calls in a day is a red flag."
+// `humanAttempts`/`aiAttempts` are {count, lastAttemptOn} | 'loading' | null.
+function attemptStatus(channel, humanAttempts, aiAttempts, createdOnIst) {
+  const needsHuman = channel === 'Human' || channel === 'Human + AI'
+  const needsAi = channel === 'AI' || channel === 'Human + AI'
+  if (!needsHuman && !needsAi) return null
+  if (needsHuman && humanAttempts === 'loading') return 'loading'
+  if (needsAi && aiAttempts === 'loading') return 'loading'
+  const humanCount = needsHuman && humanAttempts ? humanAttempts.count : 0
+  const aiCount = needsAi && aiAttempts ? aiAttempts.count : 0
+  const target = channel === 'Human' ? 6 : channel === 'AI' ? 8 : 14
+  if (humanCount + aiCount >= target) return 'Attempts Complete'
+
+  const lastHuman = needsHuman && humanAttempts ? humanAttempts.lastAttemptOn : null
+  const lastAi = needsAi && aiAttempts ? aiAttempts.lastAttemptOn : null
+  const lastReal = [lastHuman, lastAi].filter(Boolean).sort().pop()
+  const anchor = lastReal ? new Date(lastReal.replace(' ', 'T')) : callAnchorDate(createdOnIst)
+  if (!anchor) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const anchorDay = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())
+  const dayDiff = Math.round((today - anchorDay) / 86400000)
+  return dayDiff >= 2 ? 'Stalled' : 'In Progress'
+}
+
 // ---- Advanced filter: same small condition-builder pattern already shipped on Live
 // QLs (field / operator / value, any number of conditions combined by one shared
 // AND/OR toggle) -- ported here per direct request ("just like Live QLs"), trimmed to
@@ -161,6 +207,7 @@ const FILTERABLE_FIELDS = [
   { key: 'humanDisposition', label: 'Human Disposition' },
   { key: 'aiDisposition', label: 'AI Disposition' },
   { key: 'dispositionStatus', label: 'Disposition Status' },
+  { key: 'attemptStatus', label: 'Attempt Status' },
   { key: 'ownerName', label: 'Opportunity Owner' },
   { key: 'status', label: 'Status' },
 ]
@@ -395,8 +442,14 @@ function renderCell(colKey, r, viewKey) {
     case 'humanDisposition': return r.humanDisposition || '—'
     case 'aiDisposition': return r.aiDisposition || '—'
     case 'dispositionStatus': return r.dispositionStatus === 'loading' ? '…' : (r.dispositionStatus || '—')
-    case 'humanAttempts': return r.humanAttempts === 'loading' ? '…' : (r.humanAttempts == null ? '—' : r.humanAttempts)
-    case 'aiAttempts': return r.aiAttempts === 'loading' ? '…' : (r.aiAttempts == null ? '—' : r.aiAttempts)
+    case 'humanAttempts': return r.humanAttempts === 'loading' ? '…' : (r.humanAttempts == null ? '—' : r.humanAttempts.count)
+    case 'aiAttempts': return r.aiAttempts === 'loading' ? '…' : (r.aiAttempts == null ? '—' : r.aiAttempts.count)
+    case 'attemptStatus': {
+      if (r.attemptStatus === 'loading') return '…'
+      if (!r.attemptStatus) return '—'
+      const color = r.attemptStatus === 'Attempts Complete' ? C.green : r.attemptStatus === 'Stalled' ? '#DC2626' : C.navy
+      return <span style={{ fontWeight: 700, color }}>{r.attemptStatus}</span>
+    }
     case 'ownerName': return r.ownerName || '—'
     case 'status': return r.status || '—'
     default: return r[colKey] || '—'
@@ -421,7 +474,7 @@ export default function NotAttemptedDashboard() {
   const [error, setError] = useState(null)
   const [syncedAt, setSyncedAt] = useState(null)
   const [dispositionCache, setDispositionCache] = useState({}) // `${channel}:${prospectId}` -> value | 'loading' | null
-  const [attemptCache, setAttemptCache] = useState({}) // `${channel}:${prospectId}` -> count | 'loading' | null
+  const [attemptCache, setAttemptCache] = useState({}) // `${channel}:${prospectId}` -> {count, lastAttemptOn} | 'loading' | null
   const pickerRef = useRef(null)
 
   // Call Window analysis -- a fixed trailing-3-month window, completely independent
@@ -610,11 +663,11 @@ export default function NotAttemptedDashboard() {
 
   const displayRows = useMemo(() => {
     if (viewKey !== 'attempted_not_closed') return pageRows
-    return pageRows.map(r => ({
-      ...r,
-      humanAttempts: r.humanDisposition ? attemptCache[`human:${r.prospectId}`] : null,
-      aiAttempts: r.aiDisposition ? attemptCache[`ai:${r.prospectId}`] : null,
-    }))
+    return pageRows.map(r => {
+      const humanAttempts = r.humanDisposition ? attemptCache[`human:${r.prospectId}`] : null
+      const aiAttempts = r.aiDisposition ? attemptCache[`ai:${r.prospectId}`] : null
+      return { ...r, humanAttempts, aiAttempts, attemptStatus: attemptStatus(r.channel, humanAttempts, aiAttempts, r.createdOn) }
+    })
   }, [pageRows, attemptCache, viewKey])
 
   const humanCount = allRows.filter(r => r.channel === 'Human' || r.channel === 'Human + AI').length
@@ -622,13 +675,17 @@ export default function NotAttemptedDashboard() {
 
   const exportRows = useMemo(() => filteredRows.map(r => {
     const o = {}
+    // Attempt counts (and the Attempt Status derived from them) are fetched lazily
+    // per visited page only -- export can only ever include whatever's already
+    // been resolved into attemptCache, blank for rows on a page never actually
+    // viewed. A known, deliberate tradeoff.
+    const humanAttempts = r.humanDisposition ? attemptCache[`human:${r.prospectId}`] : null
+    const aiAttempts = r.aiDisposition ? attemptCache[`ai:${r.prospectId}`] : null
     columns.forEach(c => {
-      // Attempt counts are fetched lazily per visited page only -- export can only
-      // ever include whatever's already been resolved into attemptCache, blank for
-      // rows on a page never actually viewed. A known, deliberate tradeoff.
       let v = r[c.key]
-      if (c.key === 'humanAttempts') v = r.humanDisposition ? attemptCache[`human:${r.prospectId}`] : null
-      if (c.key === 'aiAttempts') v = r.aiDisposition ? attemptCache[`ai:${r.prospectId}`] : null
+      if (c.key === 'humanAttempts') v = humanAttempts && humanAttempts !== 'loading' ? humanAttempts.count : (humanAttempts === 'loading' ? '' : null)
+      if (c.key === 'aiAttempts') v = aiAttempts && aiAttempts !== 'loading' ? aiAttempts.count : (aiAttempts === 'loading' ? '' : null)
+      if (c.key === 'attemptStatus') v = attemptStatus(r.channel, humanAttempts, aiAttempts, r.createdOn)
       o[c.label] = (v === 'loading' ? '' : v) || ''
     })
     return o
