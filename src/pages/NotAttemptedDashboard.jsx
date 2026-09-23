@@ -69,7 +69,7 @@ const VIEWS = [
         <div style={{ marginTop: 6 }}>But the Opportunity's own Status is still "Open" — the agent never moved it to "Lost" after the call. QL dispositions and the "still queued, never attempted" placeholder values are excluded from this view.</div>
         <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account — a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
         <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) — fetched lazily per page, may show "…" briefly while loading.</div>
-        <div style={{ marginTop: 6 }}><b>Call Window</b> buckets the Opportunity's own creation time: <b>Catered (9 AM–9 PM)</b> if it landed during real-time-callable hours, <b>Not Catered (9 PM–9 AM)</b> if it landed inside the window TRAI's National DND rules block unsolicited commercial calls in.</div>
+        <div style={{ marginTop: 6 }}><b>Call Window</b> is the Opportunity's own creation time bucketed into <b>9 AM – 9 PM</b> (green) or <b>9 PM – 9 AM</b> (red) — the window TRAI's National DND rules block unsolicited commercial calls in. The lead still gets called either way, just not in real time if it lands in the red window.</div>
       </>
     ),
   },
@@ -104,16 +104,16 @@ function columnsForView(viewKey) {
 }
 
 // TRAI's National DND regulations prohibit unsolicited commercial calls between 9 PM
-// and 9 AM IST -- a lead whose Opportunity was created inside that window genuinely
-// cannot be attempted in real time no matter how fast an agent works, a different
-// situation from one created during the day and simply not yet worked. Computed off
-// the already-IST-corrected Opportunity Created On the backend now returns.
+// and 9 AM IST -- plainly the window itself, not a "catered/not catered" judgment
+// about the lead (a lead created at night still gets called, just not in real time,
+// per explicit correction). Computed off the already-IST-corrected Opportunity
+// Created On the backend now returns.
 function callWindowBucket(createdOn) {
   if (!createdOn) return null
   const m = String(createdOn).match(/(\d{2}):(\d{2}):(\d{2})/)
   if (!m) return null
   const hour = Number(m[1])
-  return (hour >= 9 && hour < 21) ? 'Catered (9 AM–9 PM)' : 'Not Catered (9 PM–9 AM)'
+  return (hour >= 9 && hour < 21) ? '9 AM – 9 PM' : '9 PM – 9 AM'
 }
 
 // Scoped to Attempted-Not-Closed's own display only (see the Call Window column
@@ -362,8 +362,12 @@ function renderCell(colKey, r, viewKey) {
     case 'createdOn': return viewKey === 'attempted_not_closed' ? formatCreatedOnDisplay(r.createdOn) : (r.createdOn || '—')
     case 'callWindow': {
       if (!r.callWindow) return '—'
-      const isCatered = r.callWindow.startsWith('Catered')
-      return <span style={{ fontWeight: 700, color: isCatered ? C.green : C.muted }}>{r.callWindow}</span>
+      const isDaytime = r.callWindow === '9 AM – 9 PM'
+      // A deliberate, narrow exception to the brand-colors-only rule (same
+      // precedent as the Opportunity Owner misassignment flag elsewhere on this
+      // page) -- red genuinely signals "outside the real-time-callable window,"
+      // not an error state, but the distinction is worth calling out this plainly.
+      return <span style={{ fontWeight: 700, color: isDaytime ? C.green : '#DC2626' }}>{r.callWindow}</span>
     }
     case 'opportunityId':
       return <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
