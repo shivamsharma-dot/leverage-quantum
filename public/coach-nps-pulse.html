@@ -1186,8 +1186,8 @@ async function loadLiveData(){
     if(res.status === 401){
       document.querySelector('.wrap').innerHTML =
         '<div style="max-width:520px;margin:80px auto;text-align:center;font-family:inherit">'
-        + '<div style="font-size:15px;font-weight:800;color:var(--ink,#0f172a);margin-bottom:8px">This link is invalid or has expired</div>'
-        + '<div style="font-size:13px;color:var(--muted,#64748b)">Ask whoever shared this with you for a fresh link, or check the URL was copied in full.</div>'
+        + '<div style="font-size:15px;font-weight:800;color:var(--text-1);margin-bottom:8px">This link is invalid or has expired</div>'
+        + '<div style="font-size:13px;color:var(--text-2)">Ask whoever shared this with you for a fresh link, or check the URL was copied in full.</div>'
         + '</div>';
       return;
     }
@@ -1203,8 +1203,8 @@ async function loadLiveData(){
       if(ROWS.length === 0){
         document.querySelector('.wrap').innerHTML =
           '<div style="max-width:520px;margin:80px auto;text-align:center;font-family:inherit">'
-          + '<div style="font-size:15px;font-weight:800;color:var(--ink,#0f172a);margin-bottom:8px">No ratings yet for ' + name + '</div>'
-          + '<div style="font-size:13px;color:var(--muted,#64748b)">Nothing has come in yet — check back after a few coaching calls.</div>'
+          + '<div style="font-size:15px;font-weight:800;color:var(--text-1);margin-bottom:8px">No ratings yet for ' + name + '</div>'
+          + '<div style="font-size:13px;color:var(--text-2)">Nothing has come in yet — check back after a few coaching calls.</div>'
           + '</div>';
         return;
       }
