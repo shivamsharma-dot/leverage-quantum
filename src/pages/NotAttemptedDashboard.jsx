@@ -69,6 +69,7 @@ const VIEWS = [
         <div style={{ marginTop: 6 }}>But the Opportunity's own Status is still "Open" — the agent never moved it to "Lost" after the call. QL dispositions and the "still queued, never attempted" placeholder values are excluded from this view.</div>
         <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account — a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
         <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) — fetched lazily per page, may show "…" briefly while loading.</div>
+        <div style={{ marginTop: 6 }}><b>Call Window</b> buckets the Opportunity's own creation time: <b>Catered (9 AM–9 PM)</b> if it landed during real-time-callable hours, <b>Not Catered (9 PM–9 AM)</b> if it landed inside the window TRAI's National DND rules block unsolicited commercial calls in.</div>
       </>
     ),
   },
@@ -80,12 +81,17 @@ const VIEWS = [
 function columnsForView(viewKey) {
   const cols = [
     { key: 'createdOn', label: 'Opportunity Created On' },
+  ]
+  // Call Window scoped to Attempted-Not-Closed only, per explicit request -- Not
+  // Attempted's table/columns are left exactly as they were.
+  if (viewKey === 'attempted_not_closed') cols.push({ key: 'callWindow', label: 'Call Window' })
+  cols.push(
     { key: 'opportunityId', label: 'Opportunity ID' },
     { key: 'contactName', label: 'Contact' },
     { key: 'channel', label: 'Channel' },
     { key: 'humanDisposition', label: 'Human Disposition' },
     { key: 'aiDisposition', label: 'AI Disposition' },
-  ]
+  )
   if (viewKey === 'attempted_not_closed') {
     cols.push(
       { key: 'dispositionStatus', label: 'Disposition Status' },
@@ -97,12 +103,40 @@ function columnsForView(viewKey) {
   return cols
 }
 
+// TRAI's National DND regulations prohibit unsolicited commercial calls between 9 PM
+// and 9 AM IST -- a lead whose Opportunity was created inside that window genuinely
+// cannot be attempted in real time no matter how fast an agent works, a different
+// situation from one created during the day and simply not yet worked. Computed off
+// the already-IST-corrected Opportunity Created On the backend now returns.
+function callWindowBucket(createdOn) {
+  if (!createdOn) return null
+  const m = String(createdOn).match(/(\d{2}):(\d{2}):(\d{2})/)
+  if (!m) return null
+  const hour = Number(m[1])
+  return (hour >= 9 && hour < 21) ? 'Catered (9 AM–9 PM)' : 'Not Catered (9 PM–9 AM)'
+}
+
+// Scoped to Attempted-Not-Closed's own display only (see the Call Window column
+// above) -- Not Attempted keeps the raw "YYYY-MM-DD HH:mm:ss" string untouched.
+function formatCreatedOnDisplay(createdOn) {
+  if (!createdOn) return '—'
+  const m = String(createdOn).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/)
+  if (!m) return createdOn
+  const [, y, mo, d, h, mi] = m
+  const monthShort = new Date(Number(y), Number(mo) - 1, Number(d)).toLocaleDateString('en-US', { month: 'short' })
+  let hour = Number(h)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  hour = hour % 12; if (hour === 0) hour = 12
+  return `${Number(d)} ${monthShort}, ${hour}:${mi} ${ampm}`
+}
+
 // ---- Advanced filter: same small condition-builder pattern already shipped on Live
 // QLs (field / operator / value, any number of conditions combined by one shared
 // AND/OR toggle) -- ported here per direct request ("just like Live QLs"), trimmed to
 // drop the numeric-only operators/UI since every field on this page is plain text.
 const FILTERABLE_FIELDS = [
   { key: 'createdOn', label: 'Opportunity Created On' },
+  { key: 'callWindow', label: 'Call Window' },
   { key: 'opportunityId', label: 'Opportunity ID' },
   { key: 'contactName', label: 'Contact' },
   { key: 'channel', label: 'Channel' },
@@ -323,9 +357,14 @@ function PaginationControl({ page, totalPages, onPrev, onNext }) {
   )
 }
 
-function renderCell(colKey, r) {
+function renderCell(colKey, r, viewKey) {
   switch (colKey) {
-    case 'createdOn': return r.createdOn || '—'
+    case 'createdOn': return viewKey === 'attempted_not_closed' ? formatCreatedOnDisplay(r.createdOn) : (r.createdOn || '—')
+    case 'callWindow': {
+      if (!r.callWindow) return '—'
+      const isCatered = r.callWindow.startsWith('Catered')
+      return <span style={{ fontWeight: 700, color: isCatered ? C.green : C.muted }}>{r.callWindow}</span>
+    }
     case 'opportunityId':
       return <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
     case 'contactName':
@@ -408,8 +447,9 @@ export default function NotAttemptedDashboard() {
   // this merges whatever's already resolved onto each row so filtering/display/export
   // all see the same value, without waiting for the whole dataset to finish loading.
   const enrichedRows = useMemo(() => {
-    if (viewKey !== 'attempted_not_closed') return allRows
-    return allRows.map(r => {
+    const withCallWindow = allRows.map(r => ({ ...r, callWindow: callWindowBucket(r.createdOn) }))
+    if (viewKey !== 'attempted_not_closed') return withCallWindow
+    return withCallWindow.map(r => {
       const key = (r.humanDisposition ? 'human:' : 'ai:') + r.prospectId
       const v = dispositionCache[key]
       return { ...r, dispositionStatus: v }
@@ -710,7 +750,7 @@ export default function NotAttemptedDashboard() {
                       {displayRows.map(r => (
                         <tr key={r.opportunityId} style={{ borderBottom: `0.5px solid ${C.border}` }}>
                           {columns.map(c => (
-                            <td key={c.key} style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{renderCell(c.key, r)}</td>
+                            <td key={c.key} style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{renderCell(c.key, r, viewKey)}</td>
                           ))}
                         </tr>
                       ))}
