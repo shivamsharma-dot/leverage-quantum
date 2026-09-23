@@ -290,12 +290,21 @@ function campaignLedger({ title, subtitle, bestLabel, best, priciestLabel, prici
 
 function editorsNote(title, subtitle, items) {
   const colors = [NAVY, GREEN, NAVY, GREEN, NAVY]
+  // items comes straight from the Anthropic tool-use response's structured
+  // output (see generateGazetteProse in api/ask-ai.mjs) -- a schema hint to
+  // the model, not a server-enforced guarantee. Confirmed live 2026-09-20/21:
+  // under output truncation the model can finish a section's `intro` but
+  // never emit `notes` at all, leaving this `undefined` and crashing the
+  // whole agent run with "Cannot read properties of undefined (reading
+  // 'map')". A missing/malformed note list should render as an empty
+  // section, never take the whole Gazette down.
+  const safeItems = Array.isArray(items) ? items : []
   return `
     ${sectionTitle(title, subtitle)}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;margin-bottom:8px">
-      ${items.map((it, i) => `<tr>
+      ${safeItems.map((it, i) => `<tr>
         <td width="28" valign="top" style="padding-top:2px"><div style="width:20px;height:20px;background-color:${colors[i % colors.length]};border-radius:50%;text-align:center;line-height:20px;font-family:${F};font-size:13px;font-weight:700;color:#ffffff">${i + 1}</div></td>
-        <td valign="top" style="padding-bottom:16px;font-family:${F};font-size:15px;color:#1A1A1A;line-height:1.6"><b style="color:#000000">${esc(it.lead)}</b> ${esc(it.rest)}</td>
+        <td valign="top" style="padding-bottom:16px;font-family:${F};font-size:15px;color:#1A1A1A;line-height:1.6"><b style="color:#000000">${esc(it?.lead)}</b> ${esc(it?.rest)}</td>
       </tr>`).join('')}
     </table>`
 }

@@ -1345,7 +1345,17 @@ async function generateGazetteProse(digest) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: MODEL, max_tokens: 3072, stream: false, system,
+      // 4096, not 3072 -- matches the sibling tool loop's own budget above
+      // (bumped 2026-08-24 after a nearly identical truncation incident, see
+      // that call's comment), and this call has to fit a headline/lede/pull-
+      // quote/byline plus 3 full sections (7 editor's-note items total) in
+      // ONE structured-output response with no follow-up round to recover
+      // in. Confirmed live 2026-09-20/21: at 3072 the model can truncate
+      // mid-section, omitting a section's `notes` array entirely rather
+      // than writing a shorter one -- which crashed the whole agent run
+      // downstream (see editorsNote's own guard in gazetteTemplate.mjs for
+      // the belt-and-suspenders fix on the rendering side).
+      model: MODEL, max_tokens: 4096, stream: false, system,
       messages: [{ role: 'user', content: "Tonight's digest:\n\n" + JSON.stringify(digest, null, 1) }],
       tools: [schema], tool_choice: { type: 'tool', name: 'submit_gazette_prose' },
     }),
@@ -1474,7 +1484,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
     + T.headline(prose.headline) + T.dropCapParagraph(prose.aboveFold) + T.pullQuote(prose.pullQuoteText)
     + kpiA + T.sectionTitle('Funnel and Daily Volume') + funnelA + chartA + tableChannels + tableCorridors
     + ledgerA + ledgerFootnote
-    + T.editorsNote("Editor's Notes, Marketing", prose.sectionA.intro, prose.sectionA.notes)
+    + T.editorsNote("Editor's Notes, Marketing", prose.sectionA?.intro || '', prose.sectionA?.notes)
 
   // --- Section B: Corporate Finance -------------------------------------
   let sectionsB
@@ -1501,8 +1511,8 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
       cashFlow: [['Total Cash Inflow', fmtINR(b2c.cashFlow.ytd.totalRev)], ['Total Cash Outflow', fmtINR(b2c.cashFlow.ytd.totalCost)], ['Net Cash Inflow', fmtINR(b2c.cashFlow.ytd.net), b2c.cashFlow.ytd.net >= 0 ? T.GREEN : T.NAVY]],
       footnote: ebitdaNote,
     })
-    sectionsB = T.sectionHeader('B', 'Corporate Finance', 'P&L, Cash Flow, YTD') + T.paragraph(prose.sectionB.intro, { size: 16, mb: 20 })
-      + kpiB + tablesB + chartB + ytdB + T.editorsNote("Editor's Notes, Finance", '', prose.sectionB.notes)
+    sectionsB = T.sectionHeader('B', 'Corporate Finance', 'P&L, Cash Flow, YTD') + T.paragraph(prose.sectionB?.intro || '', { size: 16, mb: 20 })
+      + kpiB + tablesB + chartB + ytdB + T.editorsNote("Editor's Notes, Finance", '', prose.sectionB?.notes)
   } else {
     sectionsB = T.sectionHeader('B', 'Corporate Finance', 'Not Yet Connected') + T.paragraph('The B2C finance sheet is not configured for this environment, so tonight’s edition has no Corporate Finance desk. Connect it in Settings &gt; Data &gt; B2C Finance Sheet.', { size: 15, mb: 20 })
   }
@@ -1520,9 +1530,9 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
   const chartC = T.dayBarChart(careers.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.leads, tip: d.date + ': ' + fmtN(d.leads) + ' leads, ' + fmtN(d.won) + ' won' })))
   const campRow = c => ({ cells: [{ text: c.campaign }, { html: fmtN(c.leads), align: 'right' }, { html: fmtN(c.interested), align: 'right' }, { html: fmtN(c.won), align: 'right' }] })
   const tableC = T.sectionTitle('Top Campaigns by CRM Leads') + T.dataTable([{ label: 'Campaign' }, { label: 'Leads', align: 'right' }, { label: 'Interested', align: 'right' }, { label: 'Won', align: 'right' }], careers.campaigns.map(campRow))
-  const sectionsC = T.sectionHeader('C', 'Talent Mobility', 'Leverage Careers · Leads, Interest and Won Deals') + T.paragraph(prose.sectionC.intro, { size: 16, mb: 20 })
+  const sectionsC = T.sectionHeader('C', 'Talent Mobility', 'Leverage Careers · Leads, Interest and Won Deals') + T.paragraph(prose.sectionC?.intro || '', { size: 16, mb: 20 })
     + kpiC + T.sectionTitle('Funnel and Daily Volume') + funnelC + chartC + tableC
-    + T.editorsNote("Editor's Notes, Talent", '', prose.sectionC.notes)
+    + T.editorsNote("Editor's Notes, Talent", '', prose.sectionC?.notes)
 
   const dateLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
   const edition = Math.max(1, Math.ceil((Date.now() - new Date('2026-01-01').getTime()) / 86400000))

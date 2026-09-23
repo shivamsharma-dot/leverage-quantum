@@ -4586,20 +4586,25 @@ async function handleBigQuery(req, res, me) {
           synced_at: syncedAt,
         }
       })
-      for (let i = 0; i < payload.length; i += 500) {
-        const batch = payload.slice(i, i + 500)
-        const r = await supabaseAdmin('leverage_careers_daily', {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-          body: JSON.stringify(batch),
-        })
-        if (!r.ok) {
-          const detail = await r.text()
-          return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + detail, batchIndex: i / 500, rowCount: rows.length })
-        }
+      // upsertBatchesConcurrent (defined above, already proven live for
+      // overall_bq_daily_agg) retries each batch with backoff before giving
+      // up -- the plain single-attempt loop this replaced aborted the WHOLE
+      // sync on the first transient hiccup, which is exactly what happened
+      // live 3x in one week (2026-09-12/13/14, all "Supabase upsert failed:
+      // Gateway Timeout" on one random batch out of ~41, zero retry). Only
+      // throws once a batch has failed 3 real attempts, so a genuine,
+      // persistent outage still surfaces as a real 502 below rather than
+      // being silently swallowed.
+      try {
+        await upsertBatchesConcurrent(supabaseAdmin, 'leverage_careers_daily', payload, 500, 8)
+      } catch (e) {
+        return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + (e?.message || String(e)), rowCount: rows.length })
       }
       // Prune rows this run didn't touch (e.g. a campaign/day/source/channel
-      // combination that no longer appears in BigQuery at all).
+      // combination that no longer appears in BigQuery at all). Only reached
+      // once every batch above has actually landed -- pruning after a
+      // genuinely failed upsert would delete still-good rows for exactly the
+      // ones this run couldn't refresh.
       await supabaseAdmin(`leverage_careers_daily?sync_id=neq.${syncId}`, { method: 'DELETE' })
       return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
     }
