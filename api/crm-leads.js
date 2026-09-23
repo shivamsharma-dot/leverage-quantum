@@ -4662,8 +4662,18 @@ async function handleBigQuery(req, res, me) {
           return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + detail, batchIndex: i / 500, rowCount: rows.length })
         }
       }
-      await supabaseAdmin(`apps_feed?sync_id=neq.${syncId}`, { method: 'DELETE' })
-      return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
+      // A 0-row BigQuery result is almost always a transient upstream hiccup
+      // (confirmed 2026-09-23: the source tables were briefly empty for one
+      // scheduled run, recovered on a manual retry 90 minutes later), not a
+      // real "the table is now empty" signal -- pruning unconditionally here
+      // would wipe every pre-existing row, since none of them carry the fresh
+      // syncId. Same guard pattern as the 2026-09-17 Overall BQ sync agg-table
+      // fix: skip the prune entirely when there's nothing new to justify it,
+      // leaving yesterday's good data in place instead of destroying it.
+      if (rows.length > 0) {
+        await supabaseAdmin(`apps_feed?sync_id=neq.${syncId}`, { method: 'DELETE' })
+      }
+      return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed, pruned: rows.length > 0 })
     }
     // Mirrors the "Overall" BigQuery saved query into overall_bq_daily (and its
     // pre-aggregated companion overall_bq_daily_agg), row for row -- the exact

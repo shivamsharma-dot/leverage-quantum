@@ -43,4 +43,10 @@ jobs:
           echo "HTTP Status: $STATUS"
           echo "Response: $JSON"
           if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
-          echo "Apps cache synced."
+          OK=$(echo "$JSON" | jq -r '.ok')
+          ROWCOUNT=$(echo "$JSON" | jq -r '.rowCount')
+          if [ "$OK" != "true" ]; then echo "Response body reports ok=$OK -- failing"; exit 1; fi
+          if [ "$ROWCOUNT" = "0" ]; then
+            echo "::warning::apps_sync returned 0 rows this run -- likely a transient BigQuery hiccup. api/crm-leads.js now skips the prune step in this case, so apps_feed keeps its last good data rather than being wiped. Re-run manually if this persists."
+          fi
+          echo "Apps cache synced ($ROWCOUNT rows)."
