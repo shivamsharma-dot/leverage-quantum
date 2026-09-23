@@ -3070,6 +3070,37 @@ async function fetchNpsSheetValues(accessToken, range) {
   if (!r.ok) throw new Error('NPS sheet read failed (' + r.status + '): ' + (d.error && d.error.message || 'unknown'))
   return d.values || []
 }
+
+// Per-coach private links for the same public Coach NPS Pulse page: a token is
+// base64url(email) + '.' + HMAC-SHA256(email, COACH_LINK_SECRET).slice(0,24 hex) --
+// self-contained (no lookup table needed), unforgeable without the secret, and
+// deliberately does NOT gate the endpoint behind Quantum login (matches the page's
+// own "anyone, no login" design -- see handleNpsDashboard's comment above). Only
+// used to filter which rows a given link's viewer sees, never to authenticate.
+async function signCoachToken(email) {
+  const secret = process.env.COACH_LINK_SECRET
+  if (!secret) throw new Error('COACH_LINK_SECRET is not set')
+  const crypto = await import('crypto')
+  const norm = String(email || '').trim().toLowerCase()
+  const b64 = Buffer.from(norm, 'utf8').toString('base64url')
+  const sig = crypto.createHmac('sha256', secret).update(norm).digest('hex').slice(0, 24)
+  return b64 + '.' + sig
+}
+async function verifyCoachToken(token) {
+  const secret = process.env.COACH_LINK_SECRET
+  if (!secret || !token || typeof token !== 'string') return null
+  const parts = token.split('.')
+  if (parts.length !== 2) return null
+  const [b64, sig] = parts
+  let email
+  try { email = Buffer.from(b64, 'base64url').toString('utf8') } catch { return null }
+  const crypto = await import('crypto')
+  const expected = crypto.createHmac('sha256', secret).update(email).digest('hex').slice(0, 24)
+  const a = Buffer.from(sig, 'utf8'), b = Buffer.from(expected, 'utf8')
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
+  return email
+}
+
 async function handleNpsDashboard(req, res) {
   try {
     const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
@@ -3097,21 +3128,36 @@ async function handleNpsDashboard(req, res) {
       }
     }
 
+    // ?c=<token> scopes this response to one coach's own rows only -- see
+    // signCoachToken/verifyCoachToken above. An invalid/missing-secret token is a
+    // hard 401 (never silently falls back to the full org-wide dataset).
+    const coachToken = req.query && req.query.c
+    let coachEmail = null
+    if (coachToken) {
+      coachEmail = await verifyCoachToken(coachToken)
+      if (!coachEmail) return res.status(401).json({ error: 'Invalid or expired link' })
+    }
+
     const rows = []
+    let coachName = null
     for (const row of extractRows) {
       const dateStr = row[1], name = row[2], emailRaw = row[3], ratingStr = row[4], countStr = row[5]
       const email = (emailRaw || '').trim().toLowerCase()
       const iso = parseNpsSheetDate(dateStr)
       if (!email || !iso) continue
+      if (coachEmail && email !== coachEmail) continue
       const rating = parseInt(ratingStr, 10)
       if (isNaN(rating)) continue
       const count = parseInt(countStr, 10) || 0
       const t = team[email] || {}
       rows.push([iso, (name || '').trim(), email, rating, count, t.manager || 'Unmapped', t.ssm || 'Unmapped'])
+      if (coachEmail && !coachName && (name || '').trim()) coachName = (name || '').trim()
     }
 
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900')
-    return res.status(200).json({ generated_at: new Date().toISOString().slice(0, 10), rows })
+    res.setHeader('Cache-Control', coachToken ? 'private, no-store' : 's-maxage=300, stale-while-revalidate=900')
+    const out = { generated_at: new Date().toISOString().slice(0, 10), rows }
+    if (coachEmail) out.coach = { email: coachEmail, name: coachName }
+    return res.status(200).json(out)
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message || e) })
   }

@@ -368,8 +368,8 @@
   <header>
     <div>
       <p class="eyebrow">Coaching Quality &middot; Leverage Edu</p>
-      <h1>Coach NPS Pulse</h1>
-      <p class="sub">Post-call ratings students give their coach (0&ndash;10), rolled up day by day and by reporting line.</p>
+      <h1 id="pageTitle">Coach NPS Pulse</h1>
+      <p class="sub" id="pageSub">Post-call ratings students give their coach (0&ndash;10), rolled up day by day and by reporting line.</p>
     </div>
     <div class="head-meta">
       <span>Generated <b id="genDate">&mdash;</b></span>
@@ -1173,13 +1173,42 @@ document.getElementById('pgPrev').addEventListener('click', ()=>{ if(state.page>
 document.getElementById('pgNext').addEventListener('click', ()=>{ state.page++; render(); });
 
 // ---------- live data load ----------
+function coachTokenFromUrl(){
+  try{ return new URLSearchParams(location.search).get('c') || ''; } catch(e){ return ''; }
+}
+
 async function loadLiveData(){
+  const coachToken = coachTokenFromUrl();
+  const apiUrl = '/api/crm-leads?source=nps_dashboard' + (coachToken ? ('&c=' + encodeURIComponent(coachToken)) : '');
   try{
-    const res = await fetch('/api/crm-leads?source=nps_dashboard', {cache:'no-store'});
+    const res = await fetch(apiUrl, {cache:'no-store'});
     const d = await res.json();
+    if(res.status === 401){
+      document.querySelector('.wrap').innerHTML =
+        '<div style="max-width:520px;margin:80px auto;text-align:center;font-family:inherit">'
+        + '<div style="font-size:15px;font-weight:800;color:var(--ink,#0f172a);margin-bottom:8px">This link is invalid or has expired</div>'
+        + '<div style="font-size:13px;color:var(--muted,#64748b)">Ask whoever shared this with you for a fresh link, or check the URL was copied in full.</div>'
+        + '</div>';
+      return;
+    }
     if(!res.ok || d.error) throw new Error(d.error || ('HTTP '+res.status));
     ROWS = Array.isArray(d.rows) ? d.rows : [];
     GENERATED_AT = d.generated_at || new Date().toISOString().slice(0,10);
+
+    if(d.coach){
+      const name = d.coach.name || d.coach.email || 'you';
+      document.getElementById('pageTitle').textContent = name + '’s NPS Ratings';
+      document.getElementById('pageSub').textContent = 'Your own post-call ratings from students (0–10), private to you — not visible to anyone else with this link format.';
+      document.title = name + ' — NPS Ratings';
+      if(ROWS.length === 0){
+        document.querySelector('.wrap').innerHTML =
+          '<div style="max-width:520px;margin:80px auto;text-align:center;font-family:inherit">'
+          + '<div style="font-size:15px;font-weight:800;color:var(--ink,#0f172a);margin-bottom:8px">No ratings yet for ' + name + '</div>'
+          + '<div style="font-size:13px;color:var(--muted,#64748b)">Nothing has come in yet — check back after a few coaching calls.</div>'
+          + '</div>';
+        return;
+      }
+    }
   } catch(e){
     document.getElementById('genDate').textContent = '—';
     document.getElementById('rangeNote').innerHTML = '<b style="color:var(--bad)">Could not load live data<\/b> — ' + (e && e.message || 'unknown error');
