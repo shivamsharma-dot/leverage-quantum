@@ -215,6 +215,11 @@ const FILTERABLE_FIELDS = [
 const OPERATORS = [
   { key: 'is', label: 'is', value: 'select' },
   { key: 'is_not', label: 'is not', value: 'select' },
+  // Multi-select variants -- pick any number of values for one field in one
+  // condition, e.g. "Human Disposition is any of Voicemail, Not Connected"
+  // instead of needing a separate OR'd condition per value.
+  { key: 'is_any_of', label: 'is any of', value: 'multi' },
+  { key: 'is_none_of', label: 'is none of', value: 'multi' },
   { key: 'contains', label: 'contains', value: 'text' },
   { key: 'not_contains', label: 'does not contain', value: 'text' },
   { key: 'starts_with', label: 'starts with', value: 'text' },
@@ -224,10 +229,17 @@ const OPERATORS = [
 ]
 const OPERATOR_MAP = Object.fromEntries(OPERATORS.map(o => [o.key, o]))
 
+// The empty/default value for a freshly-picked operator -- an array for the
+// multi-select ops, empty string for everything else that takes a value.
+function defaultValueForOp(opKey) {
+  return OPERATOR_MAP[opKey] && OPERATOR_MAP[opKey].value === 'multi' ? [] : ''
+}
+
 function isConditionComplete(c) {
   const op = OPERATOR_MAP[c.operator]
   if (!c.field || !op) return false
   if (op.value === 'none') return true
+  if (op.value === 'multi') return Array.isArray(c.value) && c.value.length > 0
   return (c.value || '').trim() !== ''
 }
 
@@ -237,6 +249,11 @@ function matchesCondition(row, cond) {
   if (cond.operator === 'not_defined') return raw == null || String(raw).trim() === ''
   const v = raw == null ? '' : String(raw)
   const hay = v.toLowerCase()
+  if (cond.operator === 'is_any_of' || cond.operator === 'is_none_of') {
+    const list = Array.isArray(cond.value) ? cond.value.map(x => String(x).toLowerCase()) : []
+    const isIn = list.includes(hay)
+    return cond.operator === 'is_any_of' ? isIn : !isIn
+  }
   const needle = (cond.value || '').toLowerCase()
   switch (cond.operator) {
     case 'is': return hay === needle
@@ -257,56 +274,128 @@ function conditionSummary(c) {
   const op = OPERATOR_MAP[c.operator]
   if (!f || !op) return ''
   if (op.value === 'none') return `${f.label} ${op.label}`
+  if (op.value === 'multi') {
+    const vals = Array.isArray(c.value) ? c.value : []
+    const shown = vals.length > 2
+      ? `"${vals.slice(0, 2).join('", "')}" +${vals.length - 2} more`
+      : `"${vals.join('", "')}"`
+    return `${f.label} ${op.label} ${shown}`
+  }
   return `${f.label} ${op.label} "${c.value}"`
 }
 
-function ValueSelectPopover({ options, onPick, onClose }) {
+// Every popover below used to pair itself with a permanent, invisible
+// `position:fixed; inset:0` div purely to catch an outside click and close --
+// but that div sits in the DOM under the page's HEADER (not under the
+// scrollable content area beneath it), and it stays mounted for as long as
+// the popover is open (which, for the Filters popover, is often long after a
+// value's been picked, since picking a value only closes the nested
+// sub-popover, not the whole panel). A mouse-wheel scroll while the pointer
+// is over that invisible div has no scrollable ancestor to bubble to in ITS
+// OWN branch of the tree, since the real scrollable table area is a totally
+// separate sibling subtree -- which is exactly why filtering, then trying to
+// scroll down the page, silently did nothing. Fixed by dropping the
+// full-screen catcher entirely and using a real "click outside this
+// element" listener instead (the same pattern this page's own date-range
+// picker already used correctly).
+// Ignores clicks on any element carrying data-popover-trigger -- every button
+// that opens one of these popovers sets that attribute, so clicking a trigger
+// while its OWN popover is open lets the button's own onClick toggle handle
+// it (open -> close), rather than this listener closing it a beat before the
+// click reaches the button and the toggle immediately reopening it.
+function useClickOutside(active, onOutside) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!active) return
+    const onDoc = e => {
+      if (e.target.closest && e.target.closest('[data-popover-trigger]')) return
+      if (ref.current && !ref.current.contains(e.target)) onOutside()
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [active]) // eslint-disable-line react-hooks/exhaustive-deps
+  return ref
+}
+
+function ValueSelectPopover({ options, onPick }) {
   const [q, setQ] = useState('')
   const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
-      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 220, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
-        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search values…"
-          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
-        <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-          {shown.map(o => (
-            <button key={o} type="button" onClick={() => onPick(o)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-              {o}
-            </button>
-          ))}
-          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No values</div>}
-        </div>
+    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 220, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+      <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search values…"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+        {shown.map(o => (
+          <button key={o} type="button" onClick={() => onPick(o)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+            {o}
+          </button>
+        ))}
+        {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No values</div>}
       </div>
-    </>
+    </div>
   )
 }
 
-function FieldSelectPopover({ options, onPick, onClose }) {
+// Same as ValueSelectPopover, but checkbox-style multi-pick for the
+// "is any of" / "is none of" operators -- doesn't close on a single pick,
+// only via outside click or the explicit Done button.
+function MultiValueSelectPopover({ options, selected, onToggle, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+  const selSet = new Set((selected || []).map(v => v.toLowerCase()))
+  return (
+    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 240, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+      <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search values…"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+        {shown.map(o => {
+          const checked = selSet.has(o.toLowerCase())
+          return (
+            <button key={o} type="button" onClick={() => onToggle(o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: checked ? 'var(--navy-tint)' : 'transparent' }}
+              onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { if (!checked) e.currentTarget.style.background = 'transparent' }}>
+              <span style={{
+                width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${checked ? C.navy : C.border}`,
+                background: checked ? C.navy : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {checked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
+              </span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+            </button>
+          )
+        })}
+        {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No values</div>}
+      </div>
+      <button type="button" onClick={onClose} style={{ marginTop: 6, width: '100%', padding: '6px 8px', borderRadius: 7, border: 'none', background: C.navy, color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: 'pointer' }}>
+        Done{selected && selected.length ? ` (${selected.length} selected)` : ''}
+      </button>
+    </div>
+  )
+}
+
+function FieldSelectPopover({ options, onPick }) {
   const [q, setQ] = useState('')
   const shown = q.trim() ? options.filter(o => o.label.toLowerCase().includes(q.trim().toLowerCase())) : options
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 250 }} />
-      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 230, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
-        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search fields…"
-          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
-        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-          {shown.map(o => (
-            <button key={o.value} type="button" onClick={() => onPick(o.value)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-              {o.label}
-            </button>
-          ))}
-          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No fields</div>}
-        </div>
+    <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 260, width: 230, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+      <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search fields…"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+        {shown.map(o => (
+          <button key={o.value} type="button" onClick={() => onPick(o.value)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 8px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+            {o.label}
+          </button>
+        ))}
+        {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No fields</div>}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -314,32 +403,51 @@ function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, field
   const op = OPERATOR_MAP[cond.operator]
   const fieldDef = FILTERABLE_FIELDS.find(f => f.key === cond.field)
   const fieldLabel = (fieldDef || {}).label || cond.field
+  const fieldWrapRef = useClickOutside(fieldPickerOpen, onOpenFieldPicker)
+  const valueWrapRef = useClickOutside(valuePickerOpen, onOpenValuePicker)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-      <div style={{ position: 'relative', minWidth: 150, flexShrink: 0 }}>
-        <button type="button" onClick={onOpenFieldPicker}
+      <div ref={fieldWrapRef} style={{ position: 'relative', minWidth: 150, flexShrink: 0 }}>
+        <button type="button" data-popover-trigger onClick={onOpenFieldPicker}
           style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: FONT, background: 'var(--bg3)', color: C.text, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {fieldLabel}
         </button>
         {fieldPickerOpen && (
           <FieldSelectPopover options={FILTERABLE_FIELDS.map(f => ({ value: f.key, label: f.label }))}
-            onPick={v => { onChange({ field: v, operator: 'contains', value: '' }); onOpenFieldPicker() }} onClose={onOpenFieldPicker} />
+            onPick={v => { onChange({ field: v, operator: 'contains', value: '' }); onOpenFieldPicker() }} />
         )}
       </div>
-      <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: '' })} minWidth={130}
+      <Dropdown value={cond.operator} onChange={v => onChange({ operator: v, value: defaultValueForOp(v) })} minWidth={130}
         options={OPERATORS.map(o => ({ value: o.key, label: o.label }))} />
       {op.value === 'text' && (
         <input type="text" value={cond.value} onChange={e => onChange({ value: e.target.value })} placeholder="Value…"
           style={{ flex: 1, minWidth: 90, boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', background: 'var(--bg3)', color: C.text }} />
       )}
       {op.value === 'select' && (
-        <div style={{ position: 'relative', flex: 1, minWidth: 90 }}>
-          <button type="button" onClick={onOpenValuePicker}
+        <div ref={valueWrapRef} style={{ position: 'relative', flex: 1, minWidth: 90 }}>
+          <button type="button" data-popover-trigger onClick={onOpenValuePicker}
             style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, background: 'var(--bg3)', color: cond.value ? C.text : C.muted, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cond.value || 'Select value…'}
           </button>
           {valuePickerOpen && (
-            <ValueSelectPopover options={options} onPick={v => { onChange({ value: v }); onOpenValuePicker() }} onClose={onOpenValuePicker} />
+            <ValueSelectPopover options={options} onPick={v => { onChange({ value: v }); onOpenValuePicker() }} />
+          )}
+        </div>
+      )}
+      {op.value === 'multi' && (
+        <div ref={valueWrapRef} style={{ position: 'relative', flex: 1, minWidth: 90 }}>
+          <button type="button" data-popover-trigger onClick={onOpenValuePicker}
+            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'left', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, background: 'var(--bg3)', color: Array.isArray(cond.value) && cond.value.length ? C.text : C.muted, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {Array.isArray(cond.value) && cond.value.length ? `${cond.value.length} selected` : 'Select values…'}
+          </button>
+          {valuePickerOpen && (
+            <MultiValueSelectPopover options={options} selected={cond.value}
+              onToggle={v => {
+                const cur = Array.isArray(cond.value) ? cond.value : []
+                const has = cur.some(x => x.toLowerCase() === v.toLowerCase())
+                onChange({ value: has ? cur.filter(x => x.toLowerCase() !== v.toLowerCase()) : [...cur, v] })
+              }}
+              onClose={onOpenValuePicker} />
           )}
         </div>
       )}
@@ -351,12 +459,10 @@ function ConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, field
   )
 }
 
-function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
+function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll }) {
   const [openValueRowId, setOpenValueRowId] = useState(null)
   const [openFieldRowId, setOpenFieldRowId] = useState(null)
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
       <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 480, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 12 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8 }}>Filters</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -392,7 +498,6 @@ function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, on
           <button type="button" onClick={onClearAll} style={{ marginTop: 10, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
         )}
       </div>
-    </>
   )
 }
 
@@ -467,6 +572,7 @@ export default function NotAttemptedDashboard() {
   const [conditions, setConditions] = useState([])
   const [combinator, setCombinator] = useState('AND')
   const [filterOpen, setFilterOpen] = useState(false)
+  const filterWrapRef = useClickOutside(filterOpen, () => setFilterOpen(false))
   const [page, setPage] = useState(0)
   const [infoOpen, setInfoOpen] = useState(false)
   const [data, setData] = useState(null)
@@ -765,8 +871,8 @@ export default function NotAttemptedDashboard() {
           </div>
           <div style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '0 2px' }} />
 
-          <div style={{ position: 'relative' }}>
-            <button type="button" onClick={() => setFilterOpen(v => !v)}
+          <div ref={filterWrapRef} style={{ position: 'relative' }}>
+            <button type="button" data-popover-trigger onClick={() => setFilterOpen(v => !v)}
               style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               Filters
@@ -774,8 +880,7 @@ export default function NotAttemptedDashboard() {
             {filterOpen && (
               <FilterBuilderPopover conditions={conditions} combinator={combinator} filterOptions={filterOptions}
                 onAdd={addCondition} onUpdate={updateCondition} onRemove={removeCondition}
-                onSetCombinator={setCombinator} onClearAll={() => setConditions([])}
-                onClose={() => setFilterOpen(false)} />
+                onSetCombinator={setCombinator} onClearAll={() => setConditions([])} />
             )}
           </div>
           {activeConditions.map(c => (
