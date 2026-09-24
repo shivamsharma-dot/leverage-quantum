@@ -563,7 +563,15 @@ const MTableExportBtn = ({ onClick, disabled }) => (
   </Button>
 )
 
-export default function LeadQualificationDashboard({ forcedView } = {}) {
+// embedded/initialFrom/initialTo -- used when this page is rendered INSIDE another
+// page's drill-down modal (Overall's TOTAL QLs KPI card, see OverallDashboard.jsx)
+// instead of at its own route: embedded=true skips the Sidebar + full-page shell
+// (the caller supplies its own chrome), and initialFrom/initialTo (YYYY-MM-DD) seed
+// a Custom date range matching whatever window the caller had active, instead of
+// defaulting to this page's own current-month view. Same pattern already used by
+// AppsDashboard.jsx / HumanQLDetailDashboard.jsx / AIQLDetailDashboard.jsx -- every
+// control here still works exactly as it does on the real route once embedded.
+export default function LeadQualificationDashboard({ forcedView, embedded, initialFrom, initialTo } = {}) {
   const [rows, setRows]             = useState([])
   const [monthlyRows, setMonthlyRows] = useState([])
   const [view, setView]             = useState(forcedView || 'daily')
@@ -588,9 +596,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [showInfo, setShowInfo]       = useState(false)
   const [sending, setSending]         = useState(false)
   const [sendMsg, setSendMsg]         = useState('')
-  const [datePreset, setDatePreset]   = useState('month') // 'LD','L7D','MTD','custom','month'
-  const [customFrom, setCustomFrom]   = useState('')
-  const [customTo, setCustomTo]       = useState('')
+  const [datePreset, setDatePreset]   = useState(initialFrom && initialTo ? 'custom' : 'month') // 'LD','L7D','MTD','custom','month'
+  const [customFrom, setCustomFrom]   = useState(initialFrom || '')
+  const [customTo, setCustomTo]       = useState(initialTo || '')
   const [showCustom, setShowCustom]   = useState(false)
   const [hoveredPreset, setHoveredPreset] = useState(null)
   const [exportView, setExportView]         = useState('day')
@@ -1294,11 +1302,15 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     finally { setSending(false); setTimeout(() => setSendMsg(''), 4000) }
   }
 
-  return (
-    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
+  // Embedded mode (rendered inside Overall's TOTAL QLs drill-down modal) drops the
+  // Sidebar + full-page 100vh shell -- the caller's own modal supplies that -- and
+  // lets this card size to its own content; the modal's outer overflowY:'auto'
+  // becomes the one scroll region instead of this page's own. Same pattern as
+  // AppsDashboard.jsx / HumanQLDetailDashboard.jsx / AIQLDetailDashboard.jsx.
+  const content = (
+    <>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.lqTr:nth-child(even){background:#FAFBFC!important}.lqTr:hover{background:#F0F4FF!important;cursor:pointer}`}</style>
-      <Sidebar />
-      <div style={{margin:'12px 14px 0',borderRadius:14,border:'1px solid #EEF1F6',boxShadow:'0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      <div style={{margin: embedded ? 0 : '12px 14px 0',borderRadius:14,border:'1px solid #EEF1F6',boxShadow: embedded ? 'none' : '0 1px 3px rgba(31,60,132,0.06)', flex: embedded ? undefined : 1, display: 'flex', flexDirection: 'column', overflow: embedded ? 'visible' : 'hidden', minWidth: 0 }}>
 
         {/* -- HEADER ------------------------------------------------- */}
         <div style={{
@@ -2120,6 +2132,14 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
           )}
         </div>
       </div>
+    </>
+  )
+
+  if (embedded) return content
+  return (
+    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
+      <Sidebar />
+      {content}
     </div>
   )
 }

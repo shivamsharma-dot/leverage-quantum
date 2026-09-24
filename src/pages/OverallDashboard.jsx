@@ -55,6 +55,10 @@ const AIQLDetailEmbed = React.lazy(() => import('./AIQLDetailDashboard'))
 // embedded/initialFrom/initialTo props (that page has no toolbar at all normally,
 // synced once a day; see its own top-of-file comment for why this is additive).
 const AppsDetailEmbed = React.lazy(() => import('./AppsDashboard'))
+// Same idea again, for the real Daily QLs page -- the one page that actually covers
+// all three QL channels (Human + AI + Superbot) at once, which is why it's the drill
+// target for the TOTAL QLs card rather than a channel-specific detail page.
+const DailyQLsEmbed = React.lazy(() => import('./LeadQualificationDashboard'))
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
 // Not part of the original SHEET_PREF_KEYS set, so this page resolves its own override the same
@@ -1798,8 +1802,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // (or the matching KPI card) opens the real Human/AI QL Detail page, embedded,
   // scoped to whatever date window Overall currently has active
   // (activeDrillDownRange above). 'apps' does the same for the Applications KPI
-  // card, embedding the real Apps page instead.
-  const [qlDrillOpen, setQlDrillOpen] = useState(null) // null | 'human' | 'ai' | 'apps'
+  // card, embedding the real Apps page instead. 'qls' does the same for the TOTAL
+  // QLs card, embedding the real Daily QLs page (the one page that covers all
+  // three QL channels -- Human + AI + Superbot -- at once).
+  const [qlDrillOpen, setQlDrillOpen] = useState(null) // null | 'human' | 'ai' | 'apps' | 'qls'
   const qlDrillModalRef = useRef(null)
   useModalA11y(!!qlDrillOpen, useCallback(() => setQlDrillOpen(null), []), qlDrillModalRef)
   // Off by default -- Source/Spend only stay fixed while scrolling when the user
@@ -5040,19 +5046,24 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
-            <HighlightKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} />
-            {/* Human/AI QLs — same drill-down as the funnel bars below (setQlDrillOpen),
-                since this is literally the same figure (kpis.humanQL / kpis.futworkAiQl).
-                Total QLs and Superbot QLs are deliberately NOT wired: Total QLs sums
-                three sources (Human + AI + Superbot) and there's no single detail page
-                that covers all three, and there's no Superbot QL detail page anywhere
-                in the app -- so a click on either would have nowhere honest to go.
+            {/* Human/AI/Total QLs — same drill-down as the funnel bars below
+                (setQlDrillOpen). Total QLs opens Daily QLs, the one page that
+                actually covers all three channels it sums (Human + AI + Superbot);
+                Human/AI QLs open their own channel-specific detail pages since
+                that's literally the same figure (kpis.humanQL / kpis.futworkAiQl).
+                Superbot QLs is left unwired -- no Superbot QL detail page exists
+                anywhere in the app, so a click would have nowhere honest to go.
                 onClickCapture, not onClick: kpiVariants.jsx's own "click to reveal the
                 previous-period value" toggle calls e.stopPropagation() on click, which
                 silently ate a plain onClick here before it ever bubbled up -- confirmed
                 live (a click landed, the internal toggle fired, the modal never opened).
                 Capture-phase fires top-down before that stopPropagation runs, so it's
                 unaffected either way. */}
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying QL records (Daily QLs)"
+              onClickCapture={() => setQlDrillOpen('qls')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('qls') } }}>
+              <HighlightKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} />
+            </div>
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying Human QL records"
               onClickCapture={() => setQlDrillOpen('human')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
@@ -5600,16 +5611,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <div style={{ position:'sticky', top:0, zIndex:2, background:'var(--card)', padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
                     <div id="ql-drill-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>
-                      {qlDrillOpen === 'human' ? 'Human QL Detail' : qlDrillOpen === 'ai' ? 'AI QL Detail' : 'Apps'}
+                      {qlDrillOpen === 'human' ? 'Human QL Detail' : qlDrillOpen === 'ai' ? 'AI QL Detail' : qlDrillOpen === 'qls' ? 'Daily QLs' : 'Apps'}
                     </div>
                     <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>
                       {qlDrillOpen === 'apps'
                         ? (activeDrillDownRange
                             ? `The real per-application records behind that number, scoped by application submission date to ${activeDrillDownRange.from} → ${activeDrillDownRange.to} — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure`
                             : "The real per-application records behind that number — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure")
-                        : (activeDrillDownRange
-                            ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
-                            : "The real per-lead records behind that number — every control below is live, not a preview")}
+                        : qlDrillOpen === 'qls'
+                          ? (activeDrillDownRange
+                              ? `Human + Futwork AI + Superbot combined, the real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
+                              : "Human + Futwork AI + Superbot combined, the real per-lead records behind that number — every control below is live, not a preview")
+                          : (activeDrillDownRange
+                              ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
+                              : "The real per-lead records behind that number — every control below is live, not a preview")}
                     </div>
                   </div>
                   <button onClick={() => setQlDrillOpen(null)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
@@ -5622,7 +5637,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       ? <HumanQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />
                       : qlDrillOpen === 'ai'
                         ? <AIQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />
-                        : <AppsDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />}
+                        : qlDrillOpen === 'qls'
+                          ? <DailyQLsEmbed embedded forcedView="daily" initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />
+                          : <AppsDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />}
                   </React.Suspense>
                 </div>
               </div>
