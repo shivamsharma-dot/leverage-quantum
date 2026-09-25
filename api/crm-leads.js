@@ -3329,7 +3329,7 @@ async function handleLeadSquared(req, res, me) {
   // Not Attempted gets its own page id (unlike live_ql_metrics, which is gated on
   // the shared 'leadsquared' id for historical reasons) so its own frontend
   // route/nav grant and this backend gate never drift apart.
-  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup', 'attempt_count_lookup']
+  const NOT_ATTEMPTED_MODES = ['not_attempted_opportunities', 'attempted_not_closed_opportunities', 'disposition_status_lookup', 'attempt_count_lookup', 'owner_investigation_debug']
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : NOT_ATTEMPTED_MODES.includes(mode) ? 'not_attempted' : 'leadsquared'
   const { canAccessDashboard } = await import('../lib/auth.mjs')
   // activity_types is read by BOTH the main LeadSquared page (gated on
@@ -3592,6 +3592,12 @@ async function handleLeadSquared(req, res, me) {
       const channelKey = req.query.channel === 'ai' ? 'ai' : 'human'
       const ids = String(req.query.ids || '').split(',').filter(Boolean)
       return res.status(200).json({ map: await fetchAttemptCountMap(creds, channelKey, ids) })
+    }
+    if (mode === 'owner_investigation_debug') {
+      const id = req.query.id
+      const search = buildProspectActivityHistorySearch(234, [id])
+      const r = await runActivityAdvancedSearchAll(creds, 234, search, 'RelatedProspectId,CreatedOn,ActivityEvent_Note,CreatedByName,ModifiedByName,Owner', LIVE_QL_MAX_PAGES)
+      return res.status(200).json({ recordCount: r.recordCount, rows: (r.rows || []).sort((a, b) => a.CreatedOn.localeCompare(b.CreatedOn)) })
     }
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
