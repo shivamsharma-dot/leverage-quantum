@@ -2150,15 +2150,35 @@ async function buildB2CDailyMessages(data, cfg, throughDate) {
   return built
 }
 
-// Preview-only: an admin looking at the Daily Report popover before
-// committing to a send. Builds the identical jobs buildB2CDailyMessages
-// gives the real send -- same data, same image -- but never touches Slack
-// or b2c_pending_reports. Session-gated only (no cron path -- nothing
+// Preview-only: anyone with real access to BOTH B2C pages looking at the
+// Daily Report popover before committing to a send (this report always
+// bundles P&L + Cash Flow together, so partial access to just one page
+// isn't enough -- see the identical reasoning on handleB2CDailyReport
+// below). Builds the identical jobs buildB2CDailyMessages gives the real
+// send -- same data, same image -- but never touches Slack or
+// b2c_pending_reports. Session-gated only (no cron path -- nothing
 // automated ever needs a preview of itself).
+//
+// NOT admin-only anymore (was, until 2026-09-28) -- this used to hard-block
+// any signed-in non-admin with a misleading "Not signed in" 401, even a
+// viewer explicitly granted both ceo_b2c_pnl/ceo_b2c_cashflow. Safe to open
+// up: this call only ever posts a REVIEW copy to the #dashboard-testing
+// sandbox with Approve/Disapprove buttons -- it never reaches the real
+// guarded #b2c-leverage-core channel itself. That channel is only ever
+// reached later, inside Slack, when someone clicks Approve and a Slack
+// modal asks for the real CEO PIN (verifyCeoPin, in
+// handleSlackViewSubmission) -- completely unaffected by who kicked off
+// this preview/sandbox-send step. Matches the same "role doesn't gate, the
+// PIN does" principle already applied to the generic Send to Slack panel's
+// guarded destinations (see handleSlackReport, commit 883cc9d) -- this is
+// that same fix reaching a second, separate code path it never touched.
 async function handleB2CDailyPreview(req, res) {
-  const { getSessionUser } = await import('../lib/auth.mjs')
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
-  if (!me || me.role !== 'admin') return res.status(401).json({ error: 'Not signed in' })
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'ceo_b2c_pnl') || !canAccessDashboard(me.role, 'ceo_b2c_cashflow')) {
+    return res.status(403).json({ error: 'Forbidden -- Daily Report needs access to both Daily P&L and Cash Flow.' })
+  }
 
   const throughDate = req.body && typeof req.body.throughDate === 'string' ? req.body.throughDate : null
   try {
@@ -2183,10 +2203,25 @@ async function handleB2CDailyReport(req, res) {
   const bearer = req.headers.authorization || ''
   const isVercelCron = !!process.env.CRON_SECRET && bearer === 'Bearer ' + process.env.CRON_SECRET
   const isManualCron = !!process.env.CRON_SECRET && req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  // NOT admin-only anymore (was, until 2026-09-28) -- see the matching
+  // comment on handleB2CDailyPreview above for the full reasoning: this call
+  // still only ever posts a review copy to the #dashboard-testing sandbox,
+  // never straight to the real guarded #b2c-leverage-core channel, so
+  // gating it on role rather than real page access was blocking a
+  // genuinely-granted viewer for no actual security benefit -- the PIN gate
+  // that matters lives downstream, in Slack's own Approve flow.
+  let triggeredBy = 'cron'
   if (!isVercelCron && !isManualCron) {
-    const { getSessionUser } = await import('../lib/auth.mjs')
+    const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
     const me = getSessionUser(req)
-    if (!me || me.role !== 'admin') return res.status(401).json({ error: 'Not signed in' })
+    if (!me) return res.status(401).json({ error: 'Not signed in' })
+    if (!canAccessDashboard(me.role, 'ceo_b2c_pnl') || !canAccessDashboard(me.role, 'ceo_b2c_cashflow')) {
+      return res.status(403).json({ error: 'Forbidden -- Daily Report needs access to both Daily P&L and Cash Flow.' })
+    }
+    // Real email now that this isn't admin-only -- logging every viewer's
+    // real send as a generic 'admin' would be actively misleading once more
+    // than admins can trigger this.
+    triggeredBy = me.email
   }
 
   // Optional: an admin picking a specific "send through" date on the B2C
@@ -2257,7 +2292,7 @@ async function handleB2CDailyReport(req, res) {
       }
       posted.push({ statement, pendingId, ts })
     }
-    await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: (isVercelCron || isManualCron) ? 'cron' : 'admin' })
+    await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: triggeredBy })
     return res.status(200).json({ ok: true, posted })
   } catch (e) {
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: [], status: 'failed', error: e.message, triggered_by: 'cron' })
