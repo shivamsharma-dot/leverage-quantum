@@ -1618,7 +1618,14 @@ export default async function handler(req, res) {
     }
     const agentMe = getSessionUser(req)
     if (!agentMe) return res.status(401).json({ error: 'Not signed in' })
-    if (agentMe.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    // Was a hardcoded role !== 'admin' check -- the exact same bug shape as
+    // handleB2CDailyPreview/handleB2CDailyReport (fixed 2026-09-28) and
+    // overall_bigquery's old email allowlist (fixed 2026-09-29): 'agents' is
+    // a real, grantable PAGE_LIST id (adminOnly:true is just the Settings
+    // default floor, not the runtime gate), so a viewer explicitly granted
+    // the Agents page could open it and see past runs, but "Run Now" always
+    // 403'd -- the grant silently didn't cover the page's one real action.
+    if (!canAccessDashboard(agentMe.role, 'agents')) return res.status(403).json({ error: 'Forbidden' })
     return handleAgentRun(req, res, agentMe)
   }
 

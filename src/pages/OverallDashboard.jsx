@@ -1494,7 +1494,9 @@ function AcSalesEditor({ monthLabel, value, saving, loaded, readOnly, onSave }) 
 }
 
 // dataSource: 'sheet' (the original CSV path, default -- /dashboard/overall) or
-// 'bigquery' (/dashboard/overall-bigquery, Shivam-only -- see App.jsx/Sidebar.jsx).
+// 'bigquery' (/dashboard/overall-bigquery -- any admin, or a viewer explicitly
+// granted 'overall_bigquery' via Settings; no longer restricted to one named
+// person, see the comment on that id in src/lib/pageList.js).
 // Fixed per route, not a runtime toggle -- see the CLAUDE.md entry for why the old
 // per-device Settings toggle was retired in favour of two dedicated pages.
 export default function OverallDashboard({ dataSource = 'sheet' }) {

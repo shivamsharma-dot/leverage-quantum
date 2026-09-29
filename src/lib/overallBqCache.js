@@ -7,7 +7,8 @@
 // Schema     : supabase/sql/overall_bq_cache_setup.sql -- the 16 columns of the
 //              BigQuery saved query "Overall", plus row_key / lead_date_iso /
 //              sync_id / synced_at, in Supabase's overall_bq_daily table.
-// Read by    : the admin-only /dashboard/overall-bigquery page.
+// Read by    : /dashboard/overall-bigquery -- any admin, or a viewer with a
+//              real 'overall_bigquery' grant (see shared/access.mjs).
 //
 // 2026-09-08 -- moved off a direct-from-browser Supabase read, WITH a fallback.
 // This used to fetch overall_bq_daily straight from the browser with the public

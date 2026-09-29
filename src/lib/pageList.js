@@ -8,9 +8,16 @@
 export const PAGE_LIST = [
   { id:'home',         label:'Summary',      path:'/',                      adminOnly:false },
   { id:'overall',      label:'Overall',      path:'/dashboard/overall',     adminOnly:false },
-  // adminOnly:true here is a floor, not the real gate -- canSee()'s email check below
-  // is what actually restricts this to Shivam alone, since nishant.bhatia is also
-  // 'admin' and must NOT see it.
+  // adminOnly:true here is a floor, not the whole gate -- shared/access.mjs's
+  // canAccessDashboard is what actually decides this, same as every other
+  // page (any admin, or a viewer explicitly granted this id). Used to be
+  // restricted to a hardcoded email allowlist (one admin, Shivam, excluding
+  // even other admins like nishant.bhatia) -- that allowlist was removed
+  // 2026-09-29 since it made Settings' own grant checkbox a silent no-op for
+  // anyone not on the list. If excluding specific admins from this page is
+  // still wanted, that needs its own explicit mechanism (checked before the
+  // admin bypass) -- flagged to the user as an open question, not decided
+  // here.
   { id:'overall_bigquery', label:'Overall (BigQuery)', path:'/dashboard/overall-bigquery', adminOnly:true },
   { id:'meta_ads',     label:'Meta Ads',     path:'/dashboard/meta-ads',    adminOnly:false },
   { id:'leverage_careers', label:'Leverage Careers', path:'/dashboard/leverage-careers', adminOnly:false },

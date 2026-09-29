@@ -4267,10 +4267,32 @@ function overallBqCacheSet(key, data) {
   if (overallBqCache.size > 200) overallBqCache.delete(overallBqCache.keys().next().value)
 }
 
+// Every mode that reads the Overall (BigQuery) page's own cache tables --
+// gated on 'overall_bigquery', not 'settings'. Moved to module scope (was a
+// local const declared much further down, after the gate check ran) so the
+// gate itself can reference the same list its own later dispatch already
+// used, rather than the two silently drifting.
+//
+// FOUND 2026-09-29, same day as the OVERALL_BIGQUERY_EMAILS fix in
+// shared/access.mjs: that fix made canAccessDashboard('overall_bigquery',...)
+// correctly honor a real Settings grant, and the frontend route guard/nav
+// picked it up immediately -- but this endpoint's OWN gate never matched
+// that fix. Every mode not explicitly named below fell through to 'settings'
+// (admin-only), so a Settings-granted viewer could open the page shell but
+// every real data call still 403'd -- the exact "looks granted, silently
+// does nothing" failure that fix was supposed to end, just one layer
+// deeper. overall_bq_prewarm had the same problem from the opposite
+// direction: gated on 'overall' (the SHEET-based Overall page), a
+// different dashboardId than the one it actually serves.
+const OVERALL_BQ_READ_MODES = ['overall_bq_rows', 'overall_bq_agg_rows', 'overall_bq_bounds', 'overall_bq_synced_at', 'overall_bq_prewarm']
+
 async function handleBigQuery(req, res, me) {
   const auth = await import('../lib/auth.mjs')
   const mode = (req.query && req.query.mode) || 'ping'
-  const gateId = mode === 'careers_leads' ? 'leverage_careers' : (mode === 'ql_split_totals' || mode === 'overall_bq_prewarm') ? 'overall' : 'settings'
+  const gateId = mode === 'careers_leads' ? 'leverage_careers'
+    : mode === 'ql_split_totals' ? 'overall'
+    : OVERALL_BQ_READ_MODES.includes(mode) ? 'overall_bigquery'
+    : 'settings'
   if (!auth.canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -4401,7 +4423,9 @@ async function handleBigQuery(req, res, me) {
       return res.status(200).json({ rows: null, error: String((err && err.message) || err) })
     }
   }
-  const OVERALL_BQ_READ_MODES = ['overall_bq_rows', 'overall_bq_agg_rows', 'overall_bq_bounds', 'overall_bq_synced_at']
+  // OVERALL_BQ_READ_MODES is module-scope now (see its declaration above
+  // handleBigQuery, next to the gate) -- includes 'overall_bq_prewarm' too,
+  // which is harmless here since that mode already returned earlier above.
   if (OVERALL_BQ_READ_MODES.includes(mode)) {
     const { supabaseAdmin } = await import('../lib/auth.mjs')
     const { since, until, sources } = req.query || {}
