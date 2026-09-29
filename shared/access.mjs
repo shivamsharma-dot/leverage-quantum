@@ -11,10 +11,22 @@
 // browser bundle must not pull that in. Nothing in this file may import anything
 // -- it has to stay usable from both the Vercel functions and the Vite bundle.
 
-// Genuinely restricted to a named allowlist, not one role -- 'admin' still
-// includes nishant.bhatia, and this page is the BigQuery beta, opened up to
-// specific people by explicit request rather than by role/grant.
-export const OVERALL_BIGQUERY_EMAILS = ['shivam.sharma@leverageedu.com', 'chilukoti.sriteja@leverageedu.com']
+// REMOVED 2026-09-29 -- overall_bigquery used to be gated by this hardcoded
+// email allowlist instead of the normal role/grant system every other
+// dashboard uses (added when this page was a brand-new BigQuery beta, opened
+// to a couple of named people by explicit request rather than by role).
+// That made Settings > User Access's own "Overall (BigQuery)" checkbox a
+// silent no-op for anyone not on this list -- an admin could tick it, save
+// it, everything LOOKS granted, and the person still gets blocked, because
+// this function never even looked at their role for this one dashboardId.
+// Bit two real people in under a week (chilukoti.sriteja on 2026-09-23,
+// harshita.dhingra on 2026-09-29) -- both correctly granted through Settings,
+// both blocked anyway, both needing a code change + deploy just to add one
+// email. Root-fixed by folding this dashboard into VIEWER_MUST_BE_GRANTED
+// below instead -- the exact same "no viewer gets this for free, an explicit
+// grant or admin role is required" treatment ceo_b2c_pnl/team_mapping/etc.
+// already have. The Settings checkbox now does exactly what it already
+// visually promises, with no separate list to remember to update.
 
 // Dashboards a plain 'viewer' does NOT get implicitly -- they must be granted
 // explicitly through a "viewer:<ids>" role. Also the fail-safe denial list used
@@ -28,6 +40,7 @@ export const VIEWER_MUST_BE_GRANTED = [
   'marketing_review',
   'team_mapping',
   'super_tracker',
+  'overall_bigquery',
 ]
 
 // "viewer:home,meta_ads" / "custom:roas". Tolerates whitespace around the commas:
@@ -43,12 +56,12 @@ export function parseGrantedIds(role, prefix) {
 }
 
 // role: the stored allowed_users.role string. dashboardId: a PAGE_LIST id.
-// email: only ever consulted for overall_bigquery; callers that omit it simply
-// fail that one check closed, which is the safe direction.
+// email: kept as a 3rd param for call-site compatibility (every caller still
+// passes it) but no longer consulted by anything below -- overall_bigquery's
+// old email-only branch is gone, see the removal note on VIEWER_MUST_BE_GRANTED
+// above. Every dashboardId, this one included, now goes through the exact
+// same role/grant logic.
 export function canAccessDashboard(role, dashboardId, email) {
-  if (dashboardId === 'overall_bigquery') {
-    return OVERALL_BIGQUERY_EMAILS.includes(String(email || '').toLowerCase())
-  }
   const userRole = role || 'viewer'
   if (dashboardId === 'settings') return userRole === 'admin'
   if (userRole === 'admin') return true

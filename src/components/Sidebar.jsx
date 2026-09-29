@@ -46,8 +46,6 @@ export const NAV = [
     items: [
       { to: '/', icon: <HomeIcon />, label: 'Summary', end: true },
       { to: '/dashboard/overall', icon: <OverallIcon />, label: 'Overall', end: false },
-      // Genuinely restricted to Shivam's own email, not just admin-only -- see
-      // canSee()'s OVERALL_BIGQUERY_EMAILS check further down this file.
       { to: '/dashboard/overall-bigquery', icon: <OverallBigQueryIcon />, label: 'Overall (BigQuery)', end: false },
       {
         to: '/dashboard/ceo-b2c-pnl',
@@ -465,10 +463,10 @@ export default function Sidebar() {
     // role loads a moment later. This guard is nav-specific, which is why it stays
     // here rather than moving into the shared rule.
     if (!user) return false
-    // Every actual rule (settings, the overall_bigquery email restriction, admin,
-    // plain viewer, viewer:/custom: grants, legacy roles, fail-safe default) comes
-    // from shared/access.mjs -- the same function the route guard and the server-side
-    // API gate use, so nav visibility can no longer disagree with either of them.
+    // Every actual rule (settings, admin, plain viewer, viewer:/custom: grants,
+    // legacy roles, fail-safe default) comes from shared/access.mjs -- the same
+    // function the route guard and the server-side API gate use, so nav
+    // visibility can no longer disagree with either of them.
     return canAccessDashboard(userRole, id, user?.email)
   }
 
