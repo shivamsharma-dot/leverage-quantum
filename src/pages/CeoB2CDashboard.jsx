@@ -202,10 +202,13 @@ function totals(rs, revDefs) {
   // than adding 'offRev' into REV_PNL itself, which would incorrectly fold
   // it into the last-3 slice the JSX below uses for the "Offline" subgroup.
   o.offRev = col(rs, 'offRev')
-  // 'Upskilling Revenue' -- a brand-new revenue line Finance added to the
-  // sheet (2026-09), not part of the Online/Offline split, so it lives
-  // outside revDefs entirely too, same as 'sr'/'offRev' above.
+  // 'Upskilling Revenue' / 'Ancillary Revenue' -- new revenue lines Finance
+  // added to the sheet (2026-09 and 2026-10), not part of the Online/Offline
+  // split, so they live outside revDefs entirely too, same as 'sr'/'offRev'
+  // above. Ancillary is a once-a-month true-up (like Corp. Salary used to be)
+  // -- reads 0/blank every day except the last day of the month.
   o.upskilling = col(rs, 'upskilling')
+  o.ancillary = col(rs, 'ancillary')
   return o
 }
 function chg(now, was) {
@@ -526,10 +529,10 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
 
   const day = useMemo(function () {
     if (!last) return null
-    // offRev/upskilling: same reasoning as totals() above -- explicit, outside
-    // the REV.concat(COST) loop, so they're never folded into a slice(0,3)/
-    // slice(3) subgroup.
-    const o = { date: last.date, sr: last.sr, offRev: last.offRev, upskilling: last.upskilling }
+    // offRev/upskilling/ancillary: same reasoning as totals() above --
+    // explicit, outside the REV.concat(COST) loop, so they're never folded
+    // into a slice(0,3)/slice(3) subgroup.
+    const o = { date: last.date, sr: last.sr, offRev: last.offRev, upskilling: last.upskilling, ancillary: last.ancillary }
     REV.concat(COST).forEach(function (d) { o[d[0]] = last[d[0]] })
     o.rev = last.totalRev != null ? last.totalRev : roll(o, REV)
     o.cost = last.totalCost != null ? last.totalCost : roll(o, COST)
@@ -806,7 +809,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     return {
       monthLabel: activeWindow ? windowLabel : String(month || '').replace('-', ' '),
       through: d1,
-      rev: { sr: mtd.sr, ac: mtd.ac, vas: mtd.vas, off: mtd.offRev, upskilling: mtd.upskilling, total: mtd.rev },
+      rev: { sr: mtd.sr, ac: mtd.ac, vas: mtd.vas, off: mtd.offRev, upskilling: mtd.upskilling, ancillary: mtd.ancillary, total: mtd.rev },
       cost: { pm: mtd.pm, op: mtd.op, off: mtd.offCost, corp: mtd.corp, people: mtd.people, corpSalary: mtd.corpSalary, total: mtd.cost },
       net: mtd.net,
       margin: margin,
@@ -815,7 +818,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       // Additive: the existing B2C builder only ever reads date, rev, cost and net.
       day: day ? {
         date: day.date,
-        sr: day.sr, ac: day.ac, vas: day.vas, offRev: day.offRev, upskilling: day.upskilling,
+        sr: day.sr, ac: day.ac, vas: day.vas, offRev: day.offRev, upskilling: day.upskilling, ancillary: day.ancillary,
         pm: day.pm, op: day.op, offCost: day.offCost, corp: day.corp, people: day.people, corpSalary: day.corpSalary,
         rev: day.rev, cost: day.cost, net: day.net,
       } : null,
@@ -842,7 +845,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         // a 30 day one is a calendar artefact, and a builder cannot see that
         // without the count, so it travels with the comparison.
         days: prevRows.length,
-        rev: { sr: prev.sr, ac: prev.ac, vas: prev.vas, off: prev.offRev, upskilling: prev.upskilling, total: prev.rev },
+        rev: { sr: prev.sr, ac: prev.ac, vas: prev.vas, off: prev.offRev, upskilling: prev.upskilling, ancillary: prev.ancillary, total: prev.rev },
         cost: { pm: prev.pm, op: prev.op, off: prev.offCost, corp: prev.corp, people: prev.people, corpSalary: prev.corpSalary, total: prev.cost },
         net: prev.net
       } : null,
@@ -912,7 +915,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     const shot = node ? await captureNodePng(node, { ratios: [3, 2, 1.5, 1] }) : null
     const cols = ['Line item', day ? day.date : 'Latest day', periodLabel]
     if (hasPrev) cols.push(prevLab)
-    const spec = REV.concat(isCashFlow ? [] : [['upskilling', 'Upskilling']]).concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost]])
+    const spec = REV.concat(isCashFlow ? [] : [['upskilling', 'Upskilling'], ['ancillary', 'Ancillary']]).concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost]])
       .concat(isCashFlow ? [] : [['ebitdaBeforeCorp', 'Contribution Profit']])
       .concat([['net', L.net]])
     const body = spec.map(function (d) {
@@ -1239,11 +1242,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       {REV.slice(0, 3).map(revRow)}
                       <tr><td className={styles.subgroup} colSpan={hasPrev ? 6 : 4}>Offline</td></tr>
                       {REV.slice(3).map(revRow)}
-                      {/* A new revenue line Finance added to the sheet (2026-09) --
-                          not part of the Online/Offline split, so it sits outside REV
-                          entirely (see the 'day'/'totals' comments above) and gets its
-                          own row here rather than being folded into either subgroup. */}
+                      {/* New revenue lines Finance added to the sheet (2026-09/2026-10) --
+                          not part of the Online/Offline split, so they sit outside REV
+                          entirely (see the 'day'/'totals' comments above) and get their
+                          own rows here rather than being folded into either subgroup. */}
                       {revRow(['upskilling', 'Upskilling'])}
+                      {revRow(['ancillary', 'Ancillary'])}
                     </>
                   )}
                   <tr className={styles.total}>

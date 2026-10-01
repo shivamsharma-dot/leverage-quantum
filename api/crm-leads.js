@@ -5178,6 +5178,14 @@ const B2C_PNL_COLS = {
   // never re-derives), so no headline figure was ever wrong -- only the
   // per-line breakdowns (dashboard table + Slack reports) were missing them.
   upskilling: 'upskilling revenue',
+  // 'Ancillary Revenue (Commission on Loans & Acco[mmodation])' -- a third new
+  // revenue column Finance added (2026-10), confirmed against the live
+  // sheet: same pattern as Upskilling -- a once-a-month true-up entry on the
+  // LAST day of the month (e.g. 15,36,000 on 31-Jul-2026, 1,32,68,495 on
+  // 31-Aug-2026), blank every other day. Already flows into the sheet's own
+  // Total Revenue column, so no headline figure was ever wrong -- only the
+  // per-line breakdowns were missing it, same as Upskilling/Corp. Salary.
+  ancillary: 'ancillary revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads', corpSalary: 'corp. salary',
   totalCost: 'total cost',
@@ -5192,7 +5200,20 @@ const B2C_PNL_COLS = {
   // the BEFORE-corp figure, not the after-corp bottom line the rest of the
   // page implies). ebitdaBeforeCorp is exposed as its own field so the page
   // can show both, never derived from one another.
-  net: 'ebitda after corp. overheads', ebitdaBeforeCorp: 'ebitda before corp. overheads',
+  //
+  // 'EBITDA Before Corp. Overheads' was itself later renamed on the sheet to
+  // 'Contribution Profit' (Quantum's own display label was changed to match
+  // on 2026-09-17, but that pass deliberately left this lookup key alone
+  // since the sheet header hadn't changed YET at that point -- confirmed
+  // 2026-10-01 against the live sheet that it since has). Matched on 'profit'
+  // specifically, not the whole phrase, so this also survives Finance
+  // decorating the header further (e.g. 'Contribution Profit (before Corp.
+  // Overheads)') the same way the tiered matcher already tolerates elsewhere
+  // in this file. Until this fix, ebitdaBeforeCorp silently read null off the
+  // sheet and fell back to net+corp -- algebraically identical to the sheet's
+  // own Contribution Profit value, so no wrong number ever actually shipped,
+  // just a fragile reliance on a fallback instead of the real column.
+  net: 'ebitda after corp. overheads', ebitdaBeforeCorp: 'profit',
 };
 // sr and offCost were both silently reading null: the sheet's real headers
 // are 'Actuals SR Revenue (Online + Offline)' (was mapped to the stale
@@ -5212,8 +5233,8 @@ const B2C_CASHFLOW_COLS = {
 // ebitdaBeforeCorp only ever resolves on P&L (Cash Flow's cols has no such
 // key, so at.ebitdaBeforeCorp is undefined there and this stays null on every
 // Cash Flow row -- harmless, just never read by anything on that statement).
-// upskilling/corpSalary are the same story: P&L-only, undefined on Cash Flow.
-const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'corpSalary', 'totalCost', 'net', 'ebitdaBeforeCorp', 'upskilling'];
+// upskilling/corpSalary/ancillary are the same story: P&L-only, undefined on Cash Flow.
+const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'corpSalary', 'totalCost', 'net', 'ebitdaBeforeCorp', 'upskilling', 'ancillary'];
 
 function b2cParseDays(csv, cols) {
   const parsed = b2cRows(csv, cols);
@@ -5397,7 +5418,7 @@ export async function fetchB2CData() {
 const B2C_PNL_LINES = [
   ['SR Online', 'srOnline'], ['AC Online', 'ac'], ['Leverage One Online', 'vas'],
   ['SR Offline', 'srOffline'], ['AC Offline', 'acOffline'], ['Leverage One Offline', 'vasOffline'],
-  ['Upskilling', 'upskilling'],
+  ['Upskilling', 'upskilling'], ['Ancillary', 'ancillary'],
 ]
 const B2C_CASHFLOW_INFLOW_LINES = [
   ['SR, Online and Offline', 'sr'], ['Actuals AC Online Revenue', 'ac'],
