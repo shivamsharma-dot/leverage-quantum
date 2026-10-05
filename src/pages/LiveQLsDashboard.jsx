@@ -489,7 +489,7 @@ function PaginationControl({ page, totalPages, onPrev, onNext }) {
   )
 }
 
-const KPI_CARD_ROW = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, padding: '0 28px', marginTop: 16 }
+const KPI_CARD_ROW = { display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: 12, padding: '0 28px', marginTop: 16 }
 
 export default function LiveQLsDashboard() {
   const [datePreset, setDatePreset] = useState('today')
@@ -687,6 +687,9 @@ export default function LiveQLsDashboard() {
     periodElapsed = daysInMonth(lm.getFullYear(), lm.getMonth())
   }
   const periodAvgQl = totalQlUnfiltered / periodElapsed
+  const periodAvgQueued = totalQueued / periodElapsed
+  const aiShareOfQl = totalQlUnfiltered > 0 && data ? (data.ai.qlCount / totalQlUnfiltered) * 100 : null
+  const dnpShareOfAiQueued = aiQueued > 0 ? (aiQueuedDnp / aiQueued) * 100 : null
   const periodLabel = periodUnit === 'hour' ? 'Avg QLs / Hour' : 'Avg QLs / Day'
   const periodSub = periodUnit === 'hour'
     ? `${fmtN(totalQlUnfiltered)} total over ${periodElapsed.toFixed(1)}h elapsed`
@@ -902,7 +905,10 @@ export default function LiveQLsDashboard() {
                       ['AI Queued -- Fresh vs DNP', 'Not every AI-queued lead is new -- Futwork sometimes recycles a Human "Did Not Pick" lead straight into the AI queue instead of calling a genuinely fresh one. Split via Futwork Ai Project containing "DNP" (shown as two "AI Queued" cards, distinguished by the Fresh/DNP sub-line). Human queued has no such recycling, so it’s always 100% fresh.'],
                       ['QL % (DNP) vs QL % (Fresh)', 'Same numerator (Total QLs, unfiltered) both ways -- only the denominator differs. "QL % (DNP)" divides by everyone queued (Human + all AI). "QL % (Fresh)" divides by Human + AI Queued (Fresh) only, so recycled DNP leads don’t inflate or dilute the real conversion rate.'],
                       ['QL % (Human) / QL % (AI) / QL % (AI Fresh)', 'Each channel’s own conversion rate -- that channel’s QLs over that channel’s own Queued count, unfiltered. Human has no Fresh/DNP concept, so it’s one card. AI has two: "QL % (AI)" divides by AI’s FULL Queued count (Fresh + DNP combined) -- "how well is the AI channel converting overall"; "QL % (AI Fresh)" divides by AI Queued (Fresh) only, so recycled DNP leads (which rarely convert, having already been tried once by Human) don’t drag the real fresh-lead conversion rate down.'],
-                      ['QLs This Period', 'A run-rate, not a plain total -- Total QLs divided by elapsed time. Today shows QLs per hour (elapsed since midnight, since it’s still a live, partial day); every other preset shows QLs per day (This Week/This Month divide by however many days have elapsed so far; Yesterday/Last Week/Last Month, already-closed periods, divide by their own full length -- 1 / 7 / the real days in that month). The sub-line always shows the real total and elapsed time behind the rate. Always unfiltered and ignores the Filters above, same as the Queued cards.'],
+                      ['Avg Queued / Hour or Day', 'Same pace idea as the QL run-rate below, applied to Total Queued: Today is per hour, every other preset per day, using the same elapsed-time rule. Unfiltered.'],
+                      ['AI Share of QLs', 'AI QLs / Total QLs, unfiltered -- how much of the QL volume Futwork AI is producing versus Human.'],
+                      ['DNP Share', 'AI Queued (DNP) / AI Queued (Fresh + DNP), unfiltered -- the portion of the AI queue that is recycled Human "Did Not Pick" leads rather than fresh ones.'],
+                      ['QLs This Period','A run-rate, not a plain total -- Total QLs divided by elapsed time. Today shows QLs per hour (elapsed since midnight, since it’s still a live, partial day); every other preset shows QLs per day (This Week/This Month divide by however many days have elapsed so far; Yesterday/Last Week/Last Month, already-closed periods, divide by their own full length -- 1 / 7 / the real days in that month). The sub-line always shows the real total and elapsed time behind the rate. Always unfiltered and ignores the Filters above, same as the Queued cards.'],
                       ['Activity Created On', 'When the QL call/qualification activity itself was logged in LeadSquared -- NOT the same as Opportunity Created On (when the Opportunity the call is for was first created, usually well earlier).'],
                       ['Owner columns', 'Opportunity Owner, Owner Assigned On, and Opportunity Created On come from the linked Opportunity, not the QL call itself. They load for the page you’re viewing first, then keep filling in for the whole loaded window in the background (see the Records card’s subtitle for progress) -- both Export and the “Opportunity Owner” filter option need this to finish loading to be complete, so may show … or a short delay right after changing the date range. LeadSquared’s own “First assigned” fields are unused on this account (always blank), so Owner Assigned On shows the current assignment time instead.'],
                       ['Sales Group', 'Not a field on the Opportunity itself (LeadSquared has no such field) -- it’s the OWNER’s own Sales Group membership, resolved the same way Owner Assigned On is. A person can belong to multiple groups at once (shown comma-separated) or none (shown as a dash). Loads and filters the same way as the other Owner columns.'],
@@ -982,6 +988,9 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="QL % (AI)" value={qlPctAi == null ? '—' : `${qlPctAi.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh + DNP)" accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label="QL % (AI Fresh)" value={qlPctAiFresh == null ? '—' : `${qlPctAiFresh.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh only)" accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label={periodLabel} value={periodAvgQl.toFixed(1)} sub={periodSub} accent={C.green} icon={KPI_ICONS.total} />
+                <PremKPI label={periodUnit === 'hour' ? 'Avg Queued / Hour' : 'Avg Queued / Day'} value={periodAvgQueued.toFixed(1)} sub={`${fmtN(totalQueued)} queued, same window`} accent={C.green} icon={KPI_ICONS.total} />
+                <PremKPI label="AI Share of QLs" value={aiShareOfQl == null ? '—' : `${aiShareOfQl.toFixed(1)}%`} sub="AI QLs / Total QLs" accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="DNP Share" value={dnpShareOfAiQueued == null ? '—' : `${dnpShareOfAiQueued.toFixed(1)}%`} sub="AI Queued (DNP) / AI Queued" accent={C.cyan} icon={KPI_ICONS.bot} />
               </div>
 
               <div style={{ padding: '16px 28px 28px' }}>
