@@ -38,26 +38,43 @@ function daysBetween(a, b) {
   return Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000)
 }
 
-// The window each current period is read against. MTD reads against the same days
-// of the month before it (so 1-5 Oct is compared with 1-5 Sep, not with a longer or
-// shorter stretch); anything else reads against the same-length window immediately
-// before it. fetchFrom also reaches one day before the window so the first day of
-// Day on Day has a day to be read against.
-export function careersV2Windows(win, preset) {
+const istToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+
+// The one rule for "what is this period read against", shared by this report and
+// the page's Compare modal so a delta can never compare unequal stretches:
+//   1. Complete days only. Today is still filling in, so a window that reaches
+//      today is clipped to yesterday -- otherwise a partial day sits against a full
+//      one and every delta reads low.
+//   2. MTD reads against the SAME DAYS of the month before (1-4 Oct against 1-4 Sep,
+//      never against all of September); anything else reads against the
+//      same-length window immediately before it.
+export function comparableSpan(win, preset) {
+  const today = istToday()
+  const y = shiftDate(today, -1)
+  let cur = win
+  let clipped = false
+  if (win.to >= today && y >= win.from) { cur = { from: win.from, to: y }; clipped = true }
   let prev
   if (preset === 'mtd') {
-    const [y, m, d] = win.from.split('-').map(Number)
+    const [yr, m, d] = cur.from.split('-').map(Number)
     const pm = m === 1 ? 12 : m - 1
-    const py = m === 1 ? y - 1 : y
+    const py = m === 1 ? yr - 1 : yr
     const lastOfPrev = new Date(Date.UTC(py, pm, 0)).getUTCDate()
-    const toDay = Math.min(Number(win.to.split('-')[2]), lastOfPrev)
+    const toDay = Math.min(Number(cur.to.split('-')[2]), lastOfPrev)
     const pad = n => String(n).padStart(2, '0')
     prev = { from: py + '-' + pad(pm) + '-' + pad(d), to: py + '-' + pad(pm) + '-' + pad(toDay) }
   } else {
-    const len = daysBetween(win.from, win.to) + 1
-    prev = { from: shiftDate(win.from, -len), to: shiftDate(win.from, -1) }
+    const len = daysBetween(cur.from, cur.to) + 1
+    prev = { from: shiftDate(cur.from, -len), to: shiftDate(cur.from, -1) }
   }
-  const dayBefore = shiftDate(win.from, -1)
+  return { cur, prev, clipped }
+}
+
+// fetchFrom also reaches one day before the window so the first day of Day on Day
+// has a day to be read against.
+export function careersV2Windows(win, preset) {
+  const { cur, prev } = comparableSpan(win, preset)
+  const dayBefore = shiftDate(cur.from, -1)
   return { prev, fetchFrom: prev.from < dayBefore ? prev.from : dayBefore }
 }
 
@@ -98,12 +115,14 @@ function entries(curRows, prevRows) {
 // Everything the three messages read, built from rows that already reach back to
 // the previous window. `rows` are the page's row shape, already filtered.
 export function buildCareersV2Ctx({ rows, win, preset, windowLabel, filterLine, scopeLine, hasPrevData }) {
-  const { prev } = careersV2Windows(win, preset)
-  const cur = inRange(rows, win.from, win.to)
+  const span = comparableSpan(win, preset)
+  const prev = span.prev
+  const cur = inRange(rows, span.cur.from, span.cur.to)
   const prv = inRange(rows, prev.from, prev.to)
   const mtd = entries(cur, prv)
   const total = mtd.rows.length ? mtd.rows[0].g : null
 
+  const fmtDay = iso => dayLabelOf(iso)
   const dates = [...new Set(cur.map(r => r.date))].sort()
   const dayEntry = d => {
     const dayRows = cur.filter(r => r.date === d)
@@ -129,9 +148,9 @@ export function buildCareersV2Ctx({ rows, win, preset, windowLabel, filterLine, 
     return { label: dayLabelOf(d), key: d, g: { ...agg(dayRows), prev: agg(prevDayRows) } }
   }).reverse().slice(0, 31)
 
-  const fmtDay = iso => dayLabelOf(iso)
   return {
-    grpByLabel: 'Source', rowCount: mtd.rows.length, periodLabel: windowLabel,
+    grpByLabel: 'Source', rowCount: mtd.rows.length,
+    periodLabel: span.clipped ? windowLabel + ' (complete days, ' + fmtDay(span.cur.from) + ' \u2192 ' + fmtDay(span.cur.to) + ')' : windowLabel,
     prevLabel: fmtDay(prev.from) + ' → ' + fmtDay(prev.to), prevIsCalendarShift: preset === 'mtd',
     filterLine, scopeLine, hasPrev: hasPrevData !== false,
     now: total, prev: total ? total.prev : null,

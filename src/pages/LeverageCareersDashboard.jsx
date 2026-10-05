@@ -14,7 +14,7 @@ import { InlineLoader } from '../components/SkeletonLoader'
 import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, RankedBars, sourceColor, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
-import { careersV2Windows, buildCareersV2Ctx, isPaidSource } from '../lib/careersReportV2'
+import { careersV2Windows, comparableSpan, buildCareersV2Ctx, isPaidSource } from '../lib/careersReportV2'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { getSession, setSession } from '../lib/sessionLoad'
@@ -637,16 +637,20 @@ export default function LeverageCareersDashboard() {
   })), [cohortRows])
 
   // ---- Compare ----
+  // Same rule as the Slack V2 report (comparableSpan): complete days only, and
+  // MTD against the same days of the month before -- so a delta never compares a
+  // partial day, or 1-4 Oct, against all of September.
+  const comparable = useMemo(() => comparableSpan(activeWindow, preset), [activeWindow, preset])
   const compareSpanA = useMemo(() => {
-    if (compareMode === 'custom') return (cFromA && cToA) ? { from: cFromA, to: cToA } : activeWindow
-    return activeWindow
-  }, [compareMode, cFromA, cToA, activeWindow])
+    if (compareMode === 'custom') return (cFromA && cToA) ? { from: cFromA, to: cToA } : comparable.cur
+    return comparable.cur
+  }, [compareMode, cFromA, cToA, comparable])
   const compareSpanB = useMemo(() => {
     const days = (new Date(compareSpanA.to) - new Date(compareSpanA.from)) / 86400000 + 1
     if (compareMode === 'yoy') return { from: addMonthsIso(compareSpanA.from, -12), to: addMonthsIso(compareSpanA.to, -12) }
     if (compareMode === 'custom') return (cFromB && cToB) ? { from: cFromB, to: cToB } : { from: shiftDate(compareSpanA.from, -days), to: shiftDate(compareSpanA.from, -1) }
-    return { from: shiftDate(compareSpanA.from, -days), to: shiftDate(compareSpanA.from, -1) } // prev
-  }, [compareMode, compareSpanA, cFromB, cToB])
+    return comparable.prev
+  }, [compareMode, compareSpanA, cFromB, cToB, comparable])
 
   useEffect(() => {
     if (!compareOpen) return
