@@ -902,7 +902,8 @@ export default function SettingsPage() {
     // Sheet and BigQuery routes share this one component). See
     // src/lib/costExclusions.js for the matching rule and exactly where it's
     // applied; app_preferences key 'cost_excluded_campaign_patterns'.
-    const [costExclusions, setCostExclusions] = useState([]) // [{ pattern, note }]
+    const [costExclusions, setCostExclusions] = useState([]) // [{ pattern, note, scope? }] -- scope 'cpql' = CPQL only, absent = CPL + CPQL + CPA
+    const [ceNewScope, setCeNewScope] = useState('all')
     const [ceNewPattern, setCeNewPattern] = useState('')
     const [ceNewNote, setCeNewNote] = useState('')
     const [ceSaving, setCeSaving] = useState(false)
@@ -927,9 +928,17 @@ export default function SettingsPage() {
       const pattern = ceNewPattern.trim()
       if (!pattern) { setCeMsg({ type: 'err', text: 'Enter a campaign-name pattern' }); return }
       if (costExclusions.some(p => p.pattern.toLowerCase() === pattern.toLowerCase())) { setCeMsg({ type: 'err', text: 'That pattern is already in the list' }); return }
-      const next = [...costExclusions, { pattern, note: ceNewNote.trim() }]
+      const next = [...costExclusions, { pattern, note: ceNewNote.trim(), ...(ceNewScope === 'cpql' ? { scope: 'cpql' } : {}) }]
       saveCostExclusions(next, 'Saved')
-      setCeNewPattern(''); setCeNewNote('')
+      setCeNewPattern(''); setCeNewNote(''); setCeNewScope('all')
+    }
+    const setCostExclusionScope = (pattern, scope) => {
+      const next = costExclusions.map(p => {
+        if (p.pattern !== pattern) return p
+        const { scope: _old, ...rest } = p
+        return scope === 'cpql' ? { ...rest, scope: 'cpql' } : rest
+      })
+      saveCostExclusions(next, 'Saved')
     }
     const removeCostExclusion = (pattern) => {
       const next = costExclusions.filter(p => p.pattern !== pattern)
@@ -2657,7 +2666,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
                   <div>
                     <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Cost-metric exclusions</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>A campaign whose name contains one of these patterns is left out of CPL/CPQL/CPA on the Overall dashboard — its Spend, Leads and QLs still count everywhere else on the page; only the blended cost-per-X figures ignore it. For campaigns that were never meant to be judged on cost per lead (e.g. brand-awareness video buys).</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>A campaign whose name contains one of these patterns is left out of the cost-per-X figures on the Overall dashboard — its Spend, Leads and QLs still count everywhere else on the page. Each pattern can apply to CPL, CPQL and CPA together, or to CPQL only (for campaigns whose leads are real but never sent for qualification, e.g. MBBS). For campaigns that were never meant to be judged on cost per lead (e.g. brand-awareness video buys).</p>
                   </div>
                   {ceMsg && (
                     <span style={{ fontSize: 11, fontWeight: 600, color: ceMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: ceMsg.type === 'ok' ? '#F0FDF4' : 'var(--bg3)', border: '0.5px solid ' + (ceMsg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>{ceMsg.text}</span>
@@ -2669,16 +2678,31 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     className={styles.input} style={{ width: 220 }} />
                   <input type="text" placeholder="Why (optional)" value={ceNewNote} onChange={e => setCeNewNote(e.target.value)}
                     className={styles.input} style={{ width: 220 }} />
+                  <div style={{ display: 'inline-flex', border: '0.5px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                    {[['all', 'CPL · CPQL · CPA'], ['cpql', 'CPQL only']].map(([v, label]) => (
+                      <button key={v} type="button" onClick={() => setCeNewScope(v)}
+                        style={{ border: 'none', padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', background: ceNewScope === v ? 'var(--navy, #1F3C84)' : 'transparent', color: ceNewScope === v ? '#fff' : 'var(--text-3)' }}>{label}</button>
+                    ))}
+                  </div>
                   <Button size="sm" onClick={addCostExclusion} disabled={ceSaving}>{ceSaving ? 'Saving…' : 'Add pattern'}</Button>
                 </div>
 
                 {costExclusions.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No exclusions configured — every campaign counts toward CPL/CPQL/CPA on the Overall dashboard.</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No exclusions configured — every campaign counts toward CPL, CPQL and CPA on the Overall dashboard.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {costExclusions.map(p => (
                       <div key={p.pattern} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)', border: '0.5px solid var(--border)' }}>
                         <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>{p.pattern}</div>
+                        <div style={{ display: 'inline-flex', border: '0.5px solid var(--border)', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                          {[['all', 'All three'], ['cpql', 'CPQL only']].map(([v, label]) => {
+                            const on = (p.scope === 'cpql' ? 'cpql' : 'all') === v
+                            return (
+                              <button key={v} type="button" disabled={ceSaving} onClick={() => !on && setCostExclusionScope(p.pattern, v)}
+                                style={{ border: 'none', padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: on ? 'default' : 'pointer', background: on ? 'var(--navy, #1F3C84)' : 'transparent', color: on ? '#fff' : 'var(--text-3)' }}>{label}</button>
+                            )
+                          })}
+                        </div>
                         {p.note && <div style={{ fontSize: 11.5, color: 'var(--text-3)', flexShrink: 0, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.note}>{p.note}</div>}
                         <button type="button" onClick={() => removeCostExclusion(p.pattern)}
                           style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Remove</button>
