@@ -1343,12 +1343,12 @@ async function fetchLeadSquaredActivityTypes(creds) {
 // for this account's opportunity type, so a filter UI can show "Stage" / "Won" / "Lost"
 // instead of raw mx_Custom_2 / opaque values. Cached in-memory per cold start (metadata is
 // effectively static -- it only changes if someone edits Settings > Opportunities in LSQ).
-let _lsqOppMetaCache = null
+const _lsqOppMetaCache = new Map()
 async function fetchLeadSquaredOpportunityMeta(creds, { eventCode }, bypassCache) {
   const code = Number(eventCode) || 12003
-  if (!bypassCache && _lsqOppMetaCache && _lsqOppMetaCache.code === code) return _lsqOppMetaCache.data
+  if (!bypassCache && _lsqOppMetaCache.has(code)) return _lsqOppMetaCache.get(code)
   const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityTypeMetadata', creds, { code: String(code) })
-  _lsqOppMetaCache = { code, data }
+  _lsqOppMetaCache.set(code, data)
   return data
 }
 
@@ -1387,9 +1387,25 @@ async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
           if (Array.isArray(parsed)) inlineOptions = parsed.map(o => o.Value).filter(v => v != null && v !== '')
         } catch (_) { /* OptionSet isn't valid JSON for this field -- leave inlineOptions null */ }
       }
+      // Dependent dropdowns (Stage under Status, sub-statuses under a call status) keep
+      // their values in DependentOptionSet as [{Parent, Options:[{Value}]}] instead of
+      // OptionSet -- confirmed live for event codes 12003 and 12015.
+      let dependentOptions = null
+      if (f.DependentOptionSet) {
+        try {
+          const parsed = JSON.parse(f.DependentOptionSet)
+          if (Array.isArray(parsed)) {
+            const groups = parsed
+              .map(g => ({ parent: g.Parent, options: (g.Options || []).map(o => o.Value).filter(v => v != null && v !== '') }))
+              .filter(g => g.options.length)
+            if (groups.length) dependentOptions = groups
+          }
+        } catch (_) { /* DependentOptionSet isn't valid JSON for this field -- leave null */ }
+      }
       return {
         schemaName: f.SchemaName, displayName: f.DisplayName || f.SchemaName,
         dataType: f.DataType || '', isMandatory: !!f.IsMandatory, inlineOptions,
+        dependentOptions, parentField: f.ParentField || null,
       }
     }) : []
   const resolvedCode = (data && (data.EventCode || data.EventCode === 0)) ? data.EventCode : (Number(code) || 12003)

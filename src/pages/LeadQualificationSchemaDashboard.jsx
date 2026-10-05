@@ -8,6 +8,10 @@ import { getSession, setSession } from '../lib/sessionLoad'
 
 const API_BASE = '/api/crm-leads?source=leadsquared'
 
+// Leverage Careers' own Opportunity type. Its mx_Custom_N codes mean different things than
+// University Admission's (12003), so it needs its own schema fetch, never a reused field map.
+const CAREERS_OPP_CODE = '12015'
+
 async function apiGet(mode, params) {
   const qs = new URLSearchParams({ mode, ...(params || {}) })
   const res = await fetch(API_BASE + '&' + qs.toString(), { credentials: 'include', cache: 'no-store' })
@@ -25,6 +29,7 @@ function useSchema() {
   const [types, setTypes] = useState(null)
   const [schemas, setSchemas] = useState({})
   const [oppSchema, setOppSchema] = useState(null)
+  const [careersSchema, setCareersSchema] = useState(null)
   const [leadSchema, setLeadSchema] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -38,10 +43,10 @@ function useSchema() {
   const load = async (opts) => {
     const bypass = opts && opts.refresh
     if (!bypass) {
-      const cached = getSession('lq_field_schema_v1')
+      const cached = getSession('lq_field_schema_v2')
       if (cached) {
         setTypes(cached.data.types); setSchemas(cached.data.schemas)
-        setOppSchema(cached.data.oppSchema); setLeadSchema(cached.data.leadSchema)
+        setOppSchema(cached.data.oppSchema); setCareersSchema(cached.data.careersSchema); setLeadSchema(cached.data.leadSchema)
         setLastSync(cached.data.ts); setLoading(false); setError(null)
         return
       }
@@ -49,9 +54,10 @@ function useSchema() {
     if (!bypass) setLoading(true); else setRefreshing(true)
     setError(null)
     try {
-      const [typesData, oppData, leadData] = await Promise.all([
+      const [typesData, oppData, careersData, leadData] = await Promise.all([
         apiGet('activity_types'),
         apiGet('opportunity_schema', bypass ? { refresh: '1' } : {}).catch(e => ({ error: e.message })),
+        apiGet('opportunity_schema', { code: CAREERS_OPP_CODE, ...(bypass ? { refresh: '1' } : {}) }).catch(e => ({ error: e.message })),
         apiGet('lead_schema', bypass ? { refresh: '1' } : {}).catch(e => ({ error: e.message })),
       ])
       const futworkTypes = (typesData.rows || []).filter(t => (t.name || '').toLowerCase().includes('futwork'))
@@ -63,9 +69,10 @@ function useSchema() {
       setTypes(futworkTypes)
       setSchemas(map)
       setOppSchema(oppData)
+      setCareersSchema(careersData)
       setLeadSchema(leadData)
       const ts = new Date()
-      setSession('lq_field_schema_v1', { types: futworkTypes, schemas: map, oppSchema: oppData, leadSchema: leadData, ts })
+      setSession('lq_field_schema_v2', { types: futworkTypes, schemas: map, oppSchema: oppData, careersSchema: careersData, leadSchema: leadData, ts })
       setLastSync(ts)
     } catch (e) {
       setError(e.message)
@@ -76,7 +83,7 @@ function useSchema() {
   }
 
   useEffect(() => { load() }, [])
-  return { types, schemas, oppSchema, leadSchema, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
+  return { types, schemas, oppSchema, careersSchema, leadSchema, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
 }
 
 // Brand-only palette, one tone per DataType family so a long field list reads by
@@ -143,6 +150,11 @@ function DropdownOptionsModal({ target, onClose }) {
 
   useEffect(() => {
     if (!target) return
+    if (target.presetGroups) {
+      setOptions([])
+      setState('loaded')
+      return
+    }
     if (target.presetOptions) {
       setOptions(target.presetOptions)
       setState(target.presetOptions.length ? 'loaded' : 'empty')
@@ -156,7 +168,7 @@ function DropdownOptionsModal({ target, onClose }) {
         setState(opts.length ? 'loaded' : 'empty')
       })
       .catch(() => setState('error'))
-  }, [target && target.code, target && target.schemaName, target && target.presetOptions])
+  }, [target && target.code, target && target.schemaName, target && target.presetOptions, target && target.presetGroups])
 
   useEffect(() => {
     if (!target) return
@@ -181,7 +193,27 @@ function DropdownOptionsModal({ target, onClose }) {
           {state === 'loading' && <div style={{ fontSize: 13, color: C.muted, fontStyle: 'italic', padding: '12px 0' }}>Loading live options from LeadSquared…</div>}
           {state === 'error' && <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Couldn't load options -- try again.</div>}
           {state === 'empty' && <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>This field has no dropdown options configured.</div>}
-          {state === 'loaded' && (
+          {state === 'loaded' && target.presetGroups && (
+            <>
+              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
+                Dependent dropdown -- the valid values change with {target.parentLabel ? <strong>{target.parentLabel}</strong> : 'the parent field'}.
+              </div>
+              {target.presetGroups.map(g => (
+                <div key={g.parent} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>When {target.parentLabel || 'parent'} is "{g.parent}" · {g.options.length} value{g.options.length === 1 ? '' : 's'}</div>
+                  <div style={{ border: '0.5px solid ' + C.border, borderRadius: 10, overflow: 'hidden' }}>
+                    {g.options.map((o, i) => (
+                      <div key={o} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: i % 2 === 1 ? 'var(--bg3)' : 'transparent', borderTop: i > 0 ? '0.5px solid ' + C.border : 'none' }}>
+                        <span style={{ width: 24, textAlign: 'right', fontSize: 11, fontWeight: 700, color: C.muted, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}.</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{o}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {state === 'loaded' && !target.presetGroups && (
             <>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{options.length} valid value{options.length === 1 ? '' : 's'}</div>
               <div style={{ border: '0.5px solid ' + C.border, borderRadius: 10, overflow: 'hidden' }}>
@@ -228,11 +260,14 @@ function FieldSchemaInfoButton() {
             String field's own edit screen has no options concept at all.
             <br /><br />
             The <strong>Opportunity</strong> view is the same schema for Settings &rsaquo;
-            Opportunities' field configuration. LeadSquared has no live lookup API for
-            Opportunity dropdown values (confirmed -- the Activity one rejects an
-            Opportunity code outright), so a dropdown field there only shows options
-            when LeadSquared's own metadata happens to embed them directly; everything
-            else reads "Not available via API" rather than a fake button. Note:
+            Opportunities' field configuration. Both Opportunity types (University Admission and
+            Leverage Careers) are shown here -- their <strong>mx_Custom_N</strong> codes mean
+            different things in each, so never reuse one type's code on the other.
+            LeadSquared has no live lookup API for Opportunity dropdown values (confirmed --
+            the Activity one rejects an Opportunity code outright), so a dropdown field there
+            shows options only when LeadSquared's own metadata embeds them: directly, or
+            for dependent dropdowns (like Stage under Status) grouped by the parent value.
+            Anything else reads "Not available via API" rather than a fake button. Note:
             <strong> Created On / Created By / Modified On / Modified By</strong> already
             appear as their own rows here (real LeadSquared fields, DataType
             DateTime/ActiveUsers) -- that's the same audit stamp shown on every record
@@ -266,6 +301,7 @@ const ACTIVITY_VIEW_ORDER = [
 ]
 
 function SchemaTable({ code, fields, query, typeFilter, onViewOptions, entityType }) {
+  const labelFor = schemaName => { const pf = fields.find(x => x.schemaName === schemaName); return pf ? pf.displayName : schemaName }
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
   const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
   // Leads-only, and deliberately not extended to Opportunity: LeadSquared's
@@ -318,7 +354,8 @@ function SchemaTable({ code, fields, query, typeFilter, onViewOptions, entityTyp
             // fields: no such API exists (confirmed) -- only fields where LeadSquared's
             // own metadata call happened to embed real values (f.inlineOptions) can show any.
             const usesInline = entityType === 'opportunity' || entityType === 'lead'
-            const hasLiveOptions = usesInline ? isDropdown && f.inlineOptions && f.inlineOptions.length > 0 : isDropdown
+            const hasDependent = !!(f.dependentOptions && f.dependentOptions.length)
+            const hasLiveOptions = usesInline ? isDropdown && ((f.inlineOptions && f.inlineOptions.length > 0) || hasDependent) : isDropdown
             const isUnavailableDropdown = usesInline && isDropdown && !hasLiveOptions
             return (
               <tr key={f.schemaName} style={{ background: i % 2 === 1 ? 'var(--bg3)' : 'transparent' }}>
@@ -336,7 +373,7 @@ function SchemaTable({ code, fields, query, typeFilter, onViewOptions, entityTyp
                 </td>
                 <td style={td}>
                   {hasLiveOptions ? (
-                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName, usesInline ? f.inlineOptions : null)}
+                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName, usesInline ? f.inlineOptions : null, hasDependent ? f.dependentOptions : null, hasDependent && f.parentField ? labelFor(f.parentField) : null)}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                       View options
@@ -449,7 +486,7 @@ function ActivityCard({ type, schema, accent, query, typeFilter, onViewOptions, 
 }
 
 export default function LeadQualificationSchemaDashboard() {
-  const { types, schemas, oppSchema, leadSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
+  const { types, schemas, oppSchema, careersSchema, leadSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
   const [optionsTarget, setOptionsTarget] = useState(null)
   const [selectedKey, setSelectedKey] = useState(null)
   const [query, setQuery] = useState('')
@@ -470,6 +507,12 @@ export default function LeadQualificationSchemaDashboard() {
         entityType: 'opportunity', accent: C.green, schema: oppSchema,
       })
     }
+    if (careersSchema) {
+      out.push({
+        key: 'opp-careers', name: (careersSchema && careersSchema.displayName) || 'Leverage Careers', code: careersSchema.code || CAREERS_OPP_CODE,
+        entityType: 'opportunity', accent: C.cyan, schema: careersSchema,
+      })
+    }
     if (leadSchema) {
       out.push({
         key: 'lead', name: (leadSchema && leadSchema.displayName) || 'Leads', code: leadSchema.code || 'leads',
@@ -485,14 +528,15 @@ export default function LeadQualificationSchemaDashboard() {
     // known three and before Leads, rather than silently disappearing.
     return out.slice().sort((a, b) => {
       const rank = v => {
-        if (v.entityType === 'opportunity') return 0
+        if (v.key === 'opp') return 0
+        if (v.entityType === 'opportunity') return 1
         if (v.entityType === 'lead') return 100
         const i = ACTIVITY_VIEW_ORDER.indexOf(v.name)
         return i === -1 ? 50 : 10 + i
       }
       return rank(a) - rank(b)
     })
-  }, [types, schemas, oppSchema, leadSchema])
+  }, [types, schemas, oppSchema, careersSchema, leadSchema])
 
   useEffect(() => {
     if (!selectedKey && views.length) setSelectedKey(views[0].key)
@@ -519,7 +563,7 @@ export default function LeadQualificationSchemaDashboard() {
     mandatoryCount: selectedFields.filter(f => f.isMandatory).length,
   }), [views, selectedFields])
 
-  const openOptions = (code, schemaName, displayName, presetOptions) => setOptionsTarget({ code, schemaName, displayName, presetOptions })
+  const openOptions = (code, schemaName, displayName, presetOptions, presetGroups, parentLabel) => setOptionsTarget({ code, schemaName, displayName, presetOptions, presetGroups, parentLabel })
 
   if (loading) {
     return (
