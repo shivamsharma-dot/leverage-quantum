@@ -57,8 +57,8 @@ const PRESETS = [
 // means. Everything (spend, leads, interested, won) comes from the Careerv2
 // BigQuery query via its Supabase cache; the page no longer reads Meta.
 // "won" is the funnel (cohort) figure, dated by when the lead was created, so it
-// lines up with leads and interested on the same row; won_snapshot is cached but
-// not shown.
+// lines up with leads and interested on the same row. wonSnapshot is a separate
+// snapshot-view figure (no funnel cohort) and is never added to or mixed with it.
 const NO_CAMPAIGN = '(no campaign)'
 async function fetchGranular(since, until) {
   const rows = await fetchCareersCacheRows({ since, until })
@@ -71,6 +71,7 @@ async function fetchGranular(since, until) {
     leads: Number(r.total_leads) || 0,
     interested: Number(r.total_interested) || 0,
     won: Number(r.won) || 0,
+    wonSnapshot: Number(r.won_snapshot) || 0,
   }))
 }
 
@@ -94,8 +95,8 @@ function groupRows(rows, dim) {
     const key = keyForDim(r, dim)
     const label = key
     let g = map.get(key)
-    if (!g) { g = { key, label, spend: 0, leads: 0, interested: 0, won: 0 }; map.set(key, g) }
-    g.spend += r.spend; g.leads += r.leads; g.interested += r.interested; g.won += r.won
+    if (!g) { g = { key, label, spend: 0, leads: 0, interested: 0, won: 0, wonSnapshot: 0 }; map.set(key, g) }
+    g.spend += r.spend; g.leads += r.leads; g.interested += r.interested; g.won += r.won; g.wonSnapshot += r.wonSnapshot
   })
   return Array.from(map.values()).map(g => ({
     ...g,
@@ -113,8 +114,9 @@ function sumTotals(rows) {
   const leads = rows.reduce((s, r) => s + r.leads, 0)
   const interested = rows.reduce((s, r) => s + r.interested, 0)
   const won = rows.reduce((s, r) => s + r.won, 0)
+  const wonSnapshot = rows.reduce((s, r) => s + r.wonSnapshot, 0)
   return {
-    spend, leads, interested, won,
+    spend, leads, interested, won, wonSnapshot,
     cpl: leads > 0 ? spend / leads : null,
     cpi: interested > 0 ? spend / interested : null,
     cps: won > 0 ? spend / won : null,
@@ -458,12 +460,12 @@ export default function LeverageCareersDashboard() {
 
   const exportRows = useMemo(() => tableRows.map(r => ({
     [EXPORT_KEY[tableDim]]: labelForDim(tableDim, r.label),
-    Spend: fmtINR(r.spend), Leads: fmtN(r.leads), Interested: fmtN(r.interested), Won: fmtN(r.won),
+    Spend: fmtINR(r.spend), Leads: fmtN(r.leads), Interested: fmtN(r.interested), 'Won (Funnel)': fmtN(r.won), 'Won (Snapshot)': fmtN(r.wonSnapshot),
     CPL: fmtINR(r.cpl), CPI: fmtINR(r.cpi), CPS: fmtINR(r.cps),
   })), [tableRows, tableDim])
   const exportRawRows = useMemo(() => tableRows.map(r => ({
     [EXPORT_KEY[tableDim]]: labelForDim(tableDim, r.label),
-    Spend: Math.round(r.spend), Leads: r.leads, Interested: r.interested, Won: r.won,
+    Spend: Math.round(r.spend), Leads: r.leads, Interested: r.interested, 'Won (Funnel)': r.won, 'Won (Snapshot)': r.wonSnapshot,
     CPL: r.cpl != null ? Math.round(r.cpl) : '', CPI: r.cpi != null ? Math.round(r.cpi) : '', CPS: r.cps != null ? Math.round(r.cps) : '',
   })), [tableRows, tableDim])
 
@@ -700,11 +702,12 @@ export default function LeverageCareersDashboard() {
                   Filtered view: {fmtN(rows.length)} of {fmtN((dayRows || []).length)} day-campaign rows.
                 </div>
               )}
-              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
                 <PremKPI label="SPEND" value={fmtINR(totals.spend)} sub={windowLabel} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label="LEADS" value={fmtN(totals.leads)} sub={campaignRows.length + ' campaigns'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
                 <PremKPI label="INTERESTED" value={fmtN(totals.interested)} sub={pct(totals.interested, totals.leads) + ' of leads'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
-                <PremKPI label="WON" value={fmtN(totals.won)} sub={pct(totals.won, totals.interested) + ' of interested'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+                <PremKPI label="WON (FUNNEL)" value={fmtN(totals.won)} sub={pct(totals.won, totals.interested) + ' of interested'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+                <PremKPI label="WON (SNAPSHOT)" value={fmtN(totals.wonSnapshot)} sub="snapshot view, not part of the funnel" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
               </div>
               <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
                 <PremKPI label="CPL" value={fmtINR(totals.cpl)} sub="spend / leads" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} invert />
@@ -889,7 +892,7 @@ export default function LeverageCareersDashboard() {
                       <tr>
                         {[
                           ['label', GROUP_LABEL[tableDim]],
-                          ['spend', 'Spend'], ['leads', 'Leads'], ['interested', 'Interested'], ['won', 'Won'],
+                          ['spend', 'Spend'], ['leads', 'Leads'], ['interested', 'Interested'], ['won', 'Won (Funnel)'], ['wonSnapshot', 'Won (Snapshot)'],
                           ['cpl', 'CPL'], ['cpi', 'CPI'], ['cps', 'CPS'],
                         ].map(([key, label]) => (
                           <th key={key} onClick={() => toggleSort(key)} style={{ cursor: 'pointer', userSelect: 'none' }}>
@@ -901,15 +904,15 @@ export default function LeverageCareersDashboard() {
                     <tbody>
                       <tr style={{ fontWeight: 800 }}>
                         <td>TOTAL</td>
-                        <td>{fmtINR(tableTotals.spend)}</td><td>{fmtN(tableTotals.leads)}</td><td>{fmtN(tableTotals.interested)}</td><td>{fmtN(tableTotals.won)}</td>
+                        <td>{fmtINR(tableTotals.spend)}</td><td>{fmtN(tableTotals.leads)}</td><td>{fmtN(tableTotals.interested)}</td><td>{fmtN(tableTotals.won)}</td><td>{fmtN(tableTotals.wonSnapshot)}</td>
                         <td>{fmtINR(tableTotals.cpl)}</td><td>{fmtINR(tableTotals.cpi)}</td><td>{fmtINR(tableTotals.cps)}</td>
                       </tr>
                       {tableRows.length === 0 ? (
-                        <tr><td colSpan={8} className={styles.empty}>No data in this window.</td></tr>
+                        <tr><td colSpan={9} className={styles.empty}>No data in this window.</td></tr>
                       ) : tableRows.map(r => (
                         <tr key={r.key}>
                           <td>{labelForDim(tableDim, r.label)}</td>
-                          <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td>
+                          <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td><td>{fmtN(r.wonSnapshot)}</td>
                           <td>{fmtINR(r.cpl)}</td><td>{fmtINR(r.cpi)}</td><td>{fmtINR(r.cps)}</td>
                         </tr>
                       ))}

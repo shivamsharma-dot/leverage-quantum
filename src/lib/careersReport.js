@@ -27,18 +27,19 @@ function buildCareers(ctx) {
     fld('Spend', fmtINR(t.spend)),
     fld('Leads', fmtN(t.leads)),
     fld('Interested', fmtN(t.interested)),
-    fld('Won', fmtN(t.won)),
+    fld('Won (Funnel)', fmtN(t.won)),
+    fld('Won (Snapshot)', fmtN(t.wonSnapshot)),
     fld('CPL', fmtINR(t.cpl)),
     fld('CPI', fmtINR(t.cpi)),
     fld('CPS', fmtINR(t.cps)),
   ]
 
   const rows = (c.tableRows || []).slice(0, 24).map(r => [
-    r.label, fmtINR(r.spend), fmtN(r.leads), fmtN(r.interested), fmtN(r.won), fmtINR(r.cpl), fmtINR(r.cps),
+    r.label, fmtINR(r.spend), fmtN(r.leads), fmtN(r.interested), fmtN(r.won), fmtN(r.wonSnapshot), fmtINR(r.cpl), fmtINR(r.cps),
   ])
-  const totalRow = ['TOTAL', fmtINR(t.spend), fmtN(t.leads), fmtN(t.interested), fmtN(t.won), fmtINR(t.cpl), fmtINR(t.cps)]
+  const totalRow = ['TOTAL', fmtINR(t.spend), fmtN(t.leads), fmtN(t.interested), fmtN(t.won), fmtN(t.wonSnapshot), fmtINR(t.cpl), fmtINR(t.cps)]
   const table = {
-    columns: [dimLabel, 'Spend', 'Leads', 'Interested', 'Won', 'CPL', 'CPS'],
+    columns: [dimLabel, 'Spend', 'Leads', 'Interested', 'Won (Funnel)', 'Won (Snapshot)', 'CPL', 'CPS'],
     rows: [totalRow, ...rows],
     strongRows: [0],
     wrapFirst: dim === 'campaign',
@@ -65,7 +66,7 @@ export const CAREERS_REPORT_VERSIONS = [{
   name: 'Leverage Careers',
   tagline: 'KPI fields and the on-screen table for whichever grouping is active.',
   what: [
-    'Spend, Leads, Interested, Won, and the cost-per metrics (CPL, CPI, CPS)',
+    'Spend, Leads, Interested, Won (Funnel), Won (Snapshot), and the cost-per metrics (CPL, CPI, CPS)',
     'The same Campaign/Source/Sub Source/Month/Day table currently on screen, TOTAL row first, up to 24 rows as a native Slack table',
     'The table image and a full CSV land in the thread',
   ],
