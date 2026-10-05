@@ -170,6 +170,41 @@ export async function fetchOverallBqRows({ since, until, sources, signal }) {
   return fetchRowsWithFallback('overall_bq_rows', 'overall_bq_daily', BQ_COLUMNS, { since, until, sources, signal })
 }
 
+// Only the rows of campaigns whose name contains one of `patterns` (the Settings >
+// Cost-metric exclusions list), for [since, until]. Added 2026-10-05 for the Slack MTD
+// Scorecard, which reads the campaign-less agg table and so cannot tell which part of a
+// bucket's spend/leads belongs to an excluded campaign. This is a small result (a few
+// hundred rows at most), so it reads Supabase directly instead of pulling the whole
+// month just to subtract a sliver. ilike is a deliberate SUPERSET of the real match
+// ('_' is a single-character wildcard there) -- the caller re-applies the exact
+// substring test, so a stray extra row can never be wrongly excluded.
+export async function fetchOverallBqCampaignRows({ since, until, patterns, signal }) {
+  if (!since || !until) throw new Error('fetchOverallBqCampaignRows needs both since and until')
+  const pats = (patterns || []).map(x => String(x || '').trim()).filter(Boolean)
+  if (!pats.length) return []
+  const select = BQ_COLUMNS.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
+  const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+  const orClause = '(' + pats.map(x => 'campaign_name.ilike."*' + x.replace(/["*]/g, '') + '*"').join(',') + ')'
+  const rows = []
+  let cur = null
+  for (let guard = 0; guard < 200; guard++) {
+    const p = new URLSearchParams({ select: select + ',row_key', order: 'row_key.asc', limit: String(PAGE) })
+    p.set('lead_date_iso', 'gte.' + since)
+    p.append('lead_date_iso', 'lte.' + until)
+    p.set('or', orClause)
+    if (cur != null) p.set('row_key', 'gt.' + cur)
+    const r = await fetch(SB_URL + '/rest/v1/overall_bq_daily?' + p.toString(), signal ? { headers, signal } : { headers })
+    if (!r.ok) throw new Error('overall_bq_daily campaign read failed (' + r.status + ')')
+    const page = await r.json()
+    if (!Array.isArray(page)) throw new Error('overall_bq_daily returned a non-array response')
+    if (!page.length) break
+    for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+    if (page.length < PAGE) break
+    cur = page[page.length - 1].row_key
+  }
+  return rows
+}
+
 // The Overall (BigQuery) page's own DEFAULT-view snapshot (2026-09-19) -- see
 // the sync workflow's own comment for the full story (stored under
 // app_preferences, key 'overall_bq_prewarm_default' -- not a dedicated table,

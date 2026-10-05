@@ -31,7 +31,7 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 // Data source: BigQuery -- see src/lib/overallBqCache.js for the why. Which
 // source this page instance reads is now fixed by the `dataSource` prop (two
 // separate routes/pages -- see App.jsx), not a per-device Settings toggle.
-import {
+import { fetchOverallBqCampaignRows,
   fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt, fetchOverallBqPrewarm,
 } from '../lib/overallBqCache'
 // Just the MTD application count for the "MTD Scorecard" Slack report (2026-09-10) --
@@ -3631,7 +3631,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
       fetch(`/api/crm-leads?source=bigquery&mode=ql_split_totals&since=${monthStart}&until=${until}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([raw, appsCount, qlSplitRaw, prefsResp, qlSplitSheet]) => {
+    ]).then(async ([raw, appsCount, qlSplitRaw, prefsResp, qlSplitSheet]) => {
+      if (dead) return
+      // Settings > Cost-metric exclusions, applied to this report's CPL/CPQL the same way the
+      // dashboard does (2026-10-05). The agg table above has no campaign_name, so the rows of
+      // the excluded campaigns are fetched separately (small) and subtracted per bucket below.
+      const exclPatterns = Array.isArray(prefsResp.prefs && prefsResp.prefs.cost_excluded_campaign_patterns) ? prefsResp.prefs.cost_excluded_campaign_patterns : []
+      let exclRows = []
+      let exclusionsApplied = true
+      if (exclPatterns.length) {
+        try {
+          exclRows = (await fetchOverallBqCampaignRows({ since: monthStart, until, patterns: exclPatterns.map(x => x.pattern) })).map(mapRow)
+        } catch (_) { exclusionsApplied = false }
+      }
       if (dead) return
       // Real bug found live (2026-09-10): this report's Spend was short by exactly
       // Affiliate's manual monthly entry (affiliate_spend_manual) -- Affiliate's real
@@ -3662,6 +3674,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         { label: 'Referral', test: r => r.source === 'Referral' },
       ].map(b => bucket(b.label, b.test))
       const [overallRow, paidRow, organicRow, referralRow] = buckets
+      const bucketTests = [() => true, r => isPaidSource(r.source), r => !isPaidSource(r.source) && r.source !== 'Referral', r => r.source === 'Referral']
 
       // SR/AC QL split -- Overall's own data has no vertical dimension on QL (only
       // Applications carry one), so the SR:AC RATIO comes from Monthly QLs' own,
@@ -3723,6 +3736,24 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         overallRow.totalQL = qlSplitSheet.totalQL
         overallRow.srQl = qlSplitSheet.srQl
         overallRow.acQl = qlSplitSheet.acQl
+      }
+
+      // Per-bucket CPL / CPQL inputs with the exclusions taken out, using the same per-metric
+      // tests as the dashboard (src/lib/costExclusions.js): an excluded campaign's spend AND
+      // its leads / QLs both leave the ratio. Done AFTER the Overall Total QL override above
+      // so CPQL divides by the number the report actually shows. Left unset if the exclusion
+      // fetch failed, in which case the report falls back to the raw spend / leads.
+      if (exclusionsApplied) {
+        const exRows = exclRows.filter(r => isCostExcludedCampaign(r.campaign, exclPatterns))
+        buckets.forEach((b, i) => {
+          const sub = exRows.filter(bucketTests[i])
+          const cplOut = sub.filter(r => isCplCostExcludedCampaign(r.campaign, exclPatterns))
+          const sum = (arr, k) => arr.reduce((t, r) => t + (r[k] || 0), 0)
+          b.cplSpend = b.spend - sum(cplOut, 'spend')
+          b.cplLeads = b.leads - sum(cplOut, 'leads')
+          b.cpqlSpend = b.spend - sum(sub, 'spend')
+          b.cpqlQL = b.totalQL - sum(sub, 'totalQL')
+        })
       }
 
       // acSales/qlSalePct are deliberately NOT set here -- they're derived reactively

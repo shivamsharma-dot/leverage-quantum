@@ -97,8 +97,14 @@ function scoreTable(rows, fmtINR, fmtN) {
   // row for it is gone, not any underlying figure.
   rows.filter(r => r.label !== 'Referral').forEach(r => {
     const blankCost = r.label === 'Organic'
-    const cpl = !blankCost && r.leads > 0 ? r.spend / r.leads : null
-    const cpql = !blankCost && r.totalQL > 0 ? r.spend / r.totalQL : null
+    // cplSpend/cplLeads/cpqlSpend/cpqlQL carry the Settings > Cost-metric exclusions (same rule
+    // as the Overall dashboard, 2026-10-05); absent when that lookup failed -> raw figures.
+    const cplSpend = r.cplSpend != null ? r.cplSpend : r.spend
+    const cplLeads = r.cplLeads != null ? r.cplLeads : r.leads
+    const cpqlSpend = r.cpqlSpend != null ? r.cpqlSpend : r.spend
+    const cpqlQL = r.cpqlQL != null ? r.cpqlQL : r.totalQL
+    const cpl = !blankCost && cplLeads > 0 ? cplSpend / cplLeads : null
+    const cpql = !blankCost && cpqlQL > 0 ? cpqlSpend / cpqlQL : null
     const futworkQueued = r.futworkHumanQ + r.futworkAiQ
     const leadToQl = futworkQueued > 0 ? ((r.humanQL + r.futworkAiQl) / futworkQueued) * 100 : null
     if (r.label === 'Overall') t.strongRows.push(t.rows.length)
