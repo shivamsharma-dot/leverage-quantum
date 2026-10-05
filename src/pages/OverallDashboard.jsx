@@ -3607,11 +3607,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // with no need to click Refresh or reload the page.
   const [mtdScorecard, setMtdScorecard] = useState(null)
   useEffect(() => { setMtdScorecard(null) }, [bqNonce])
+  // A scorecard built WITHOUT the cost-metric exclusions (their lookup failed) is not cached for
+  // the day: it is retried once per panel opening. This ref stops that retry from looping.
+  const degradedRetryUsed = useRef(false)
+  useEffect(() => { if (!slackPanelOpen) degradedRetryUsed.current = false }, [slackPanelOpen])
   useEffect(() => {
     if (!slackPanelOpen) return
     const now = new Date()
     const todayKey = dayKey(now)
-    if (mtdScorecard && mtdScorecard.computedForDay === todayKey) return
+    if (mtdScorecard && mtdScorecard.computedForDay === todayKey) {
+      if (!(mtdScorecard.degraded && !degradedRetryUsed.current)) return
+      degradedRetryUsed.current = true
+    }
     let dead = false
     const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
     const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
@@ -3629,20 +3636,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
       fetchAppsCountSince(monthStart, until).catch(() => null),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
-      fetch('/api/preferences', { credentials: 'include' }).then(r => r.ok ? r.json() : { prefs: {} }).catch(() => ({ prefs: {} })),
+      // Retried, and null (not an empty prefs object) on final failure so a failed lookup can be told
+      // apart from "no exclusions configured" -- it also carries affiliate_spend_manual below.
+      retryFetch(() => fetch('/api/preferences', { credentials: 'include' }).then(r => { if (!r.ok) throw new Error('preferences ' + r.status); return r.json() })).catch(() => null),
       fetch(`/api/crm-leads?source=bigquery&mode=ql_split_totals&since=${monthStart}&until=${until}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(async ([raw, appsCount, qlSplitRaw, prefsResp, qlSplitSheet]) => {
       if (dead) return
       // Settings > Cost-metric exclusions, applied to this report's CPL/CPQL the same way the
       // dashboard does (2026-10-05). The agg table above has no campaign_name, so the rows of
       // the excluded campaigns are fetched separately (small) and subtracted per bucket below.
-      const exclPatterns = Array.isArray(prefsResp.prefs && prefsResp.prefs.cost_excluded_campaign_patterns) ? prefsResp.prefs.cost_excluded_campaign_patterns : []
+      const prefsOk = !!(prefsResp && prefsResp.prefs)
+      const exclPatterns = prefsOk && Array.isArray(prefsResp.prefs.cost_excluded_campaign_patterns) ? prefsResp.prefs.cost_excluded_campaign_patterns : []
       let exclRows = []
-      let exclusionsApplied = true
-      if (exclPatterns.length) {
+      let exclusionsApplied = prefsOk
+      if (prefsOk && exclPatterns.length) {
         try {
-          exclRows = (await fetchOverallBqCampaignRows({ since: monthStart, until, patterns: exclPatterns.map(x => x.pattern) })).map(mapRow)
-        } catch (_) { exclusionsApplied = false }
+          exclRows = (await retryFetch(() => fetchOverallBqCampaignRows({ since: monthStart, until, patterns: exclPatterns.map(x => x.pattern) }))).map(mapRow)
+        } catch (e) { exclusionsApplied = false; console.warn('MTD Scorecard: could not load the excluded campaigns', e) }
       }
       if (dead) return
       // Real bug found live (2026-09-10): this report's Spend was short by exactly
@@ -3653,7 +3663,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // evenly-spread-per-day Affiliate rows client-side (buildSyntheticAffiliateRows)
       // -- this report just never did the same merge. Fixed by doing exactly that,
       // filtered to this report's own date window.
-      const affiliateManualMap = (prefsResp.prefs && prefsResp.prefs.affiliate_spend_manual) || null
+      const affiliateManualMap = (prefsOk && prefsResp.prefs.affiliate_spend_manual) || null
       const syntheticAffiliate = buildSyntheticAffiliateRows(affiliateManualMap)
         .filter(r => r.date >= monthStartDate && r.date <= yesterdayDate)
       const rows = raw.map(mapRow).concat(syntheticAffiliate)
@@ -3788,6 +3798,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
         qlSplitAvailable: Array.isArray(qlSplitRaw),
         qlSource,
+        exclusionsApplied, degraded: !exclusionsApplied,
         computedForDay: todayKey,
       })
     }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message, computedForDay: todayKey }) })

@@ -157,6 +157,9 @@ export function buildV8(ctx) {
   const msgs = []
   const table1 = scoreTable(s.rows, fmtINR, fmtN)
   const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
+  // CPL / CPQL need the Settings cost-metric exclusions; if they could not be loaded the table above shows
+  // the plain spend / leads figures and says so (the panel retries once each time it is opened).
+  const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions — they could not be loaded just now; reopen the panel._' : null
   // The QL Split sheet is the source for the Overall row's Total QL / SR / AC; when it is not filled
   // through yesterday yet the BigQuery count is used instead and the reader is told (2026-10-05).
   const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts — the QL Split sheet is not filled through ' + s.throughLabel + ' yet._' : null
@@ -164,6 +167,7 @@ export function buildV8(ctx) {
     testLine(ctx),
     '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
     dateLine,
+    exclNote,
   ]
   msgs.push({
     key: 'scorecard', label: 'Marketing Efficiency',
