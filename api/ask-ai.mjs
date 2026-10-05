@@ -406,6 +406,20 @@ async function fetchOverallCampaignTotals({ since, until }) {
   return { byCampaign }
 }
 
+// The Overall dashboard's admin-configured cost-metric exclusions
+// (Settings > Data > Cost-metric exclusions, app_preferences key
+// 'cost_excluded_campaign_patterns'). Empty list on any failure -> raw figures, as before.
+async function loadCostExclusionPatterns() {
+  if (!SB_URL || !SB_KEY) return []
+  try {
+    const pr = await fetch(`${SB_URL}/rest/v1/app_preferences?key=eq.cost_excluded_campaign_patterns&select=value`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(5000),
+    })
+    if (pr.ok) { const j = await pr.json(); if (Array.isArray(j[0] && j[0].value)) return j[0].value }
+  } catch (_) { /* fall through */ }
+  return []
+}
+
 // A direct "what was X for period Y" answer -- account-wide, or split by
 // Source -- as opposed to analyzeCampaignContribution above, which is only
 // for a "why did it change between two periods" campaign-level ranking.
@@ -448,13 +462,7 @@ async function fetchOverallTotals({ since, until, group_by, campaign_contains })
     // denominator counts leads / QLs / apps from PAID SOURCES ONLY (a source counts as paid
     // when it had spend in the rows being asked about) minus the same excluded campaigns.
     // Spend / leads / QLs / apps in each row stay the plain, unexcluded totals.
-    let patterns = []
-    try {
-      const pr = await fetch(`${SB_URL}/rest/v1/app_preferences?key=eq.cost_excluded_campaign_patterns&select=value`, {
-        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(5000),
-      })
-      if (pr.ok) { const j = await pr.json(); if (Array.isArray(j[0] && j[0].value)) patterns = j[0].value }
-    } catch (_) { /* no patterns -> raw figures, same as before */ }
+    const patterns = await loadCostExclusionPatterns()
     const paidSrc = new Set()
     for (const row of rows) if ((Number(row.spend) || 0) > 0) paidSrc.add(row.source)
     const buckets = {}
@@ -508,14 +516,19 @@ async function analyzeCampaignContribution({ current_since, current_until, previ
     fetchOverallCampaignTotals({ since: previous_since, until: previous_until }),
   ])
   if (cur.error || prev.error) return { error: cur.error || prev.error }
+  const exclPatterns = await loadCostExclusionPatterns()
   const names = new Set([...Object.keys(cur.byCampaign), ...Object.keys(prev.byCampaign)])
   const empty = { leads: 0, queued: 0, totalQL: 0, spend: 0 }
   let rows = [...names].map(name => {
     const c = cur.byCampaign[name] || empty, p = prev.byCampaign[name] || empty
     const ch = cur.byCampaign[name]?.channel || prev.byCampaign[name]?.channel || 'Other'
     const qlRate = c.leads > 0 ? Math.round((c.totalQL / c.leads) * 1000) / 10 : null
-    const cpql = c.totalQL > 0 ? Math.round(c.spend / c.totalQL) : null
-    return { campaign: name, channel: ch, currentQL: c.totalQL, previousQL: p.totalQL, deltaQL: c.totalQL - p.totalQL, currentSpend: Math.round(c.spend), qlRate, cpql }
+    // A campaign matching ANY cost-metric exclusion pattern is not judged on cost per QL
+    // (same rule as the Overall dashboard's CPQL, src/lib/costExclusions.js): no CPQL, no
+    // QL-rate verdict, and it stays out of its channel's medians so it cannot drag them.
+    const costExcluded = isCostExcludedCampaign(name, exclPatterns)
+    const cpql = !costExcluded && c.totalQL > 0 ? Math.round(c.spend / c.totalQL) : null
+    return { campaign: name, channel: ch, currentQL: c.totalQL, previousQL: p.totalQL, deltaQL: c.totalQL - p.totalQL, currentSpend: Math.round(c.spend), qlRate: costExcluded ? null : qlRate, cpql, costExcluded }
   })
   if (channel && channel !== 'All') rows = rows.filter(r => r.channel === channel)
   const totalAbsDelta = rows.reduce((s, r) => s + Math.abs(r.deltaQL), 0) || 1
@@ -538,6 +551,12 @@ async function analyzeCampaignContribution({ current_since, current_until, previ
   rows.forEach(r => {
     const { medianQlRate, medianCpql } = channelStats[r.channel]
     r.shareOfChangePct = Math.round((r.deltaQL / totalAbsDelta) * 1000) / 10
+    if (r.costExcluded) {
+      // Volume (currentQL / deltaQL / share) is still reported; only the cost verdict is withheld.
+      r.action = 'Excluded'
+      r.evidence = 'Left out of cost-per-QL judgement (Settings > Cost-metric exclusions) -- its spend and QL rate are not compared with the channel median.'
+      return
+    }
     const aboveMedianQlRate = r.qlRate != null && medianQlRate != null && r.qlRate >= medianQlRate
     const atOrBelowMedianCpql = r.cpql == null || medianCpql == null || r.cpql <= medianCpql
     const aboveMedianQuality = aboveMedianQlRate && atOrBelowMedianCpql
@@ -560,6 +579,7 @@ async function analyzeCampaignContribution({ current_since, current_until, previ
     previous_period: { since: previous_since, until: previous_until },
     channel: channel || 'All',
     channel_medians: channelStats,
+    cost_exclusions: exclPatterns.map(p => ({ pattern: p.pattern, note: p.note || null })),
     total_current_QL: rows.reduce((s, r) => s + r.currentQL, 0),
     total_previous_QL: rows.reduce((s, r) => s + r.previousQL, 0),
     contributors: limited,

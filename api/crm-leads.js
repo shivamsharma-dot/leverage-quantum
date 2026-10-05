@@ -3827,17 +3827,25 @@ function gazIsPaid(source) { return GAZ_PAID_SOURCES.includes((source || '').tri
 // Whole-account KPIs, paid-only for CPL/CPQL (matching the real edition's own
 // footnote: "CPQL and CPL divide spend by paid-source leads and QLs only" --
 // Total QL itself still includes free/earned channels).
-function gazAccountTotals(rows) {
-  const paid = rows.filter(r => gazIsPaid(r.source))
+function gazAccountTotals(rows, ex) {
+  // CPL / CPQL follow the Overall dashboard exactly (2026-10-05): the numerator is spend
+  // minus campaigns excluded for that metric (Settings > Cost-metric exclusions, per-pattern
+  // scope), the denominator is leads / QLs from PAID SOURCES ONLY -- sources that had spend
+  // in these rows -- minus the same excluded campaigns. This replaces the old fixed
+  // Facebook / Google / Affiliate / Remarketing list and the all-source numerator.
+  const spendSources = new Set(rows.filter(r => (Number(r.spend) || 0) > 0).map(r => r.source))
+  const paid = rows.filter(r => spendSources.has(r.source))
   const spend = gazSum(rows, 'spend')
   const totalQL = gazSum(rows, 'total_ql')
-  const paidLeads = gazSum(paid, 'leads')
-  const paidQL = gazSum(paid, 'total_ql')
+  const paidLeads = gazSum(paid.filter(r => !ex.cpl(r.campaign)), 'leads')
+  const paidQL = gazSum(paid.filter(r => !ex.cpql(r.campaign)), 'total_ql')
+  const cplSpend = gazSum(rows.filter(r => !ex.cpl(r.campaign)), 'spend')
+  const cpqlSpend = gazSum(rows.filter(r => !ex.cpql(r.campaign)), 'spend')
   const apps = gazSum(rows, 'apps'), offers = gazSum(rows, 'offers'), deposits = gazSum(rows, 'deposits')
   return {
     spend, totalQL, paidLeads, paidQL, apps, offers, deposits,
-    cpql: paidQL > 0 ? Math.round(spend / paidQL) : null,
-    cpl: paidLeads > 0 ? Math.round(spend / paidLeads) : null,
+    cpql: paidQL > 0 && cpqlSpend > 0 ? Math.round(cpqlSpend / paidQL) : null,
+    cpl: paidLeads > 0 && cplSpend > 0 ? Math.round(cplSpend / paidLeads) : null,
     estSrRevenue: Math.round(apps * GAZ_SR_APP_RATE * GAZ_SR_FEE),
     freeQL: totalQL - paidQL,
   }
@@ -3881,28 +3889,33 @@ function gazDaySeries(rows) {
 // "Facebook/Google/Affiliate/Remarketing" + "Organic/Referral/Others/Bing"
 // vocabulary -- deliberately NOT mapChannel()'s coarser Meta Ads/Google Ads
 // labels, since the Gazette names the literal sheet source).
-function gazChannelTable(nowRows, prevRows) {
+function gazChannelTable(nowRows, prevRows, ex) {
+  // spend / totalQL stay the real volume totals; cqSpend / cqQL are the CPQL basis -- the same
+  // rows minus campaigns excluded from CPQL (Settings > Cost-metric exclusions), so a channel's
+  // CPQL matches the dashboard's source row without understating its spend or QLs.
   const bySource = (rows) => {
     const m = {}
     rows.forEach(r => {
       const s = (r.source || 'Other').trim() || 'Other'
-      const e = m[s] || (m[s] = { source: s, spend: 0, totalQL: 0 })
-      e.spend += Number(r.spend) || 0
-      e.totalQL += Number(r.total_ql) || 0
+      const e = m[s] || (m[s] = { source: s, spend: 0, totalQL: 0, cqSpend: 0, cqQL: 0 })
+      const sp = Number(r.spend) || 0, ql = Number(r.total_ql) || 0
+      e.spend += sp
+      e.totalQL += ql
+      if (!ex.cpql(r.campaign)) { e.cqSpend += sp; e.cqQL += ql }
     })
     return m
   }
   const now = bySource(nowRows), prev = bySource(prevRows)
   const allSources = new Set([...Object.keys(now), ...Object.keys(prev)])
   const rows = Array.from(allSources).map(s => {
-    const n = now[s] || { spend: 0, totalQL: 0 }
-    const p = prev[s] || { spend: 0, totalQL: 0 }
+    const n = now[s] || { spend: 0, totalQL: 0, cqSpend: 0, cqQL: 0 }
+    const p = prev[s] || { spend: 0, totalQL: 0, cqSpend: 0, cqQL: 0 }
     return {
       source: s, spend: n.spend, totalQL: n.totalQL,
-      cpql: n.totalQL > 0 ? Math.round(n.spend / n.totalQL) : null,
+      cpql: n.cqQL > 0 && n.cqSpend > 0 ? Math.round(n.cqSpend / n.cqQL) : null,
       spendChange: pctChangeSafe(n.spend, p.spend),
       qlChange: pctChangeSafe(n.totalQL, p.totalQL),
-      cpqlChange: pctChangeSafe(n.totalQL > 0 ? n.spend / n.totalQL : null, p.totalQL > 0 ? p.spend / p.totalQL : null),
+      cpqlChange: pctChangeSafe(n.cqQL > 0 && n.cqSpend > 0 ? n.cqSpend / n.cqQL : null, p.cqQL > 0 && p.cqSpend > 0 ? p.cqSpend / p.cqQL : null),
     }
   })
   const paidRows = rows.filter(r => gazIsPaid(r.source)).sort((a, b) => b.spend - a.spend)
@@ -3921,27 +3934,31 @@ function pctChangeSafe(now, was) {
 // that file directly (it's a plain .js with no "type":"module" scoping, so a
 // dynamic import from this CommonJS-bundled handler would try to parse its
 // `export` syntax as CommonJS and fail).
-async function gazCorridorTable(nowRows, prevRows) {
+async function gazCorridorTable(nowRows, prevRows, ex) {
   const { corridorLabelForName } = await import('../shared/corridors.mjs')
   const byCorridor = (rows) => {
     const m = {}
+    // Dashboard corridor rows divide by PAID-source QLs only (sources that had spend).
+    const spendSources = new Set(rows.filter(r => (Number(r.spend) || 0) > 0).map(r => r.source))
     rows.forEach(r => {
       const c = corridorLabelForName(r.campaign) || 'Unclassified'
-      const e = m[c] || (m[c] = { corridor: c, spend: 0, totalQL: 0 })
-      e.spend += Number(r.spend) || 0
-      e.totalQL += Number(r.total_ql) || 0
+      const e = m[c] || (m[c] = { corridor: c, spend: 0, totalQL: 0, cqSpend: 0, cqQL: 0 })
+      const sp = Number(r.spend) || 0, ql = Number(r.total_ql) || 0
+      e.spend += sp
+      e.totalQL += ql
+      if (!ex.cpql(r.campaign)) { e.cqSpend += sp; if (spendSources.has(r.source)) e.cqQL += ql } // CPQL basis only; volume stays raw
     })
     return m
   }
   const now = byCorridor(nowRows), prev = byCorridor(prevRows)
   const all = new Set([...Object.keys(now), ...Object.keys(prev)])
   return Array.from(all).map(c => {
-    const n = now[c] || { spend: 0, totalQL: 0 }
-    const p = prev[c] || { spend: 0, totalQL: 0 }
+    const n = now[c] || { spend: 0, totalQL: 0, cqSpend: 0, cqQL: 0 }
+    const p = prev[c] || { spend: 0, totalQL: 0, cqSpend: 0, cqQL: 0 }
     return {
       corridor: c, spend: n.spend, totalQL: n.totalQL,
-      cpql: n.totalQL > 0 ? Math.round(n.spend / n.totalQL) : null,
-      cpqlChange: pctChangeSafe(n.totalQL > 0 ? n.spend / n.totalQL : null, p.totalQL > 0 ? p.spend / p.totalQL : null),
+      cpql: n.cqQL > 0 && n.cqSpend > 0 ? Math.round(n.cqSpend / n.cqQL) : null,
+      cpqlChange: pctChangeSafe(n.cqQL > 0 && n.cqSpend > 0 ? n.cqSpend / n.cqQL : null, p.cqQL > 0 && p.cqSpend > 0 ? p.cqSpend / p.cqQL : null),
     }
   }).sort((a, b) => b.spend - a.spend)
 }
@@ -3951,7 +3968,7 @@ async function gazCorridorTable(nowRows, prevRows) {
 // CORRIDORS mirrors the real edition's own carve-out (IVY100/MBBS leads are
 // never sent for qualification, so a CPQL for them measures the wrong thing).
 const GAZ_NON_QUALIFIED_CORRIDORS = new Set(['MBBS (India source)', 'IVY100'])
-async function gazCampaignLedger(nowRows) {
+async function gazCampaignLedger(nowRows, ex) {
   const { corridorLabelForName } = await import('../shared/corridors.mjs')
   const byCampaign = {}
   nowRows.forEach(r => {
@@ -3962,9 +3979,13 @@ async function gazCampaignLedger(nowRows) {
     e.totalQL += Number(r.total_ql) || 0
   })
   const all = Object.values(byCampaign)
-  const excluded = all.filter(c => GAZ_NON_QUALIFIED_CORRIDORS.has(c.corridor))
+  // Left out of the ranking: the hard-coded never-qualified corridors above PLUS any campaign
+  // matching the admin's cost-metric exclusion patterns (Settings), so the Gazette agrees
+  // with the dashboard about which campaigns CPQL is not meant to judge.
+  const isOut = c => GAZ_NON_QUALIFIED_CORRIDORS.has(c.corridor) || ex.cpql(c.campaign)
+  const excluded = all.filter(isOut)
   const ranked = all
-    .filter(c => c.totalQL >= 25 && c.spend > 0 && !GAZ_NON_QUALIFIED_CORRIDORS.has(c.corridor))
+    .filter(c => c.totalQL >= 25 && c.spend > 0 && !isOut(c))
     .map(c => ({ ...c, cpql: Math.round(c.spend / c.totalQL) }))
     .sort((a, b) => a.cpql - b.cpql)
   return {
@@ -3980,13 +4001,26 @@ export async function fetchMarketingGazetteData({ since, until, prevSince, prevU
     fetchOverallFunnelRowsRange(since, until),
     fetchOverallFunnelRowsRange(prevSince, prevUntil),
   ])
-  const [corridors, ledger] = await Promise.all([gazCorridorTable(nowRows, prevRows), gazCampaignLedger(nowRows)])
+  // Cost-metric exclusions (same rule + same shared module as the Overall dashboard).
+  const { isCostExcludedCampaign, isCplCostExcludedCampaign } = await import('../shared/costExclusions.mjs')
+  let exclPatterns = []
+  try {
+    const { supabaseAdmin } = await import('../lib/auth.mjs')
+    const pr = await supabaseAdmin('app_preferences?key=eq.cost_excluded_campaign_patterns&select=value')
+    if (pr.ok) { const j = await pr.json(); if (Array.isArray(j[0] && j[0].value)) exclPatterns = j[0].value }
+  } catch (_) { /* no patterns -> raw figures */ }
+  const ex = {
+    cpql: c => isCostExcludedCampaign(c, exclPatterns),
+    cpl: c => isCplCostExcludedCampaign(c, exclPatterns),
+    patterns: exclPatterns,
+  }
+  const [corridors, ledger] = await Promise.all([gazCorridorTable(nowRows, prevRows, ex), gazCampaignLedger(nowRows, ex)])
   return {
     since, until, prevSince, prevUntil,
-    totals: { now: gazAccountTotals(nowRows), prev: gazAccountTotals(prevRows) },
+    totals: { now: gazAccountTotals(nowRows, ex), prev: gazAccountTotals(prevRows, ex) },
     stages: gazFunnelStages(nowRows, prevRows),
     daySeries: gazDaySeries(nowRows),
-    channels: gazChannelTable(nowRows, prevRows),
+    channels: gazChannelTable(nowRows, prevRows, ex),
     corridors,
     ledger,
   }

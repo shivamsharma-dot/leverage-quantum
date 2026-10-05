@@ -71,6 +71,7 @@ const STATUS_STYLE = {
   Protect: { bg: C.blueBg, fg: C.blue },
   Reduce: { bg: C.navyBg, fg: C.navy },
   Investigate: { bg: '#F1F5F9', fg: C.sub },
+  Excluded: { bg: '#F1F5F9', fg: C.muted || C.sub },
 }
 function ActionPill({ action }) {
   const s = STATUS_STYLE[action] || STATUS_STYLE.Investigate
@@ -338,7 +339,7 @@ export default function MarketingPerformanceReport() {
                   <ul style={{ margin: 0, paddingLeft: 16 }}>
                     <li>Reporting day uses the latest complete day (D-1) vs. the previous complete day (D-2).</li>
                     <li>QL rate = Total QL / Leads for the period. CPQL = Spend / Total QL. Never averaged from daily rates.</li>
-                    <li>Contributor Action (Scale/Protect/Reduce/Investigate) compares each campaign's QL rate and CPQL against the median of its OWN channel, not a global median.</li>
+                    <li>Contributor Action (Scale/Protect/Reduce/Investigate) compares each campaign's QL rate and CPQL against the median of its OWN channel, not a global median. Campaigns listed in Settings &gt; Cost-metric exclusions show <b>Excluded</b> instead: they are not judged on cost per QL and stay out of the medians.</li>
                   </ul>
                   <div style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.muted, margin: '10px 0 6px' }}>Data coverage</div>
                   <ul style={{ margin: 0, paddingLeft: 16 }}>
