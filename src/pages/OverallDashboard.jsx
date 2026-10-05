@@ -3738,21 +3738,31 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         overallRow.acQl = qlSplitSheet.acQl
       }
 
-      // Per-bucket CPL / CPQL inputs with the exclusions taken out, using the same per-metric
-      // tests as the dashboard (src/lib/costExclusions.js): an excluded campaign's spend AND
-      // its leads / QLs both leave the ratio. Done AFTER the Overall Total QL override above
-      // so CPQL divides by the number the report actually shows. Left unset if the exclusion
-      // fetch failed, in which case the report falls back to the raw spend / leads.
+      // Per-bucket CPL / CPQL inputs, computed EXACTLY like the dashboard (summaryValue):
+      //  - numerator = the bucket's spend minus the spend of campaigns excluded for that
+      //    metric (src/lib/costExclusions.js: CPL leaves out scope-'all' patterns only,
+      //    CPQL leaves out every pattern);
+      //  - denominator = leads / QLs from PAID SOURCES ONLY -- a source counts as paid when
+      //    it had spend in this window -- minus the same excluded campaigns' leads / QLs.
+      //    Free channels (and a source with no spend yet this month, e.g. Affiliate before
+      //    its manual entry is saved) therefore never inflate the denominator.
+      // CPQL's denominator is the BigQuery QL count, not the Overall row's sheet-sourced
+      // Total QL shown in the table, because that is what the dashboard divides by.
+      // Left unset if the exclusion fetch failed -> the report falls back to raw figures.
       if (exclusionsApplied) {
+        const spendSources = new Set(rows.filter(r => r.spend > 0).map(r => r.source))
+        const sum = (arr, k) => arr.reduce((t, r) => t + (r[k] || 0), 0)
         const exRows = exclRows.filter(r => isCostExcludedCampaign(r.campaign, exclPatterns))
         buckets.forEach((b, i) => {
+          const inBucket = rows.filter(bucketTests[i])
+          const paidIn = inBucket.filter(r => spendSources.has(r.source))
           const sub = exRows.filter(bucketTests[i])
           const cplOut = sub.filter(r => isCplCostExcludedCampaign(r.campaign, exclPatterns))
-          const sum = (arr, k) => arr.reduce((t, r) => t + (r[k] || 0), 0)
+          const paidOf = arr => arr.filter(r => spendSources.has(r.source))
           b.cplSpend = b.spend - sum(cplOut, 'spend')
-          b.cplLeads = b.leads - sum(cplOut, 'leads')
+          b.cplLeads = sum(paidIn, 'leads') - sum(paidOf(cplOut), 'leads')
           b.cpqlSpend = b.spend - sum(sub, 'spend')
-          b.cpqlQL = b.totalQL - sum(sub, 'totalQL')
+          b.cpqlQL = sum(paidIn, 'totalQL') - sum(paidOf(sub), 'totalQL')
         })
       }
 
