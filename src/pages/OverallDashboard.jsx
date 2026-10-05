@@ -3732,10 +3732,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // the broader Total QLs definition used everywhere else in this app. If
       // the sheet fetch fails, this silently falls back to the ratio-derived
       // numbers just computed above rather than showing a broken report.
-      if (qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL)) {
+      // Only trusted once the sheet covers EVERY complete day of the window (2026-10-05: early in a
+      // month it is still catching up, and used to overwrite the real BigQuery count with 0 -- the
+      // Overall row showed Total QL 0 / SR 0 / AC 0 and a 0 run-rate while Paid showed 1,192). If it is
+      // missing days the BigQuery-derived numbers computed above stay, and the report says so.
+      let qlSource = 'bigquery'
+      if (qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) >= daysDone) {
         overallRow.totalQL = qlSplitSheet.totalQL
         overallRow.srQl = qlSplitSheet.srQl
         overallRow.acQl = qlSplitSheet.acQl
+        qlSource = 'sheet'
       }
 
       // Per-bucket CPL / CPQL inputs, computed EXACTLY like the dashboard (summaryValue):
@@ -3781,6 +3787,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         totalQL: overallRow.totalQL, totalApps, dailyRunRate, daysDone,
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
         qlSplitAvailable: Array.isArray(qlSplitRaw),
+        qlSource,
         computedForDay: todayKey,
       })
     }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message, computedForDay: todayKey }) })

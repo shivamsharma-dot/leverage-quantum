@@ -2925,6 +2925,7 @@ async function fetchQlSplitSheetTotals(since, until) {
   const sinceDate = new Date(since + 'T00:00:00')
   const untilDate = new Date(until + 'T00:00:00')
   let srQl = 0, acQl = 0, rowsInWindow = 0
+  const daysSeen = new Set()
   for (const row of d.values || []) {
     const [dayStr, , vertical, countStr] = row
     if (!dayStr) continue
@@ -2939,8 +2940,11 @@ async function fetchQlSplitSheetTotals(since, until) {
     else if (vertical === 'AC') acQl += n
     else continue
     rowsInWindow++
+    daysSeen.add(y + '-' + m + '-' + day)
   }
-  return { srQl, acQl, totalQL: srQl + acQl, rowsInWindow }
+  // daysCovered lets the caller tell "the sheet is filled through the whole window" from
+  // "the sheet is empty / still catching up" -- an all-zero total alone can't.
+  return { srQl, acQl, totalQL: srQl + acQl, rowsInWindow, daysCovered: daysSeen.size }
 }
 
 // The one function every save/delete/restore/finished-import routes through.

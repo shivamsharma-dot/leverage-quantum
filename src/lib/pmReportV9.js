@@ -124,6 +124,9 @@ export function buildV9(ctx) {
   const msgs = []
   const table1 = scoreTable(s.rows, fmtINR, fmtN)
   const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
+  // Overall row's Total QL / SR / AC come from the QL Split sheet only once it is filled through the
+  // whole window; otherwise BigQuery counts are used and the reader is told (2026-10-05).
+  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts — the QL Split sheet is not filled through ' + s.throughLabel + ' yet._' : null
   const one = [
     testLine(ctx),
     '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
@@ -142,7 +145,7 @@ export function buildV9(ctx) {
   ]
   msgs.push({
     key: 'outcomes', label: 'Sales Efficiency',
-    text: two.join('\n'),
+    text: two.concat(qlNote ? [qlNote] : []).join('\n'),
     table: outcomes,
     // Visual gap from message 1 -- Slack otherwise groups two consecutive posts
     // from the same bot with no visible space (2026-09-10, asked for directly).
