@@ -8,6 +8,7 @@
 // normal static import (the old dynamic import() was itself a workaround for the .js/CJS
 // ambiguity, no longer needed now that this file is genuinely ESM).
 
+import { isCostExcludedCampaign, isCplCostExcludedCampaign, isCpaCostExcludedCampaign } from '../shared/costExclusions.mjs'
 import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
 
 // analyze_campaign_contribution's underlying sheet fetch alone can take up to 45s (see
@@ -441,11 +442,38 @@ async function fetchOverallTotals({ since, until, group_by, campaign_contains })
       if (!rows.length) return { error: 'No campaigns matching "' + campaign_contains + '" found for ' + since + ' to ' + until + '.' }
     }
     const mode = group_by === 'source' ? 'source' : group_by === 'campaign' ? 'campaign' : 'none'
+    // CPL / CPQL / CPA follow the Overall dashboard's rule exactly (OverallDashboard.jsx
+    // summaryValue, 2026-10-05): the numerator is spend minus campaigns excluded for that
+    // metric (Settings > Data > Cost-metric exclusions, per-pattern scope), and the
+    // denominator counts leads / QLs / apps from PAID SOURCES ONLY (a source counts as paid
+    // when it had spend in the rows being asked about) minus the same excluded campaigns.
+    // Spend / leads / QLs / apps in each row stay the plain, unexcluded totals.
+    let patterns = []
+    try {
+      const pr = await fetch(`${SB_URL}/rest/v1/app_preferences?key=eq.cost_excluded_campaign_patterns&select=value`, {
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(5000),
+      })
+      if (pr.ok) { const j = await pr.json(); if (Array.isArray(j[0] && j[0].value)) patterns = j[0].value }
+    } catch (_) { /* no patterns -> raw figures, same as before */ }
+    const paidSrc = new Set()
+    for (const row of rows) if ((Number(row.spend) || 0) > 0) paidSrc.add(row.source)
     const buckets = {}
     for (const row of rows) {
       const key = mode === 'source' ? mapChannel(row.source) : mode === 'campaign' ? ((row.campaign || '').trim() || 'Unknown') : 'All'
-      const e = buckets[key] || (buckets[key] = { label: key, spend: 0, leads: 0, totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0 })
-      e.spend += Number(row.spend) || 0
+      const e = buckets[key] || (buckets[key] = { label: key, spend: 0, leads: 0, totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0, cplSpend: 0, cpqlSpend: 0, cpaSpend: 0, paidLeads: 0, paidQL: 0, paidApps: 0 })
+      const sp = Number(row.spend) || 0
+      const exCpl = isCplCostExcludedCampaign(row.campaign, patterns)
+      const exQl = isCostExcludedCampaign(row.campaign, patterns)
+      const exCpa = isCpaCostExcludedCampaign(row.campaign, patterns)
+      if (!exCpl) e.cplSpend += sp
+      if (!exQl) e.cpqlSpend += sp
+      if (!exCpa) e.cpaSpend += sp
+      if (paidSrc.has(row.source)) {
+        if (!exCpl) e.paidLeads += Number(row.leads) || 0
+        if (!exQl) e.paidQL += Number(row.total_ql) || 0
+        if (!exCpa) e.paidApps += Number(row.apps) || 0
+      }
+      e.spend += sp
       e.leads += Number(row.leads) || 0
       e.totalQL += Number(row.total_ql) || 0
       e.apps += Number(row.apps) || 0
@@ -454,14 +482,21 @@ async function fetchOverallTotals({ since, until, group_by, campaign_contains })
       e.raus += Number(row.raus) || 0
       buckets[key] = e
     }
-    const outRows = Object.values(buckets).map(e => ({
+    const outRows = Object.values(buckets).map(({ cplSpend, cpqlSpend, cpaSpend, paidLeads, paidQL, paidApps, ...e }) => ({
       ...e,
       spend: Math.round(e.spend),
-      cpl: e.leads > 0 ? Math.round(e.spend / e.leads) : null,
-      cpql: e.totalQL > 0 ? Math.round(e.spend / e.totalQL) : null,
-      cpa: e.apps > 0 ? Math.round(e.spend / e.apps) : null,
+      cpl: cplSpend > 0 && paidLeads > 0 ? Math.round(cplSpend / paidLeads) : null,
+      cpql: cpqlSpend > 0 && paidQL > 0 ? Math.round(cpqlSpend / paidQL) : null,
+      cpa: cpaSpend > 0 && paidApps > 0 ? Math.round(cpaSpend / paidApps) : null,
     })).sort((a, b) => b.spend - a.spend)
-    return { since, until, group_by: mode, campaign_filter: campaign_contains || null, matched_campaigns: campaign_contains ? new Set(rows.map(r => r.campaign)).size : undefined, rows: outRows }
+    return {
+      since, until, group_by: mode, campaign_filter: campaign_contains || null,
+      matched_campaigns: campaign_contains ? new Set(rows.map(r => r.campaign)).size : undefined,
+      // How cpl/cpql/cpa above were computed, so an answer can say so if asked.
+      cost_metric_basis: 'Same as the Overall dashboard: paid sources only (sources with spend), minus campaigns excluded in Settings > Cost-metric exclusions. null = no paid spend or no paid leads/QLs/apps in that row.',
+      cost_exclusions: patterns.map(p => ({ pattern: p.pattern, excluded_from: p.scope === 'cpql' ? 'CPQL' : p.scope === 'cpql_cpa' ? 'CPQL and CPA' : 'CPL, CPQL and CPA' })),
+      rows: outRows,
+    }
   } catch (e) { return { error: e.message || 'Overall cache query failed.' } }
 }
 async function analyzeCampaignContribution({ current_since, current_until, previous_since, previous_until, top_n, channel }) {
