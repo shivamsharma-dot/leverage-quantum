@@ -3770,12 +3770,12 @@ async function fetchLeverageCareersRowsForGazette(since, until) {
   const rows = []
   let cursor = null
   for (let guard = 0; guard < 2000; guard++) {
-    let path = 'leverage_careers_daily?select=' + encodeURIComponent(cols + ',row_key')
+    let path = 'leverage_careers_v2_daily?select=' + encodeURIComponent(cols + ',row_key')
       + '&lead_date=gte.' + since + '&lead_date=lte.' + until
       + '&order=row_key.asc&limit=1000'
     if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
     const r = await supabaseAdmin(path)
-    if (!r.ok) throw new Error('leverage_careers_daily read failed: ' + (await r.text()).slice(0, 200))
+    if (!r.ok) throw new Error('leverage_careers_v2_daily read failed: ' + (await r.text()).slice(0, 200))
     const page = await r.json()
     if (!Array.isArray(page) || page.length === 0) break
     rows.push(...page)
@@ -4105,6 +4105,34 @@ export async function fetchCareersGazetteData({ since, until, prevSince, prevUnt
 // one this replaces), opp_status LIKE '%won%' is new. Date range stays
 // page-driven (since/until from the request), unlike that saved query's own
 // fixed '> 2025-12-31' floor.
+// Mirrors the "Careerv2" saved query in Settings > Data > BigQuery Console
+// (2026-10-05): the Leverage Careers page no longer reads Meta at all -- spend,
+// leads, interested and won all come from leverage_direct.mis_marketing_career.
+// The saved query is a plain row read; this adds GROUP BY + SUM over the four
+// dimensions so (lead_date, source, sub_source, campaign) is a unique key for
+// the Supabase cache even if the source table carries several rows per key.
+// Keep the source CASE and the '> 2024-12-31' floor in step with the saved
+// query -- this copy cannot see edits made in the Console.
+const CAREERS_V2_SQL = `SELECT
+  FORMAT_DATE('%Y-%m-%d', DATE(date_of_transaction)) AS lead_date,
+  CASE
+    WHEN LOWER(source) IN ('affiliate partner') THEN 'Affiliate'
+    WHEN LOWER(source) IN ('content+brand', 'branding') THEN 'Organic'
+    WHEN LOWER(source) IN ('lead source na', 'others', 'offline') THEN 'Others'
+    ELSE source
+  END AS source,
+  sub_source,
+  career_campaign_name AS campaign,
+  SUM(opp_funnel) AS total_leads,
+  SUM(ever_interested_funnel) AS total_interested,
+  SUM(won_funnel) AS won,
+  SUM(won_snapshot) AS won_snapshot,
+  SUM(total_spends) AS spend
+FROM \`leverage_direct.mis_marketing_career\`
+WHERE DATE(date_of_transaction) > '2024-12-31'
+GROUP BY 1, 2, 3, 4
+ORDER BY lead_date, campaign`
+
 function careersLeadsSql(since, until) {
   const clauses = ["career_campaign_name IS NOT NULL", "career_campaign_name != ''"]
   if (isIsoDate(since)) clauses.push(`DATE(opp_created_on) >= '${since}'`)
@@ -4681,23 +4709,25 @@ async function handleBigQuery(req, res, me) {
       // short read -- the real result here is already 19,677 rows (measured
       // 2026-08-23) and only grows, so bigQuerySelectAll (follows BigQuery's
       // pageToken, refuses a truncated read) is required here, not optional.
-      const out = await bq.bigQuerySelectAll(careersLeadsSql(null, null), {
+      const out = await bq.bigQuerySelectAll(CAREERS_V2_SQL, {
         maxBytes: 20_000_000_000, mode: 'careers_sync', dashboardId: 'leverage_careers', userEmail: me.email,
       })
       const rows = out.rows || []
       const syncId = crypto.randomUUID()
       const syncedAt = new Date().toISOString()
       const payload = rows.map(r => {
-        const key = [r.campaign || '', r.lead_date || '', r.source || '', r.channel || ''].join('|')
+        const key = [r.lead_date || '', r.source || '', r.sub_source || '', r.campaign || ''].join('|')
         return {
           row_key: crypto.createHash('md5').update(key).digest('hex'),
-          campaign: r.campaign || null,
           lead_date: r.lead_date || null,
           source: r.source || null,
-          channel: r.channel || null,
+          sub_source: r.sub_source || null,
+          campaign: r.campaign || null,
           total_leads: Number(r.total_leads) || 0,
           total_interested: Number(r.total_interested) || 0,
           won: Number(r.won) || 0,
+          won_snapshot: Number(r.won_snapshot) || 0,
+          spend: Number(r.spend) || 0,
           sync_id: syncId,
           synced_at: syncedAt,
         }
@@ -4712,7 +4742,7 @@ async function handleBigQuery(req, res, me) {
       // persistent outage still surfaces as a real 502 below rather than
       // being silently swallowed.
       try {
-        await upsertBatchesConcurrent(supabaseAdmin, 'leverage_careers_daily', payload, 500, 8)
+        await upsertBatchesConcurrent(supabaseAdmin, 'leverage_careers_v2_daily', payload, 500, 8)
       } catch (e) {
         return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + (e?.message || String(e)), rowCount: rows.length })
       }
@@ -4721,7 +4751,8 @@ async function handleBigQuery(req, res, me) {
       // once every batch above has actually landed -- pruning after a
       // genuinely failed upsert would delete still-good rows for exactly the
       // ones this run couldn't refresh.
-      await supabaseAdmin(`leverage_careers_daily?sync_id=neq.${syncId}`, { method: 'DELETE' })
+      // A 0-row BigQuery read (transient upstream blip) must not wipe the table.
+      if (rows.length > 0) await supabaseAdmin(`leverage_careers_v2_daily?sync_id=neq.${syncId}`, { method: 'DELETE' })
       return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
     }
     // Once/day (see .github/workflows/apps-sync.yml, 9am IST) -- the user's

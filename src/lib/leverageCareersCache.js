@@ -1,13 +1,15 @@
 // src/lib/leverageCareersCache.js
-// Client-side reader for the public.leverage_careers_daily Supabase cache.
+// Client-side reader for the public.leverage_careers_v2_daily Supabase cache.
 //
 // Written by : .github/workflows/leverage-careers-sync.yml, which just POSTs a
 //              GET to api/crm-leads.js's own careers_sync mode (that endpoint
 //              owns the BigQuery query + the Supabase upsert + the prune step;
 //              this file only ever reads what it wrote).
-// Schema     : supabase/sql/leverage_careers_daily_setup.sql -- campaign,
-//              lead_date, source, channel, total_leads, total_interested, won,
-//              plus row_key / sync_id / synced_at.
+// Schema     : supabase/sql/leverage_careers_v2_daily_setup.sql -- lead_date,
+//              source, sub_source, campaign, total_leads, total_interested, won,
+//              won_snapshot, spend, plus row_key / sync_id / synced_at. Fed by
+//              the "Careerv2" BigQuery query (mis_marketing_career); the page
+//              no longer reads Meta at all.
 // Read by    : src/pages/LeverageCareersDashboard.jsx's fetchGranular(), which
 //              the main page, Trend Analysis and Compare all share -- so
 //              wiring that one function to this reader fixes all three at once.
@@ -34,8 +36,8 @@
 
 const SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
-const TABLE = 'leverage_careers_daily'
-const SELECT = 'campaign,lead_date,source,channel,total_leads,total_interested,won'
+const TABLE = 'leverage_careers_v2_daily'
+const SELECT = 'lead_date,source,sub_source,campaign,total_leads,total_interested,won,won_snapshot,spend'
 
 const headers = extra => Object.assign({ apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, extra || {})
 
@@ -87,10 +89,7 @@ async function fetchAllPaginated(params) {
 }
 
 // since/until are inclusive 'YYYY-MM-DD' strings, matched against the real
-// DATE column. Returns rows shaped exactly like the live careers_leads
-// BigQuery API's own rows -- { campaign, lead_date, source, channel,
-// total_leads, total_interested, won } -- so fetchGranular() in
-// LeverageCareersDashboard.jsx needs no change beyond where it gets them from.
+// DATE column. Numeric columns come back as JSON numbers (or null).
 export async function fetchCareersCacheRows({ since, until }) {
   if (!since || !until) throw new Error('fetchCareersCacheRows needs both since and until')
   const params = new URLSearchParams({ select: SELECT, order: 'row_key.asc' })
