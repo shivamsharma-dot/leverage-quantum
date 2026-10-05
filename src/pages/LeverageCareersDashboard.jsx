@@ -101,9 +101,9 @@ function groupRows(rows, dim) {
   })
   return Array.from(map.values()).map(g => ({
     ...g,
-    cpl: g.leads > 0 ? g.spend / g.leads : null,
-    cpi: g.interested > 0 ? g.spend / g.interested : null,
-    cps: g.won > 0 ? g.spend / g.won : null,
+    cpl: g.leads > 0 && g.spend > 0 ? g.spend / g.leads : null,
+    cpi: g.interested > 0 && g.spend > 0 ? g.spend / g.interested : null,
+    cps: g.won > 0 && g.spend > 0 ? g.spend / g.won : null,
   }))
 }
 function sortGroup(dim, arr) {
@@ -118,9 +118,9 @@ function sumTotals(rows) {
   const wonSnapshot = rows.reduce((s, r) => s + r.wonSnapshot, 0)
   return {
     spend, leads, interested, won, wonSnapshot,
-    cpl: leads > 0 ? spend / leads : null,
-    cpi: interested > 0 ? spend / interested : null,
-    cps: won > 0 ? spend / won : null,
+    cpl: leads > 0 && spend > 0 ? spend / leads : null,
+    cpi: interested > 0 && spend > 0 ? spend / interested : null,
+    cps: won > 0 && spend > 0 ? spend / won : null,
   }
 }
 const fmtINR = n => n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN')
