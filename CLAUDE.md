@@ -2250,3 +2250,9 @@ User: drop everything pulled from Meta on this page; power it from the `Careerv2
 **Needs the user:** run the SQL, then trigger `leverage-careers-sync.yml` once (the page shows an error until the table is filled). Keep `CAREERS_V2_SQL` in step with the saved query: it cannot see Console edits.
 
 Follow-up, same day: **Won (Snapshot)** is now shown as its own figure (KPI card, table column, exports, Slack), kept separate from **Won (Funnel)**. They are never summed or mixed; funnel rates and CPS still use Won (Funnel). Compare and the daily/cohort charts show Won (Funnel) only.
+
+## 2026-10-05 (later still) -- Leverage Careers: Source tree + Paid/Non-Paid bands, Slack V2 report
+
+- **Source tab** now mirrors Overall's Source view: PAID CHANNELS and NON-PAID CHANNELS band rows (same paid list as Overall's `PAID_SOURCE_KEYS`), each listing its Sources; click a Source for its Sub Sources, click a Sub Source for its Campaigns. Every level carries all metrics, ratios recomputed from that level's own totals. Month/Day/Campaign/Sub Source tabs stay flat.
+- **Slack V2** (`src/lib/careersReportV2.js`, registered first in `CAREERS_REPORT_VERSIONS`): same 3 messages as Overall's V2 -- MTD Performance (KPI stack with vs-figures + banded Source table), Last Day Performance, Day on Day -- with Careerv2 metrics (Spend, Leads, Interested, CPL, CPI, Won (Funnel), Won (Snapshot), CPS). MTD reads against the same days of the previous month; other windows against the same-length window before. The page prefetches rows reaching back past the on-screen window when the Slack panel opens (`slackRows`). Won (Snapshot) stays separate from Won (Funnel). Old single-message report kept as its own version.
+- Dropped by request: the "where did Won come from" lead-month x won-month grid.

@@ -6,6 +6,8 @@
 // table, and SlackReportPanel.jsx's TablePreview renders identically before
 // send -- there is no second code path that could drift from what's sent.
 
+import { CAREERS_V2 } from './careersReportV2'
+
 const fmtINR = n => n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN')
 const fmtN = n => n == null ? '—' : Math.round(n).toLocaleString('en-IN')
 const pctStr = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—')
@@ -59,7 +61,7 @@ function buildCareers(ctx) {
   }]
 }
 
-export const CAREERS_REPORT_VERSIONS = [{
+export const CAREERS_REPORT_VERSIONS = [CAREERS_V2, {
   id: 'leverage_careers',
   code: 'CAREERS',
   msgKeys: ['leverage_careers'],

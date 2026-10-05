@@ -14,6 +14,7 @@ import { InlineLoader } from '../components/SkeletonLoader'
 import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, RankedBars, sourceColor, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
+import { careersV2Windows, buildCareersV2Ctx, isPaidSource } from '../lib/careersReportV2'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { getSession, setSession } from '../lib/sessionLoad'
@@ -224,6 +225,28 @@ function StepTile({ label, value, sub, color }) {
   )
 }
 
+function sortRowsBy(arr, sort) {
+  const dir = sort.dir === 'asc' ? 1 : -1
+  return [...arr].sort((a, b) => {
+    const av = a[sort.key], bv = b[sort.key]
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+    return av < bv ? -dir : av > bv ? dir : 0
+  })
+}
+
+// Expand/collapse caret for the Source view's tree rows -- same glyph and rotation
+// as Overall's TreeChevron.
+function TreeChevron({ open }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s', flexShrink: 0 }}>
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  )
+}
+
 const TABLE_TABS = [['campaign', 'Campaign'], ['source', 'Source'], ['subSource', 'Sub Source'], ['month', 'Month'], ['day', 'Day']]
 // First-column header per grouping tab, reused by the table AND the exports so a
 // downloaded CSV always names its group column the same way the screen does.
@@ -382,6 +405,7 @@ export default function LeverageCareersDashboard() {
   const [cPick, setCPick] = useState(null) // which custom range popover is open: 'a' | 'b' | null
 
   const [slackOpen, setSlackOpen] = useState(false)
+  const [slackRows, setSlackRows] = useState(null) // current + previous window, for the V2 report's vs columns
   const tableRef = useRef(null)
 
   const d1 = ist(0)
@@ -445,16 +469,41 @@ export default function LeverageCareersDashboard() {
   ]), [totals])
 
   const tableRowsRaw = useMemo(() => groupRows(rows, tableDim), [rows, tableDim])
-  const tableRows = useMemo(() => {
-    const dir = tableSort.dir === 'asc' ? 1 : -1
-    return [...tableRowsRaw].sort((a, b) => {
-      const av = a[tableSort.key], bv = b[tableSort.key]
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      return av < bv ? -dir : av > bv ? dir : 0
-    })
-  }, [tableRowsRaw, tableSort])
+  const tableRows = useMemo(() => sortRowsBy(tableRowsRaw, tableSort), [tableRowsRaw, tableSort])
+  // Source view: Paid / Non-Paid bands, each listing its Sources; clicking a Source
+  // reveals its Sub Sources, clicking a Sub Source reveals its Campaigns -- the same
+  // tree Overall's Source view uses. Every level carries the full metric set, and
+  // every ratio is recomputed from that level's own summed totals.
+  const [expandedSources, setExpandedSources] = useState(() => new Set())
+  const [expandedSubs, setExpandedSubs] = useState(() => new Set())
+  const toggleIn = (setter, key) => setter(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
+  const sourceTreeItems = useMemo(() => {
+    if (tableDim !== 'source') return []
+    const items = []
+    const addBand = (key, label, keep) => {
+      const br = rows.filter(r => keep(r.source))
+      if (!br.length) return
+      items.push({ kind: 'band', key, label, ...sumTotals(br) })
+      sortRowsBy(groupRows(br, 'source'), tableSort).forEach(src => {
+        const srcOpen = expandedSources.has(src.key)
+        items.push({ kind: 'source', key: 'src:' + src.key, label: src.label, depth: 0, open: srcOpen, toggle: () => toggleIn(setExpandedSources, src.key), ...src })
+        if (!srcOpen) return
+        const srcRows = br.filter(r => r.source === src.key)
+        sortRowsBy(groupRows(srcRows, 'subSource'), tableSort).forEach(sub => {
+          const subKey = src.key + '||' + sub.key
+          const subOpen = expandedSubs.has(subKey)
+          items.push({ kind: 'sub', key: 'sub:' + subKey, label: sub.label, depth: 1, open: subOpen, toggle: () => toggleIn(setExpandedSubs, subKey), ...sub })
+          if (!subOpen) return
+          sortRowsBy(groupRows(srcRows.filter(r => r.subSource === sub.key), 'campaign'), tableSort).forEach(c => {
+            items.push({ kind: 'campaign', key: 'camp:' + subKey + '||' + c.key, label: c.label, depth: 2, ...c })
+          })
+        })
+      })
+    }
+    addBand('band-paid', 'PAID CHANNELS', isPaidSource)
+    addBand('band-free', 'NON-PAID CHANNELS', v => !isPaidSource(v))
+    return items
+  }, [tableDim, rows, tableSort, expandedSources, expandedSubs])
   const tableTotals = useMemo(() => sumTotals(tableRows), [tableRows])
   const toggleSort = key => setTableSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
 
@@ -473,11 +522,35 @@ export default function LeverageCareersDashboard() {
   // not the plain ExportButton's inline Slack menu items. buildContext is read
   // synchronously by the panel to build BOTH the live preview and the real send
   // (see SlackReportPanel.jsx), so it must never depend on anything async.
-  const buildCareersContext = useCallback(() => ({
-    windowLabel, totals, tableDim,
-    tableRows: tableRows.map(r => ({ ...r, label: labelForDim(tableDim, r.label) })),
-    campaignCount: campaignRows.length,
-  }), [windowLabel, totals, tableDim, tableRows, campaignRows.length])
+  const buildCareersContext = useCallback(() => {
+    const scope = 'Source: ' + fSource + ' \u00b7 Sub source: ' + fSubSource
+    const v2 = buildCareersV2Ctx({
+      rows: applyFilters(slackRows || dayRows || [], filters),
+      win: activeWindow, preset, windowLabel, filterLine: scope, scopeLine: scope,
+      hasPrevData: !!slackRows,
+    })
+    return {
+      windowLabel, totals, tableDim,
+      tableRows: tableRows.map(r => ({ ...r, label: labelForDim(tableDim, r.label) })),
+      campaignCount: campaignRows.length,
+      ...v2,
+    }
+  }, [windowLabel, totals, tableDim, tableRows, campaignRows.length, slackRows, dayRows, filters, activeWindow, preset, fSource, fSubSource])
+
+  // The V2 report reads every figure against the window before it, and each day
+  // against the day before, so it needs rows reaching back past the on-screen
+  // window. Fetched once when the Slack panel opens (buildContext must stay
+  // synchronous), then filtered through the same applyFilters() as everything else.
+  useEffect(() => {
+    if (!slackOpen) return undefined
+    let cancelled = false
+    setSlackRows(null)
+    const { fetchFrom } = careersV2Windows(activeWindow, preset)
+    fetchGranular(fetchFrom, activeWindow.to)
+      .then(r => { if (!cancelled) setSlackRows(r) })
+      .catch(() => { if (!cancelled) setSlackRows([]) })
+    return () => { cancelled = true }
+  }, [slackOpen, activeWindow.from, activeWindow.to, preset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const captureCareersFiles = useCallback(async () => {
     await nextPaint()
@@ -876,7 +949,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 }
               >
-                {sectionTitle('Ads ↔ LeadSquared, by ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + ' — joined by exact name = career_campaign_name')}
+                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + (tableDim === 'source' ? ' \u2014 click a source to see its sub sources, then a sub source to see its campaigns' : ''))}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                     <Button
@@ -907,9 +980,23 @@ export default function LeverageCareersDashboard() {
                         <td>{fmtINR(tableTotals.spend)}</td><td>{fmtN(tableTotals.leads)}</td><td>{fmtN(tableTotals.interested)}</td><td>{fmtN(tableTotals.won)}</td><td>{fmtN(tableTotals.wonSnapshot)}</td>
                         <td>{fmtINR(tableTotals.cpl)}</td><td>{fmtINR(tableTotals.cpi)}</td><td>{fmtINR(tableTotals.cps)}</td>
                       </tr>
-                      {tableRows.length === 0 ? (
+                      {(tableDim === 'source' ? sourceTreeItems.length === 0 : tableRows.length === 0) ? (
                         <tr><td colSpan={9} className={styles.empty}>No data in this window.</td></tr>
-                      ) : tableRows.map(r => (
+                      ) : tableDim === 'source' ? sourceTreeItems.map(it => (
+                        <tr key={it.key} style={it.kind === 'band' ? { fontWeight: 800, background: 'var(--navy-tint)' } : (it.kind === 'campaign' ? { color: 'var(--text2)' } : undefined)}>
+                          <td
+                            onClick={it.toggle}
+                            style={{ cursor: it.toggle ? 'pointer' : 'default', paddingLeft: 12 + (it.depth || 0) * 20, fontWeight: it.kind === 'band' ? 800 : (it.kind === 'source' ? 700 : 500) }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                              {it.toggle ? <TreeChevron open={it.open} /> : null}
+                              {it.label}
+                            </span>
+                          </td>
+                          <td>{fmtINR(it.spend)}</td><td>{fmtN(it.leads)}</td><td>{fmtN(it.interested)}</td><td>{fmtN(it.won)}</td><td>{fmtN(it.wonSnapshot)}</td>
+                          <td>{fmtINR(it.cpl)}</td><td>{fmtINR(it.cpi)}</td><td>{fmtINR(it.cps)}</td>
+                        </tr>
+                      )) : tableRows.map(r => (
                         <tr key={r.key}>
                           <td>{labelForDim(tableDim, r.label)}</td>
                           <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td><td>{fmtN(r.wonSnapshot)}</td>
