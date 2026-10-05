@@ -4709,8 +4709,11 @@ async function handleBigQuery(req, res, me) {
       // short read -- the real result here is already 19,677 rows (measured
       // 2026-08-23) and only grows, so bigQuerySelectAll (follows BigQuery's
       // pageToken, refuses a truncated read) is required here, not optional.
+      // mis_marketing_career scans ~26.6GB per run (measured 2026-10-05), unlike
+      // the old ~11.5GB careers table -- cap raised from 20GB to 35GB. At list
+      // price that is roughly Rs14/run, so 3 runs/day is ~Rs1,300/month.
       const out = await bq.bigQuerySelectAll(CAREERS_V2_SQL, {
-        maxBytes: 20_000_000_000, mode: 'careers_sync', dashboardId: 'leverage_careers', userEmail: me.email,
+        maxBytes: 35_000_000_000, mode: 'careers_sync', dashboardId: 'leverage_careers', userEmail: me.email,
       })
       const rows = out.rows || []
       const syncId = crypto.randomUUID()
