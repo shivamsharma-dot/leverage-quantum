@@ -267,7 +267,7 @@ function buildCareersV2(ctx) {
 }
 
 export const CAREERS_V2 = {
-  id: 'v2',
+  id: 'careers_v2',
   code: 'V2',
   msgKeys: ['mtd', 'yday', 'dow'],
   name: 'Summary + table — MTD, Last Day, day on day',
