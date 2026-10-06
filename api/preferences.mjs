@@ -118,7 +118,7 @@ export default async function handler(req, res) {
     // just admins -- same precedent as affiliate_spend_manual just above it.
     // (ac_sales_manual itself no longer needs to be here: only Marketing Review reads/
     // writes it now, and that page is admin-only already.)
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'team_ac_countries', 'team_sr_countries', 'overall_summary_table_views'])
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'careers_programs', 'team_ac_countries', 'team_sr_countries', 'overall_summary_table_views'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))

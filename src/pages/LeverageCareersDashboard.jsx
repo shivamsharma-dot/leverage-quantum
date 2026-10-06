@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Legend,
+  CartesianGrid, Legend, ScatterChart, Scatter, ZAxis, LabelList, Cell,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
@@ -15,6 +15,7 @@ import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, RankedBars, sourceColor, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
 import { careersV2Windows, comparableSpan, buildCareersV2Ctx, isPaidSource } from '../lib/careersReportV2'
+import { DEFAULT_PROGRAMS, classifyProgram, normalizePrograms } from '../lib/careersPrograms'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { getSession, setSession } from '../lib/sessionLoad'
@@ -87,6 +88,7 @@ function keyForDim(r, dim) {
   if (dim === 'campaign') return r.name
   if (dim === 'source') return r.source
   if (dim === 'subSource') return r.subSource
+  if (dim === 'program') return r.program
   if (dim === 'day') return r.date
   return monthKeyOf(r.date)
 }
@@ -225,6 +227,32 @@ function StepTile({ label, value, sub, color }) {
   )
 }
 
+// Stamps every row with its program (see src/lib/careersPrograms.js for the rule).
+function tagRows(rows, programs) {
+  return (rows || []).map(r => ({ ...r, program: classifyProgram(r.name, programs) }))
+}
+
+// A program counts as low volume when too little has happened to read a rate from:
+// under 10 Won or under 1,000 leads. It is a caution flag next to the program name,
+// never a reason to hide the row.
+const isLowVolume = g => g.leads > 0 && (g.won < 10 || g.leads < 1000)
+
+const PROGRAM_COLORS = [C.navy, C.blue, C.cyan, C.green, '#3A5BA0', '#5BCAD2', '#7A8FB8']
+
+function ProgramEfficiencyTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const d = payload[0].payload
+  return (
+    <div style={{ background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 10, padding: '9px 13px', fontFamily: FONT, boxShadow: '0 8px 24px rgba(15,23,42,0.12)' }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{d.name}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Paid spend {fmtINR(d.spend)}<br />Won (Funnel) {fmtN(d.won)}<br />Cost per won {fmtINR(d.cps)}<br />Cost per lead {fmtINR(d.cpl)}
+        {d.lowVolume ? <><br /><span style={{ color: C.muted }}>low volume — read with care</span></> : null}
+      </div>
+    </div>
+  )
+}
+
 function sortRowsBy(arr, sort) {
   const dir = sort.dir === 'asc' ? 1 : -1
   return [...arr].sort((a, b) => {
@@ -247,11 +275,11 @@ function TreeChevron({ open }) {
   )
 }
 
-const TABLE_TABS = [['campaign', 'Campaign'], ['source', 'Source'], ['subSource', 'Sub Source'], ['month', 'Month'], ['day', 'Day']]
+const TABLE_TABS = [['program', 'Program'], ['campaign', 'Campaign'], ['source', 'Source'], ['subSource', 'Sub Source'], ['month', 'Month'], ['day', 'Day']]
 // First-column header per grouping tab, reused by the table AND the exports so a
 // downloaded CSV always names its group column the same way the screen does.
-const GROUP_LABEL = { campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
-const EXPORT_KEY = { campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
+const GROUP_LABEL = { program: 'Program', campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
+const EXPORT_KEY = { program: 'Program', campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
 function labelForDim(dim, key) {
   if (dim === 'day') return dayLabelOf(key)
   if (dim === 'month') return monthLabelOf(key)
@@ -317,6 +345,7 @@ function applyFilters(rows, f) {
   const q = (f.query || '').trim().toLowerCase()
   const out = (rows || []).filter(r => {
     if (f.source !== 'All' && r.source !== f.source) return false
+    if (f.program !== 'All' && r.program !== f.program) return false
     if (f.subSource !== 'All' && r.subSource !== f.subSource) return false
     if (q && !String(r.name || '').toLowerCase().includes(q)) return false
     return true
@@ -370,17 +399,27 @@ export default function LeverageCareersDashboard() {
   const [customOpen, setCustomOpen] = useState(false)
 
   const [dayRows, setDayRows] = useState(null) // granular (date, name) rows for activeWindow
+  // Program rule (campaign-name keywords). Defaults apply until/unless Settings has a saved list.
+  const [programs, setPrograms] = useState(DEFAULT_PROGRAMS)
+  useEffect(() => {
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && d.prefs && Array.isArray(d.prefs.careers_programs)) setPrograms(normalizePrograms(d.prefs.careers_programs)) })
+      .catch(() => {})
+  }, [])
+  const dayRowsT = useMemo(() => (dayRows ? tagRows(dayRows, programs) : dayRows), [dayRows, programs])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [synced, setSynced] = useState(null)
 
-  const [tableDim, setTableDim] = useState('campaign')
+  const [tableDim, setTableDim] = useState('program')
   // Advanced filters. These are page-level, not table-level: every KPI, the funnel,
   // the cohort table, the charts, the exports and Compare all read the SAME filters object via
   // applyFilters(), so a filtered CPI on a card can never disagree with a filtered
   // CPI in the table. The old table-only search box was removed in favour of the
   // debounced ad-name search here, which previously filtered the visible rows while
   // leaving the TOTAL row and every KPI on the unfiltered set.
+  const [fProgram, setFProgram] = useState('All')
   const [fSource, setFSource] = useState('All')
   const [fSubSource, setFSubSource] = useState('All')
   const [fConv, setFConv] = useState('All')
@@ -450,15 +489,16 @@ export default function LeverageCareersDashboard() {
 
   // ---- main-page aggregates ----
   const filters = useMemo(
-    () => ({ source: fSource, subSource: fSubSource, conv: fConv, cost: fCost, query: nameQueryDebounced }),
-    [fSource, fSubSource, fConv, fCost, nameQueryDebounced]
+    () => ({ program: fProgram, source: fSource, subSource: fSubSource, conv: fConv, cost: fCost, query: nameQueryDebounced }),
+    [fProgram, fSource, fSubSource, fConv, fCost, nameQueryDebounced]
   )
-  const filterCount = (fSource !== 'All' ? 1 : 0) + (fSubSource !== 'All' ? 1 : 0) + (fConv !== 'All' ? 1 : 0) + (fCost !== 'All' ? 1 : 0) + (nameQueryDebounced.trim() ? 1 : 0)
-  const resetFilters = useCallback(() => { setFSource('All'); setFSubSource('All'); setFConv('All'); setFCost('All'); setNameQuery('') }, [])
+  const filterCount = (fProgram !== 'All' ? 1 : 0) + (fSource !== 'All' ? 1 : 0) + (fSubSource !== 'All' ? 1 : 0) + (fConv !== 'All' ? 1 : 0) + (fCost !== 'All' ? 1 : 0) + (nameQueryDebounced.trim() ? 1 : 0)
+  const resetFilters = useCallback(() => { setFProgram('All'); setFSource('All'); setFSubSource('All'); setFConv('All'); setFCost('All'); setNameQuery('') }, [])
   // Menus are built from the UNFILTERED rows on purpose -- see optionsFor().
-  const sourceOptions = useMemo(() => optionsFor(dayRows, 'source'), [dayRows])
-  const subSourceOptions = useMemo(() => optionsFor(dayRows, 'subSource'), [dayRows])
-  const rows = useMemo(() => applyFilters(dayRows || [], filters), [dayRows, filters])
+  const programOptions = useMemo(() => optionsFor(dayRowsT, 'program'), [dayRowsT])
+  const sourceOptions = useMemo(() => optionsFor(dayRowsT, 'source'), [dayRowsT])
+  const subSourceOptions = useMemo(() => optionsFor(dayRowsT, 'subSource'), [dayRowsT])
+  const rows = useMemo(() => applyFilters(dayRowsT || [], filters), [dayRowsT, filters])
   const campaignRows = useMemo(() => sortGroup('campaign', groupRows(rows, 'campaign')), [rows])
   const totals = useMemo(() => sumTotals(rows), [rows])
 
@@ -504,6 +544,42 @@ export default function LeverageCareersDashboard() {
     addBand('band-free', 'NON-PAID CHANNELS', v => !isPaidSource(v))
     return items
   }, [tableDim, rows, tableSort, expandedSources, expandedSubs])
+  // Program view: each program expands into its Paid and Non-Paid rows (same paid rule as
+  // the Source view), and each of those expands into its campaigns.
+  const [expandedPrograms, setExpandedPrograms] = useState(() => new Set())
+  const [expandedProgPB, setExpandedProgPB] = useState(() => new Set())
+  const programTreeItems = useMemo(() => {
+    if (tableDim !== 'program') return []
+    const items = []
+    sortRowsBy(groupRows(rows, 'program'), tableSort).forEach(pg => {
+      const open = expandedPrograms.has(pg.key)
+      items.push({ kind: 'source', key: 'prog:' + pg.key, label: pg.label, depth: 0, open, lowVolume: isLowVolume(pg), toggle: () => toggleIn(setExpandedPrograms, pg.key), ...pg })
+      if (!open) return
+      const pgRows = rows.filter(r => r.program === pg.key)
+      ;[['Paid', isPaidSource], ['Non-Paid', v => !isPaidSource(v)]].forEach(([lab, test]) => {
+        const br = pgRows.filter(r => test(r.source))
+        if (!br.length) return
+        const k = pg.key + '||' + lab
+        const o = expandedProgPB.has(k)
+        items.push({ kind: 'sub', key: 'pb:' + k, label: lab, depth: 1, open: o, toggle: () => toggleIn(setExpandedProgPB, k), ...sumTotals(br) })
+        if (!o) return
+        sortRowsBy(groupRows(br, 'campaign'), tableSort).forEach(c => {
+          items.push({ kind: 'campaign', key: 'pc:' + k + '||' + c.key, label: c.label, depth: 2, ...c })
+        })
+      })
+    })
+    return items
+  }, [tableDim, rows, tableSort, expandedPrograms, expandedProgPB])
+  const treeItems = tableDim === 'source' ? sourceTreeItems : (tableDim === 'program' ? programTreeItems : null)
+  // Efficiency chart: paid campaigns only (free outreach leads would make a program look cheaper
+  // than it is), one point per program that has paid spend and at least one Won.
+  const programEfficiency = useMemo(() => {
+    const out = []
+    groupRows(rows.filter(r => isPaidSource(r.source)), 'program').forEach(g => {
+      if (g.spend > 0 && g.won > 0 && g.cps != null) out.push({ name: g.label, spend: g.spend, won: g.won, cps: g.cps, cpl: g.cpl, lowVolume: isLowVolume(g) })
+    })
+    return out.sort((a, b) => b.spend - a.spend)
+  }, [rows])
   const tableTotals = useMemo(() => sumTotals(tableRows), [tableRows])
   const toggleSort = key => setTableSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
 
@@ -523,9 +599,9 @@ export default function LeverageCareersDashboard() {
   // synchronously by the panel to build BOTH the live preview and the real send
   // (see SlackReportPanel.jsx), so it must never depend on anything async.
   const buildCareersContext = useCallback(() => {
-    const scope = 'Source: ' + fSource + ' \u00b7 Sub source: ' + fSubSource
+    const scope = 'Program: ' + fProgram + ' \u00b7 Source: ' + fSource + ' \u00b7 Sub source: ' + fSubSource
     const v2 = buildCareersV2Ctx({
-      rows: applyFilters(slackRows || dayRows || [], filters),
+      rows: applyFilters(tagRows(slackRows || dayRows || [], programs), filters),
       win: activeWindow, preset, windowLabel, filterLine: scope, scopeLine: scope,
       hasPrevData: !!slackRows,
     })
@@ -535,7 +611,7 @@ export default function LeverageCareersDashboard() {
       campaignCount: campaignRows.length,
       ...v2,
     }
-  }, [windowLabel, totals, tableDim, tableRows, campaignRows.length, slackRows, dayRows, filters, activeWindow, preset, fSource, fSubSource])
+  }, [windowLabel, totals, tableDim, tableRows, campaignRows.length, slackRows, dayRows, programs, filters, activeWindow, preset, fSource, fSubSource])
 
   // The V2 report reads every figure against the window before it, and each day
   // against the day before, so it needs rows reaching back past the on-screen
@@ -666,8 +742,8 @@ export default function LeverageCareersDashboard() {
   }, [compareOpen, compareSpanA.from, compareSpanA.to, compareSpanB.from, compareSpanB.to])
 
   const compareResult = useMemo(() => {
-    const fa = applyFilters(compareRowsA || [], filters)
-    const fb = applyFilters(compareRowsB || [], filters)
+    const fa = applyFilters(tagRows(compareRowsA || [], programs), filters)
+    const fb = applyFilters(tagRows(compareRowsB || [], programs), filters)
     const a = sumTotals(fa)
     const b = sumTotals(fb)
     const groupA = new Map(groupRows(fa, 'campaign').map(r => [r.label, r]))
@@ -684,7 +760,7 @@ export default function LeverageCareersDashboard() {
       ? `No Won leads in either period — comparing on Leads instead: ${deltaPct(a.leads, b.leads) == null ? '—' : (deltaPct(a.leads, b.leads) >= 0 ? 'up' : 'down') + ' ' + Math.abs(deltaPct(a.leads, b.leads)).toFixed(1) + '%'}.`
       : `Won is ${wonDelta == null ? 'flat' : (wonDelta >= 0 ? 'up' : 'down') + ' ' + Math.abs(wonDelta).toFixed(1) + '%'}${cpsDelta == null ? '' : `, and cost per Won is ${cpsDelta >= 0 ? 'up' : 'down'} ${Math.abs(cpsDelta).toFixed(1)}%`}.`
     return { a, b, rows, verdict }
-  }, [compareRowsA, compareRowsB, filters])
+  }, [compareRowsA, compareRowsB, filters, programs])
   const compareExportRows = useMemo(() => compareResult.rows.map(r => ({
     Campaign: r.name,
     [`Spend (${windowLabel})`]: Math.round(r.a.spend), 'Spend (compare)': Math.round(r.b.spend),
@@ -768,6 +844,7 @@ export default function LeverageCareersDashboard() {
                   <input value={nameQuery} onChange={e => setNameQuery(e.target.value)} placeholder="Search ad name..."
                     style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, width: '100%' }} />
                 </div>
+                <Dropdown label="Program" options={programOptions} value={fProgram} onChange={setFProgram} minWidth={170} />
                 <Dropdown label="Source" options={sourceOptions} value={fSource} onChange={setFSource} minWidth={130} />
                 <Dropdown label="Sub source" options={subSourceOptions} value={fSubSource} onChange={setFSubSource} minWidth={150} />
                 <Dropdown label="Won rate" options={CONV_OPTIONS} value={fConv} onChange={setFConv} minWidth={135} />
@@ -879,6 +956,29 @@ export default function LeverageCareersDashboard() {
               </div>
 
               <div style={{ height: 16 }} />
+              <Card title="Program efficiency" sub={windowLabel + ' \u2014 paid only. Right = more Won, lower = cheaper per Won, bubble = spend. Faded = low volume'}>
+                {programEfficiency.length === 0 ? (
+                  <div className={styles.empty}>No paid program has both spend and a Won in this window.</div>
+                ) : (
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart margin={{ top: 16, right: 24, bottom: 8, left: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" />
+                        <XAxis type="number" dataKey="won" name="Won" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} />
+                        <YAxis type="number" dataKey="cps" name="Cost per won" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} tickFormatter={v => '\u20b9' + Math.round(v / 1000) + 'k'} width={52} />
+                        <ZAxis type="number" dataKey="spend" range={[160, 1400]} />
+                        <Tooltip content={<ProgramEfficiencyTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+                        <Scatter data={programEfficiency}>
+                          {programEfficiency.map((d, i) => <Cell key={d.name} fill={PROGRAM_COLORS[i % PROGRAM_COLORS.length]} fillOpacity={d.lowVolume ? 0.35 : 0.85} />)}
+                          <LabelList dataKey="name" position="top" style={{ fontSize: 10.5, fill: C.muted, fontFamily: FONT }} />
+                        </Scatter>
+                      </ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </Card>
+
+              <div style={{ height: 16 }} />
               {/* COHORT VIEW -- lead arrival cohorts, followed through to Won. */}
               <Card
                 title="Cohort view"
@@ -953,7 +1053,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 }
               >
-                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + (tableDim === 'source' ? ' \u2014 click a source to see its sub sources, then a sub source to see its campaigns' : ''))}
+                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + (tableDim === 'source' ? ' \u2014 click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'program' ? ' \u2014 campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                     <Button
@@ -984,9 +1084,9 @@ export default function LeverageCareersDashboard() {
                         <td>{fmtINR(tableTotals.spend)}</td><td>{fmtN(tableTotals.leads)}</td><td>{fmtN(tableTotals.interested)}</td><td>{fmtN(tableTotals.won)}</td><td>{fmtN(tableTotals.wonSnapshot)}</td>
                         <td>{fmtINR(tableTotals.cpl)}</td><td>{fmtINR(tableTotals.cpi)}</td><td>{fmtINR(tableTotals.cps)}</td>
                       </tr>
-                      {(tableDim === 'source' ? sourceTreeItems.length === 0 : tableRows.length === 0) ? (
+                      {(treeItems ? treeItems.length === 0 : tableRows.length === 0) ? (
                         <tr><td colSpan={9} className={styles.empty}>No data in this window.</td></tr>
-                      ) : tableDim === 'source' ? sourceTreeItems.map(it => (
+                      ) : treeItems ? treeItems.map(it => (
                         <tr key={it.key} style={it.kind === 'band' ? { fontWeight: 800, background: 'var(--navy-tint)' } : (it.kind === 'campaign' ? { color: 'var(--text2)' } : undefined)}>
                           <td
                             onClick={it.toggle}
@@ -995,6 +1095,7 @@ export default function LeverageCareersDashboard() {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                               {it.toggle ? <TreeChevron open={it.open} /> : null}
                               {it.label}
+                              {it.lowVolume ? <span title="Under 10 Won or under 1,000 leads: read the rates with care" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: C.muted, border: '0.5px solid var(--card-border)', borderRadius: 99, padding: '1px 7px' }}>low volume</span> : null}
                             </span>
                           </td>
                           <td>{fmtINR(it.spend)}</td><td>{fmtN(it.leads)}</td><td>{fmtN(it.interested)}</td><td>{fmtN(it.won)}</td><td>{fmtN(it.wonSnapshot)}</td>

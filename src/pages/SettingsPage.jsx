@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { DEFAULT_PROGRAMS, normalizePrograms } from '../lib/careersPrograms'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar, { PAGE_LIST, NAV } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
@@ -897,6 +898,58 @@ export default function SettingsPage() {
       const next = { ...affiliateSpend }; delete next[ym]
       saveAffiliateSpend(next, 'Removed')
     }
+    // Leverage Careers programs -- campaigns are grouped into programs by keywords in
+    // their name (src/lib/careersPrograms.js is the one matching rule); this edits the
+    // list the Careers page, its Slack report and this card all read. app_preferences
+    // key 'careers_programs'. Order matters: the first program whose keyword matches wins.
+    const [careersProgs, setCareersProgs] = useState(DEFAULT_PROGRAMS)
+    const [cpDrafts, setCpDrafts] = useState({})
+    const [cpNewName, setCpNewName] = useState('')
+    const [cpNewKw, setCpNewKw] = useState('')
+    const [cpSaving, setCpSaving] = useState(false)
+    const [cpMsg, setCpMsg] = useState(null)
+    const saveCareersProgs = async (next, successMsg) => {
+      const prev = careersProgs
+      setCareersProgs(next)
+      setCpSaving(true); setCpMsg(null)
+      try {
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'careers_programs', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setCpMsg({ type: 'ok', text: successMsg || 'Saved' })
+      } catch (e) {
+        setCareersProgs(prev)
+        setCpMsg({ type: 'err', text: e.message })
+      } finally {
+        setCpSaving(false)
+        setTimeout(() => setCpMsg(null), 4000)
+      }
+    }
+    const splitKeywords = txt => String(txt || '').split(',').map(k => k.trim()).filter(Boolean)
+    const addCareersProgram = () => {
+      const name = cpNewName.trim()
+      const keywords = splitKeywords(cpNewKw)
+      if (!name || !keywords.length) { setCpMsg({ type: 'err', text: 'Enter a program name and at least one keyword' }); return }
+      if (careersProgs.some(p => p.name.toLowerCase() === name.toLowerCase())) { setCpMsg({ type: 'err', text: 'That program already exists' }); return }
+      saveCareersProgs([...careersProgs, { name, keywords }], 'Saved')
+      setCpNewName(''); setCpNewKw('')
+    }
+    const commitProgramKeywords = (name) => {
+      const txt = cpDrafts[name]
+      if (txt == null) return
+      const keywords = splitKeywords(txt)
+      setCpDrafts(d => { const n = { ...d }; delete n[name]; return n })
+      const cur = careersProgs.find(p => p.name === name)
+      if (!cur || !keywords.length || keywords.join('|') === cur.keywords.join('|')) return
+      saveCareersProgs(careersProgs.map(p => p.name === name ? { ...p, keywords } : p), 'Saved')
+    }
+    const moveCareersProgram = (idx, dir) => {
+      const to = idx + dir
+      if (to < 0 || to >= careersProgs.length) return
+      const next = [...careersProgs]
+      const tmp = next[idx]; next[idx] = next[to]; next[to] = tmp
+      saveCareersProgs(next, 'Order saved')
+    }
+    const removeCareersProgram = (name) => saveCareersProgs(careersProgs.filter(p => p.name !== name), 'Removed')
     // Cost-metric exclusions -- any campaign whose name contains one of these
     // patterns is left out of CPL/CPQL/CPA on the Overall dashboard (both the
     // Sheet and BigQuery routes share this one component). See
@@ -1169,6 +1222,7 @@ export default function SettingsPage() {
                   }
                   if (pf.affiliate_spend_manual && typeof pf.affiliate_spend_manual === 'object') setAffiliateSpend(pf.affiliate_spend_manual)
                   if (Array.isArray(pf.cost_excluded_campaign_patterns)) setCostExclusions(pf.cost_excluded_campaign_patterns)
+                  if (Array.isArray(pf.careers_programs)) setCareersProgs(normalizePrograms(pf.careers_programs))
                   if (pf.linkedin_manual && typeof pf.linkedin_manual === 'object') setLinkedinManual(pf.linkedin_manual)
                   if (pf.x_manual && typeof pf.x_manual === 'object') setXManual(pf.x_manual)
       })
@@ -2710,6 +2764,47 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* ── LEVERAGE CAREERS PROGRAMS ── Groups campaigns into programs (Nursing,
+                  Physiotherapy, ...) by keywords in the campaign name. Read by the Careers
+                  page, its Slack report and the Program filter -- one rule, in
+                  src/lib/careersPrograms.js. First matching program wins. */}
+              <div className={styles.card} style={{ marginTop: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+                  <div>
+                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Leverage Careers programs</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>A campaign is counted in the first program (top to bottom) whose keyword appears in its name, so every campaign counts once. Campaigns that match nothing show as "Other". Keywords are comma-separated; write a keyword as /regex/ for a pattern.</p>
+                  </div>
+                  {cpMsg && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: cpMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: 'var(--bg3)', border: '0.5px solid var(--border)', padding: '4px 10px', borderRadius: 8, flexShrink: 0 }}>{cpMsg.text}</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                  {careersProgs.map((p, idx) => (
+                    <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)', border: '0.5px solid var(--border)' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', width: 16, flexShrink: 0 }}>{idx + 1}</span>
+                      <div style={{ width: 190, fontSize: 12.5, fontWeight: 700, color: 'var(--text)', flexShrink: 0 }}>{p.name}</div>
+                      <input type="text" className={styles.input} style={{ flex: 1, minWidth: 0 }}
+                        value={cpDrafts[p.name] != null ? cpDrafts[p.name] : p.keywords.join(', ')}
+                        onChange={e => setCpDrafts(d => ({ ...d, [p.name]: e.target.value }))}
+                        onBlur={() => commitProgramKeywords(p.name)}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+                      <button type="button" disabled={cpSaving || idx === 0} onClick={() => moveCareersProgram(idx, -1)} title="Move up"
+                        style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 13, fontWeight: 800, cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                      <button type="button" disabled={cpSaving || idx === careersProgs.length - 1} onClick={() => moveCareersProgram(idx, 1)} title="Move down"
+                        style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 13, fontWeight: 800, cursor: idx === careersProgs.length - 1 ? 'default' : 'pointer', opacity: idx === careersProgs.length - 1 ? 0.3 : 1 }}>↓</button>
+                      <button type="button" disabled={cpSaving} onClick={() => removeCareersProgram(p.name)}
+                        style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <input type="text" placeholder="New program name" value={cpNewName} onChange={e => setCpNewName(e.target.value)} className={styles.input} style={{ width: 200 }} />
+                  <input type="text" placeholder="Keywords, comma-separated" value={cpNewKw} onChange={e => setCpNewKw(e.target.value)} className={styles.input} style={{ width: 260 }} />
+                  <Button size="sm" onClick={addCareersProgram} disabled={cpSaving}>{cpSaving ? 'Saving…' : 'Add program'}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => saveCareersProgs(DEFAULT_PROGRAMS, 'Reset to defaults')} disabled={cpSaving}>Reset to defaults</Button>
+                </div>
               </div>
 
               {/* ── LINKEDIN / X (MANUAL) ── Neither has free API access: LinkedIn's

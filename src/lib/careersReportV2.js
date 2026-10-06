@@ -112,6 +112,33 @@ function entries(curRows, prevRows) {
   return { rows: out, totalSpend: total ? total.g.spend : 0 }
 }
 
+// One block per program (largest spend first, then by leads), each followed by its Paid and
+// Non-Paid rows. Rows must already carry `program` (the page tags them).
+function programEntries(curRows, prevRows) {
+  const names = new Set()
+  curRows.concat(prevRows).forEach(r => names.add(r.program || 'Other'))
+  const mk = (label, strong, c, p) => {
+    const g = { ...agg(c), prev: agg(p) }
+    return hasData(g) || hasData(g.prev) ? { label, strong, g } : null
+  }
+  const blocks = [...names].map(n => {
+    const c = curRows.filter(r => (r.program || 'Other') === n)
+    const p = prevRows.filter(r => (r.program || 'Other') === n)
+    return { n, head: mk(n, true, c, p), spend: agg(c).spend, leads: agg(c).leads, c, p }
+  }).filter(b => b.head).sort((a, b) => (b.spend - a.spend) || (b.leads - a.leads))
+  const out = []
+  const total = mk('TOTAL', true, curRows, prevRows)
+  if (total) out.push(total)
+  blocks.forEach(b => {
+    out.push(b.head)
+    const paid = mk('  Paid', false, b.c.filter(r => isPaidSource(r.source)), b.p.filter(r => isPaidSource(r.source)))
+    const free = mk('  Non-Paid', false, b.c.filter(r => !isPaidSource(r.source)), b.p.filter(r => !isPaidSource(r.source)))
+    if (paid) out.push(paid)
+    if (free) out.push(free)
+  })
+  return { rows: out, totalSpend: total ? total.g.spend : 0 }
+}
+
 // Everything the three messages read, built from rows that already reach back to
 // the previous window. `rows` are the page's row shape, already filtered.
 export function buildCareersV2Ctx({ rows, win, preset, windowLabel, filterLine, scopeLine, hasPrevData }) {
@@ -120,6 +147,7 @@ export function buildCareersV2Ctx({ rows, win, preset, windowLabel, filterLine, 
   const cur = inRange(rows, span.cur.from, span.cur.to)
   const prv = inRange(rows, prev.from, prev.to)
   const mtd = entries(cur, prv)
+  const prog = programEntries(cur, prv)
   const total = mtd.rows.length ? mtd.rows[0].g : null
 
   const fmtDay = iso => dayLabelOf(iso)
@@ -154,7 +182,7 @@ export function buildCareersV2Ctx({ rows, win, preset, windowLabel, filterLine, 
     prevLabel: fmtDay(prev.from) + ' → ' + fmtDay(prev.to), prevIsCalendarShift: preset === 'mtd',
     filterLine, scopeLine, hasPrev: hasPrevData !== false,
     now: total, prev: total ? total.prev : null,
-    cmpRows: mtd.rows, cmpTotalSpend: mtd.totalSpend, day, dow: { rows: dow, periodLabel: windowLabel },
+    cmpRows: mtd.rows, cmpTotalSpend: mtd.totalSpend, progRows: prog.rows, progTotalSpend: prog.totalSpend, day, dow: { rows: dow, periodLabel: windowLabel },
   }
 }
 
@@ -273,6 +301,17 @@ function buildCareersV2(ctx) {
     msgs.push({ key: 'yday', label: 'Last Day performance', text: two.filter(l => l != null).join('\n'), table: cmpTable('Source', d.rows, d.totalSpend, 'vs ' + (d.prevLabel || 'prev day'), true) })
   }
 
+  if (ctx.progRows && ctx.progRows.length > 1) {
+    const pm = [
+      '*:bar_chart: Leverage Careers - Programs*',
+      '*MTD by program*',
+      ctx.filterLine,
+      '',
+      '_Programs are matched from keywords in the campaign name. Each program shows its Paid and Non-Paid rows; campaigns that match nothing sit under Other. Movements read ' + (ctx.periodLabel || 'this period') + ' against ' + (ctx.prevLabel || 'the period before') + '. Won (Snapshot) is separate from the funnel._',
+    ]
+    msgs.push({ key: 'program', label: 'Programs', text: pm.filter(l => l != null).join('\n'), table: cmpTable('Program', ctx.progRows, ctx.progTotalSpend, vsLast, true) })
+  }
+
   const dow = ctx.dow
   if (dow && dow.rows && dow.rows.length) {
     const three = [
@@ -290,13 +329,14 @@ function buildCareersV2(ctx) {
 export const CAREERS_V2 = {
   id: 'careers_v2',
   code: 'V2',
-  msgKeys: ['mtd', 'yday', 'dow'],
+  msgKeys: ['mtd', 'program', 'yday', 'dow'],
   name: 'Summary + table — MTD, Last Day, day on day',
   tagline: 'Three messages: month to date, yesterday, and every day against the day before.',
   what: [
     'Message 1 — MTD Performance: the KPI stack and the Paid vs Non-Paid native table by Source',
-    'Message 2 — Last Day Performance: yesterday, read against the day before it',
-    'Message 3 — Day on Day Performance: one row per day, newest first',
+    'Message 2 — Programs: each program with its Paid and Non-Paid rows, MTD',
+    'Message 3 — Last Day Performance: yesterday, read against the day before it',
+    'Message 4 — Day on Day Performance: one row per day, newest first',
     'Every metric column is followed by a vs column carrying the movement AND the figure it moved from',
     'Table image and the all-columns CSV in the thread of message 1',
   ],
