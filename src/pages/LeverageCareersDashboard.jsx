@@ -803,7 +803,6 @@ export default function LeverageCareersDashboard() {
     'Won (Snapshot)': d.wonSnapshot,
     'CPL': d.cpl != null ? Math.round(d.cpl) : null,
     'Won rate': d.interested > 0 ? +((d.won / d.interested) * 100).toFixed(2) : 0,
-    'Won rate (Snapshot)': d.interested > 0 ? +((d.wonSnapshot / d.interested) * 100).toFixed(2) : 0,
   })), [rows])
   // Thin the x-axis labels once a window is long enough that they would collide.
   const dayTickInterval = dailySeries.length > 20 ? Math.ceil(dailySeries.length / 12) : 0
@@ -1051,7 +1050,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 </Card>
 
-                <Card title="Cost and conversion" sub={windowLabel + ' \u2014 CPL against Won rate, on the ' + costBasis + ' basis (' + (costBasis === 'Funnel' ? 'Won (Funnel)' : 'Won (Snapshot)') + ' / Interested)'} noPad
+                <Card title="Cost and conversion" sub={windowLabel + ' \u2014 ' + (costBasis === 'Funnel' ? 'CPL against Won rate (Won (Funnel) / Interested)' : 'CPL against Won (Snapshot) as a count. It is not tied to the same day\u2019s leads, so no rate is shown')} noPad
                   action={(
                     <div style={{ display: 'inline-flex', padding: 2, borderRadius: 9, border: '0.5px solid var(--card-border)' }}>
                       {['Funnel', 'Snapshot'].map(b => (
@@ -1066,11 +1065,11 @@ export default function LeverageCareersDashboard() {
                         <CartesianGrid vertical={false} stroke={C.border} />
                         <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval={dayTickInterval} />
                         <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={62} tickFormatter={v => '\u20B9' + fmtN(v)} />
-                        <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} unit="%" width={46} />
+                        <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} unit={costBasis === 'Funnel' ? '%' : ''} allowDecimals={costBasis === 'Funnel'} width={46} />
                         <Tooltip content={<BrandTooltip />} />
                         <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
                         <Line yAxisId="l" type="monotone" dataKey="CPL" stroke={C.navy} strokeWidth={2.4} strokeDasharray="4 3" dot={false} connectNulls />
-                        <Line yAxisId="r" type="monotone" dataKey={costBasis === 'Funnel' ? 'Won rate' : 'Won rate (Snapshot)'} stroke={C.green} strokeWidth={2.4} dot={false} />
+                        <Line yAxisId="r" type="monotone" dataKey={costBasis === 'Funnel' ? 'Won rate' : 'Won (Snapshot)'} stroke={C.green} strokeWidth={2.4} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
