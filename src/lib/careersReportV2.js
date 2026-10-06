@@ -170,14 +170,16 @@ const MONTH_KPIS = [
   { label: 'Won (Snapshot)', key: 'wonSnapshot' },
   { label: 'CPS', key: 'cps' },
 ]
-// A single day is a small number, and Won lands days or weeks after the lead, so
-// day on day it is noise, not news -- same rule as Overall's V2.
-const DAY_KPIS = MONTH_KPIS.slice(0, 5)
+// A single day is a small number, and Won (Funnel) lands days or weeks after the
+// lead, so day on day it stays out. Won (Snapshot) is shown: it is the snapshot
+// view's own figure and was asked for on every message.
+const DAY_KPIS = MONTH_KPIS.slice(0, 5).concat(MONTH_KPIS.filter(k => k.key === 'wonSnapshot'))
 const TABLE_METRICS = [
   { key: 'spend', label: 'Spend' },
   { key: 'leads', label: 'Leads' },
   { key: 'interested', label: 'Interested' },
-  { key: 'won', label: 'Won' },
+  { key: 'won', label: 'Won (Funnel)' },
+  { key: 'wonSnapshot', label: 'Won (Snapshot)' },
   { key: 'cpl', label: 'CPL' },
 ]
 
