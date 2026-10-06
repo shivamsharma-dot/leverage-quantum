@@ -227,56 +227,123 @@ function StepTile({ label, value, sub, color }) {
   )
 }
 
-// Chip for one applied filter field; the x clears that whole field.
-function FilterChip({ label, text, onRemove }) {
+// Per-field filter bar, same pattern as AI QL Detail: a removable chip per active field
+// (re-editable multi-select) plus one "+ Filter" that picks a field, then its values.
+// Picks within a field are OR, fields combine as AND.
+function FilterValuePopover({ field, options, selected, onToggleValue, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 6px 5px 11px', borderRadius: 99, border: '0.5px solid var(--card-border)', background: 'var(--card)', fontFamily: FONT, fontSize: 12, fontWeight: 600, color: C.text, maxWidth: 320 }}>
-      <span style={{ color: C.muted, fontWeight: 700 }}>{label}</span>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
-      <button type="button" onClick={onRemove} aria-label={'Clear ' + label} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 15, lineHeight: 1, padding: '0 4px' }}>{'\u00d7'}</button>
-    </span>
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 240, background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder={'Search ' + field.label.toLowerCase() + '…'}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + 'var(--card-border)', borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'transparent', color: C.text }} />
+        <div style={{ maxHeight: 230, overflowY: 'auto' }}>
+          {shown.map(o => {
+            const checked = selected.includes(o)
+            return (
+              <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : '#374151', background: checked ? C.navyBg : 'transparent' }}>
+                <input type="checkbox" checked={checked} onChange={() => onToggleValue(o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+              </label>
+            )
+          })}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No matches</div>}
+        </div>
+      </div>
+    </>
   )
 }
 
-// One advanced-filter popover for the whole page: a section per field, each a
-// searchable multi-select (picks within a field are OR, fields combine as AND),
-// plus a campaign-name search. position:fixed so no scrolling ancestor can clip it.
-function CareersFilterPanel({ anchor, onClose, sections, nameQuery, setNameQuery }) {
-  const [search, setSearch] = useState({})
-  const toggle = (sec, v) => sec.onChange(sec.value.includes(v) ? sec.value.filter(x => x !== v) : [...sec.value, v])
+function FilterChip({ field, values, options, open, onToggle, onToggleValue, onRemove }) {
+  const summary = values.length === 1 ? values[0] : values.length + ' selected'
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80 }} />
-      <div style={{ position: 'fixed', top: anchor.top, left: Math.max(12, anchor.left), width: 'min(380px, 94vw)', maxHeight: 'min(560px, calc(100vh - ' + (anchor.top + 16) + 'px))', overflowY: 'auto', zIndex: 81, background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 14, boxShadow: '0 16px 44px rgba(15,23,42,0.18)', padding: 14, fontFamily: FONT }}>
-        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 6 }}>Campaign name contains</div>
-        <input value={nameQuery} onChange={e => setNameQuery(e.target.value)} placeholder="Search campaign name..."
-          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 11px', borderRadius: 9, border: '0.5px solid var(--card-border)', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, outline: 'none', marginBottom: 14 }} />
-        {sections.map(sec => {
-          const q = (search[sec.label] || '').toLowerCase()
-          const opts = sec.options.filter(o => !q || o.label.toLowerCase().includes(q))
-          return (
-            <div key={sec.label} style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted }}>{sec.label}{sec.value.length ? ' (' + sec.value.length + ')' : ''}</span>
-                {sec.value.length > 0 && <button type="button" onClick={() => sec.onChange([])} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: C.blue }}>Clear</button>}
-              </div>
-              {sec.options.length > 8 && (
-                <input value={search[sec.label] || ''} onChange={e => setSearch(o => ({ ...o, [sec.label]: e.target.value }))} placeholder="Search..."
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: '0.5px solid var(--card-border)', background: 'transparent', fontFamily: FONT, fontSize: 12, color: C.text, outline: 'none', marginBottom: 6 }} />
-              )}
-              <div style={{ maxHeight: 150, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {opts.length === 0 ? <div style={{ fontSize: 12, color: C.muted, padding: '4px 2px' }}>Nothing to pick.</div> : opts.map(o => (
-                  <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 6px', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: C.text }}>
-                    <input type="checkbox" checked={sec.value.includes(o.value)} onChange={() => toggle(sec, o.value)} style={{ accentColor: C.navy, width: 14, height: 14 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )
-        })}
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 8, border: '0.5px solid rgba(31,60,132,0.35)', background: C.navyBg, overflow: 'hidden' }}>
+        <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px 6px 11px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+          <span style={{ color: C.navy, fontWeight: 700 }}>{field.label}</span>
+          <span style={{ color: C.text, fontWeight: 600, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
+          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="3" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+        </button>
+        <button type="button" onClick={onRemove} title="Remove filter" style={{ border: 'none', borderLeft: '0.5px solid rgba(31,60,132,0.2)', background: 'transparent', cursor: 'pointer', color: C.navy, padding: '6px 9px', display: 'flex', alignItems: 'center' }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
       </div>
-    </>
+      {open && <FilterValuePopover field={field} options={options} selected={values} onToggleValue={onToggleValue} onClose={onToggle} />}
+    </div>
+  )
+}
+
+// Two-step wizard in ONE popover: pick a column, then check off its values -- avoids the
+// dead end of handing off to a chip that doesn't exist yet for a field with no values
+// checked. Re-editing an ALREADY-active filter still goes through FilterChip above; this
+// component only ever handles adding a brand-new one.
+function AddFilterButton({ allFields, activeFilters, filterOptions, open, onToggle, onToggleValue }) {
+  const [step, setStep] = useState('pick')
+  const [q, setQ] = useState('')
+  useEffect(() => { if (open) { setStep('pick'); setQ('') } }, [open])
+
+  const pickable = allFields.filter(f => !activeFilters[f.key])
+  const shownFields = q.trim() ? pickable.filter(f => f.label.toLowerCase().includes(q.trim().toLowerCase())) : pickable
+  const activeField = step !== 'pick' ? allFields.find(f => f.key === step) : null
+  const options = activeField ? (filterOptions[activeField.key] || []) : []
+  const shownOptions = activeField && q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + 'var(--card-border)', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        Filter
+      </button>
+      {open && (
+        <>
+          <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 230, background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+            {step === 'pick' ? (
+              <>
+                <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a column…"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + 'var(--card-border)', borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'transparent', color: C.text }} />
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {shownFields.map(f => (
+                    <button key={f.key} type="button" onClick={() => { setStep(f.key); setQ('') }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: FONT, color: '#374151', background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#F3F4F6' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                      {f.label}
+                    </button>
+                  ))}
+                  {shownFields.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No columns match</div>}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <button type="button" onClick={() => { setStep('pick'); setQ('') }} title="Back" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: C.text }}>{activeField.label}</span>
+                </div>
+                <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder={'Search ' + activeField.label.toLowerCase() + '…'}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + 'var(--card-border)', borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'transparent', color: C.text }} />
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {shownOptions.map(o => {
+                    const checked = (activeFilters[activeField.key] || []).includes(o)
+                    return (
+                      <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : '#374151', background: checked ? C.navyBg : 'transparent' }}>
+                        <input type="checkbox" checked={checked} onChange={() => onToggleValue(activeField.key, o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+                      </label>
+                    )
+                  })}
+                  {shownOptions.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No matches</div>}
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -398,6 +465,7 @@ function applyFilters(rows, f) {
     if (f.source.length && !f.source.includes(r.source)) return false
     if (f.program.length && !f.program.includes(r.program)) return false
     if (f.subSource.length && !f.subSource.includes(r.subSource)) return false
+    if (f.name.length && !f.name.includes(r.name)) return false
     if (q && !String(r.name || '').toLowerCase().includes(q)) return false
     return true
   })
@@ -475,15 +543,8 @@ export default function LeverageCareersDashboard() {
   // CPI in the table. The old table-only search box was removed in favour of the
   // debounced ad-name search here, which previously filtered the visible rows while
   // leaving the TOTAL row and every KPI on the unfiltered set.
-  const [fProgram, setFProgram] = useState([])
-  const [fSource, setFSource] = useState([])
-  const [fSubSource, setFSubSource] = useState([])
-  const [fConv, setFConv] = useState([])
-  const [fCost, setFCost] = useState([])
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [filtersAnchor, setFiltersAnchor] = useState(null)
-  const [nameQuery, setNameQuery] = useState('')
-  const nameQueryDebounced = useDebouncedValue(nameQuery, 250)
+  const [activeFilters, setActiveFilters] = useState({}) // { fieldKey: string[] }
+  const [openFilterKey, setOpenFilterKey] = useState(null) // field key whose popover is open, or '__add'
   const [tableSort, setTableSort] = useState({ key: 'spend', dir: 'desc' })
 
   // Cohort view bucket -- Month or Week. Shared Dropdown, never a native select.
@@ -547,15 +608,37 @@ export default function LeverageCareersDashboard() {
 
   // ---- main-page aggregates ----
   const filters = useMemo(
-    () => ({ program: fProgram, source: fSource, subSource: fSubSource, conv: fConv, cost: fCost, query: nameQueryDebounced }),
-    [fProgram, fSource, fSubSource, fConv, fCost, nameQueryDebounced]
+    () => {
+      const g = k => activeFilters[k] || []
+      const keyOf = (opts, labels) => labels.map(l => (opts.find(o => o.label === l) || {}).value).filter(Boolean)
+      return { program: g('program'), source: g('source'), subSource: g('subSource'), name: g('name'),
+        conv: keyOf(CONV_OPTIONS, g('conv')), cost: keyOf(COST_OPTIONS, g('cost')), query: '' }
+    },
+    [activeFilters]
   )
-  const filterCount = fProgram.length + fSource.length + fSubSource.length + fConv.length + fCost.length + (nameQueryDebounced.trim() ? 1 : 0)
-  const resetFilters = useCallback(() => { setFProgram([]); setFSource([]); setFSubSource([]); setFConv([]); setFCost([]); setNameQuery('') }, [])
+  const filterCount = Object.values(activeFilters).filter(v => v && v.length).length
+  const resetFilters = useCallback(() => setActiveFilters({}), [])
+  const toggleFilterValue = (field, val) => setActiveFilters(prev => {
+    const cur = prev[field] || []
+    const nx = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]
+    const out = { ...prev }
+    if (nx.length) out[field] = nx; else delete out[field]
+    return out
+  })
+  const removeFilter = field => setActiveFilters(prev => { const c = { ...prev }; delete c[field]; return c })
   // Menus are built from the UNFILTERED rows on purpose -- see optionsFor().
   const programOptions = useMemo(() => optionsFor(dayRowsT, 'program'), [dayRowsT])
   const sourceOptions = useMemo(() => optionsFor(dayRowsT, 'source'), [dayRowsT])
   const subSourceOptions = useMemo(() => optionsFor(dayRowsT, 'subSource'), [dayRowsT])
+  const nameOptions = useMemo(() => optionsFor(dayRowsT, 'name'), [dayRowsT])
+  const FILTER_FIELDS = useMemo(() => [
+    { key: 'program', label: 'Program' }, { key: 'source', label: 'Source' }, { key: 'subSource', label: 'Sub source' },
+    { key: 'name', label: 'Campaign' }, { key: 'conv', label: 'Won rate (per campaign)' }, { key: 'cost', label: 'CPL (per campaign)' },
+  ], [])
+  const filterOptions = useMemo(() => ({
+    program: programOptions, source: sourceOptions, subSource: subSourceOptions, name: nameOptions,
+    conv: CONV_OPTIONS.map(o => o.label), cost: COST_OPTIONS.map(o => o.label),
+  }), [programOptions, sourceOptions, subSourceOptions, nameOptions])
   const rows = useMemo(() => applyFilters(dayRowsT || [], filters), [dayRowsT, filters])
   const campaignRows = useMemo(() => sortGroup('campaign', groupRows(rows, 'campaign')), [rows])
   const totals = useMemo(() => sumTotals(rows), [rows])
@@ -657,8 +740,7 @@ export default function LeverageCareersDashboard() {
   // synchronously by the panel to build BOTH the live preview and the real send
   // (see SlackReportPanel.jsx), so it must never depend on anything async.
   const buildCareersContext = useCallback(() => {
-    const sc = (l, a) => l + ': ' + (a.length ? a.join(', ') : 'All')
-    const scope = sc('Program', fProgram) + ' \u00b7 ' + sc('Source', fSource) + ' \u00b7 ' + sc('Sub source', fSubSource)
+    const scope = FILTER_FIELDS.map(f => f.label + ': ' + ((activeFilters[f.key] || []).join(', ') || 'All')).slice(0, 3).join(' \u00b7 ')
     const v2 = buildCareersV2Ctx({
       rows: applyFilters(tagRows(slackRows || dayRows || [], programs), filters),
       win: activeWindow, preset, windowLabel, filterLine: scope, scopeLine: scope,
@@ -670,7 +752,7 @@ export default function LeverageCareersDashboard() {
       campaignCount: campaignRows.length,
       ...v2,
     }
-  }, [windowLabel, totals, tableDim, tableRows, campaignRows.length, slackRows, dayRows, programs, filters, activeWindow, preset, fSource, fSubSource])
+  }, [windowLabel, totals, tableDim, tableRows, campaignRows.length, slackRows, dayRows, programs, filters, activeWindow, preset, activeFilters, FILTER_FIELDS])
 
   // The V2 report reads every figure against the window before it, and each day
   // against the day before, so it needs rows reaching back past the on-screen
@@ -898,26 +980,19 @@ export default function LeverageCareersDashboard() {
                   funnel, table, exports) and both modals read the same applyFilters()
                   predicate off this one filters object. */}
               <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <Button size="sm" variant="secondary" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setFiltersAnchor({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 400) }); setFiltersOpen(o => !o) }}>
-                  Filters{filterCount > 0 ? ' (' + filterCount + ')' : ''}
-                </Button>
-                {[['Program', fProgram, setFProgram], ['Source', fSource, setFSource], ['Sub source', fSubSource, setFSubSource],
-                  ['Won rate', fConv, setFConv, CONV_OPTIONS], ['CPL', fCost, setFCost, COST_OPTIONS]].map(([lab, arr, set, opts]) => arr.length ? (
-                  <FilterChip key={lab} label={lab} text={arr.map(v => (opts ? (opts.find(o => o.value === v) || {}).label : v)).join(', ')} onRemove={() => set([])} />
-                ) : null)}
-                {nameQueryDebounced.trim() ? <FilterChip label="Campaign" text={'contains "' + nameQueryDebounced.trim() + '"'} onRemove={() => setNameQuery('')} /> : null}
+                {Object.keys(activeFilters).map(key => {
+                  const field = FILTER_FIELDS.find(f => f.key === key)
+                  if (!field) return null
+                  return (
+                    <FilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
+                      open={openFilterKey === key} onToggle={() => setOpenFilterKey(openFilterKey === key ? null : key)}
+                      onToggleValue={v => toggleFilterValue(key, v)} onRemove={() => { removeFilter(key); setOpenFilterKey(null) }} />
+                  )
+                })}
+                <AddFilterButton allFields={FILTER_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
+                  open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(openFilterKey === '__add' ? null : '__add')}
+                  onToggleValue={toggleFilterValue} />
                 {filterCount > 0 && <Button size="sm" variant="secondary" onClick={resetFilters}>Clear all</Button>}
-                {filtersOpen && filtersAnchor && (
-                  <CareersFilterPanel anchor={filtersAnchor} onClose={() => setFiltersOpen(false)}
-                    nameQuery={nameQuery} setNameQuery={setNameQuery}
-                    sections={[
-                      { label: 'Program', options: programOptions.map(v => ({ value: v, label: v })), value: fProgram, onChange: setFProgram },
-                      { label: 'Source', options: sourceOptions.map(v => ({ value: v, label: v })), value: fSource, onChange: setFSource },
-                      { label: 'Sub source', options: subSourceOptions.map(v => ({ value: v, label: v })), value: fSubSource, onChange: setFSubSource },
-                      { label: 'Won rate (per campaign)', options: CONV_OPTIONS, value: fConv, onChange: setFConv },
-                      { label: 'CPL (per campaign)', options: COST_OPTIONS, value: fCost, onChange: setFCost },
-                    ]} />
-                )}
               </div>
               {filterCount > 0 && (
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
