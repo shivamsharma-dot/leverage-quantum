@@ -549,6 +549,7 @@ export default function LeverageCareersDashboard() {
 
   // Cohort view bucket -- Month or Week. Shared Dropdown, never a native select.
   const [cohortBy, setCohortBy] = useState('Week')
+  const [costBasis, setCostBasis] = useState('Funnel') // Won basis for the Cost and conversion chart
 
   const [compareOpen, setCompareOpen] = useState(false)
   const [compareMode, setCompareMode] = useState('prev')
@@ -802,6 +803,7 @@ export default function LeverageCareersDashboard() {
     'Won (Snapshot)': d.wonSnapshot,
     'CPL': d.cpl != null ? Math.round(d.cpl) : null,
     'Won rate': d.interested > 0 ? +((d.won / d.interested) * 100).toFixed(2) : 0,
+    'Won rate (Snapshot)': d.interested > 0 ? +((d.wonSnapshot / d.interested) * 100).toFixed(2) : 0,
   })), [rows])
   // Thin the x-axis labels once a window is long enough that they would collide.
   const dayTickInterval = dailySeries.length > 20 ? Math.ceil(dailySeries.length / 12) : 0
@@ -1049,7 +1051,15 @@ export default function LeverageCareersDashboard() {
                   </div>
                 </Card>
 
-                <Card title="Cost and conversion" sub={windowLabel + ' \u2014 CPL against Won rate'} noPad>
+                <Card title="Cost and conversion" sub={windowLabel + ' \u2014 CPL against Won rate, on the ' + costBasis + ' basis (' + (costBasis === 'Funnel' ? 'Won (Funnel)' : 'Won (Snapshot)') + ' / Interested)'} noPad
+                  action={(
+                    <div style={{ display: 'inline-flex', padding: 2, borderRadius: 9, border: '0.5px solid var(--card-border)' }}>
+                      {['Funnel', 'Snapshot'].map(b => (
+                        <button key={b} type="button" onClick={() => setCostBasis(b)}
+                          style={{ padding: '5px 12px', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: FONT, fontSize: 12, fontWeight: 700, background: costBasis === b ? C.navy : 'transparent', color: costBasis === b ? '#fff' : C.muted }}>{b}</button>
+                      ))}
+                    </div>
+                  )}>
                   <div style={{ padding: '12px 16px 6px' }}>
                     <ResponsiveContainer width="100%" height={230}>
                       <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
@@ -1060,7 +1070,7 @@ export default function LeverageCareersDashboard() {
                         <Tooltip content={<BrandTooltip />} />
                         <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
                         <Line yAxisId="l" type="monotone" dataKey="CPL" stroke={C.navy} strokeWidth={2.4} strokeDasharray="4 3" dot={false} connectNulls />
-                        <Line yAxisId="r" type="monotone" dataKey="Won rate" stroke={C.green} strokeWidth={2.4} dot={false} />
+                        <Line yAxisId="r" type="monotone" dataKey={costBasis === 'Funnel' ? 'Won rate' : 'Won rate (Snapshot)'} stroke={C.green} strokeWidth={2.4} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
