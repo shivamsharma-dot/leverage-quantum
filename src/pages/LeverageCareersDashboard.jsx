@@ -227,6 +227,59 @@ function StepTile({ label, value, sub, color }) {
   )
 }
 
+// Chip for one applied filter field; the x clears that whole field.
+function FilterChip({ label, text, onRemove }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 6px 5px 11px', borderRadius: 99, border: '0.5px solid var(--card-border)', background: 'var(--card)', fontFamily: FONT, fontSize: 12, fontWeight: 600, color: C.text, maxWidth: 320 }}>
+      <span style={{ color: C.muted, fontWeight: 700 }}>{label}</span>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+      <button type="button" onClick={onRemove} aria-label={'Clear ' + label} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 15, lineHeight: 1, padding: '0 4px' }}>{'\u00d7'}</button>
+    </span>
+  )
+}
+
+// One advanced-filter popover for the whole page: a section per field, each a
+// searchable multi-select (picks within a field are OR, fields combine as AND),
+// plus a campaign-name search. position:fixed so no scrolling ancestor can clip it.
+function CareersFilterPanel({ anchor, onClose, sections, nameQuery, setNameQuery }) {
+  const [search, setSearch] = useState({})
+  const toggle = (sec, v) => sec.onChange(sec.value.includes(v) ? sec.value.filter(x => x !== v) : [...sec.value, v])
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80 }} />
+      <div style={{ position: 'fixed', top: anchor.top, left: Math.max(12, anchor.left), width: 'min(380px, 94vw)', maxHeight: 'min(560px, calc(100vh - ' + (anchor.top + 16) + 'px))', overflowY: 'auto', zIndex: 81, background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 14, boxShadow: '0 16px 44px rgba(15,23,42,0.18)', padding: 14, fontFamily: FONT }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 6 }}>Campaign name contains</div>
+        <input value={nameQuery} onChange={e => setNameQuery(e.target.value)} placeholder="Search campaign name..."
+          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 11px', borderRadius: 9, border: '0.5px solid var(--card-border)', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, outline: 'none', marginBottom: 14 }} />
+        {sections.map(sec => {
+          const q = (search[sec.label] || '').toLowerCase()
+          const opts = sec.options.filter(o => !q || o.label.toLowerCase().includes(q))
+          return (
+            <div key={sec.label} style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted }}>{sec.label}{sec.value.length ? ' (' + sec.value.length + ')' : ''}</span>
+                {sec.value.length > 0 && <button type="button" onClick={() => sec.onChange([])} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 11.5, fontWeight: 700, color: C.blue }}>Clear</button>}
+              </div>
+              {sec.options.length > 8 && (
+                <input value={search[sec.label] || ''} onChange={e => setSearch(o => ({ ...o, [sec.label]: e.target.value }))} placeholder="Search..."
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: '0.5px solid var(--card-border)', background: 'transparent', fontFamily: FONT, fontSize: 12, color: C.text, outline: 'none', marginBottom: 6 }} />
+              )}
+              <div style={{ maxHeight: 150, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {opts.length === 0 ? <div style={{ fontSize: 12, color: C.muted, padding: '4px 2px' }}>Nothing to pick.</div> : opts.map(o => (
+                  <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 6px', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: C.text }}>
+                    <input type="checkbox" checked={sec.value.includes(o.value)} onChange={() => toggle(sec, o.value)} style={{ accentColor: C.navy, width: 14, height: 14 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
 // Stamps every row with its program (see src/lib/careersPrograms.js for the rule).
 function tagRows(rows, programs) {
   return (rows || []).map(r => ({ ...r, program: classifyProgram(r.name, programs) }))
@@ -300,13 +353,11 @@ function useDebouncedValue(value, delay) {
 }
 
 const CONV_OPTIONS = [
-  { value: 'All', label: 'All' },
   { value: 'high', label: 'At/above median' },
   { value: 'low', label: 'Below median' },
   { value: 'none', label: 'No Won yet' },
 ]
 const COST_OPTIONS = [
-  { value: 'All', label: 'All' },
   { value: 'efficient', label: 'At/below median' },
   { value: 'expensive', label: 'Above median' },
   { value: 'nospend', label: 'No spend' },
@@ -326,7 +377,7 @@ function medianOf(arr) {
 function optionsFor(rows, field) {
   const m = new Map()
   ;(rows || []).forEach(r => { const k = r[field]; if (!k) return; m.set(k, (m.get(k) || 0) + r.leads) })
-  return ['All', ...Array.from(m.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0])]
+  return Array.from(m.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0])
 }
 
 // THE one predicate every row-filtering site uses -- main page, funnel, cohort and
@@ -344,26 +395,31 @@ function optionsFor(rows, field) {
 function applyFilters(rows, f) {
   const q = (f.query || '').trim().toLowerCase()
   const out = (rows || []).filter(r => {
-    if (f.source !== 'All' && r.source !== f.source) return false
-    if (f.program !== 'All' && r.program !== f.program) return false
-    if (f.subSource !== 'All' && r.subSource !== f.subSource) return false
+    if (f.source.length && !f.source.includes(r.source)) return false
+    if (f.program.length && !f.program.includes(r.program)) return false
+    if (f.subSource.length && !f.subSource.includes(r.subSource)) return false
     if (q && !String(r.name || '').toLowerCase().includes(q)) return false
     return true
   })
-  if (f.conv === 'All' && f.cost === 'All') return out
+  if (!f.conv.length && !f.cost.length) return out
   const camps = groupRows(out, 'campaign')
   const medConv = medianOf(camps.filter(c => c.interested > 0).map(c => c.won / c.interested))
   const medCost = medianOf(camps.filter(c => c.cpl != null).map(c => c.cpl))
   const keep = new Set()
   camps.forEach(c => {
     const rate = c.interested > 0 ? c.won / c.interested : null
-    let ok = true
-    if (f.conv === 'high') ok = ok && rate != null && medConv != null && rate >= medConv && c.won > 0
-    if (f.conv === 'low') ok = ok && rate != null && medConv != null && rate < medConv
-    if (f.conv === 'none') ok = ok && c.won === 0
-    if (f.cost === 'efficient') ok = ok && c.cpl != null && medCost != null && c.cpl <= medCost
-    if (f.cost === 'expensive') ok = ok && c.cpl != null && medCost != null && c.cpl > medCost
-    if (f.cost === 'nospend') ok = ok && !(c.spend > 0)
+    const convTest = {
+      high: rate != null && medConv != null && rate >= medConv && c.won > 0,
+      low: rate != null && medConv != null && rate < medConv,
+      none: c.won === 0,
+    }
+    const costTest = {
+      efficient: c.cpl != null && medCost != null && c.cpl <= medCost,
+      expensive: c.cpl != null && medCost != null && c.cpl > medCost,
+      nospend: !(c.spend > 0),
+    }
+    // Within one field the picks are OR; across fields they are AND.
+    const ok = (!f.conv.length || f.conv.some(v => convTest[v])) && (!f.cost.length || f.cost.some(v => costTest[v]))
     if (ok) keep.add(c.label)
   })
   return out.filter(r => keep.has(r.name))
@@ -419,11 +475,13 @@ export default function LeverageCareersDashboard() {
   // CPI in the table. The old table-only search box was removed in favour of the
   // debounced ad-name search here, which previously filtered the visible rows while
   // leaving the TOTAL row and every KPI on the unfiltered set.
-  const [fProgram, setFProgram] = useState('All')
-  const [fSource, setFSource] = useState('All')
-  const [fSubSource, setFSubSource] = useState('All')
-  const [fConv, setFConv] = useState('All')
-  const [fCost, setFCost] = useState('All')
+  const [fProgram, setFProgram] = useState([])
+  const [fSource, setFSource] = useState([])
+  const [fSubSource, setFSubSource] = useState([])
+  const [fConv, setFConv] = useState([])
+  const [fCost, setFCost] = useState([])
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filtersAnchor, setFiltersAnchor] = useState(null)
   const [nameQuery, setNameQuery] = useState('')
   const nameQueryDebounced = useDebouncedValue(nameQuery, 250)
   const [tableSort, setTableSort] = useState({ key: 'spend', dir: 'desc' })
@@ -492,8 +550,8 @@ export default function LeverageCareersDashboard() {
     () => ({ program: fProgram, source: fSource, subSource: fSubSource, conv: fConv, cost: fCost, query: nameQueryDebounced }),
     [fProgram, fSource, fSubSource, fConv, fCost, nameQueryDebounced]
   )
-  const filterCount = (fProgram !== 'All' ? 1 : 0) + (fSource !== 'All' ? 1 : 0) + (fSubSource !== 'All' ? 1 : 0) + (fConv !== 'All' ? 1 : 0) + (fCost !== 'All' ? 1 : 0) + (nameQueryDebounced.trim() ? 1 : 0)
-  const resetFilters = useCallback(() => { setFProgram('All'); setFSource('All'); setFSubSource('All'); setFConv('All'); setFCost('All'); setNameQuery('') }, [])
+  const filterCount = fProgram.length + fSource.length + fSubSource.length + fConv.length + fCost.length + (nameQueryDebounced.trim() ? 1 : 0)
+  const resetFilters = useCallback(() => { setFProgram([]); setFSource([]); setFSubSource([]); setFConv([]); setFCost([]); setNameQuery('') }, [])
   // Menus are built from the UNFILTERED rows on purpose -- see optionsFor().
   const programOptions = useMemo(() => optionsFor(dayRowsT, 'program'), [dayRowsT])
   const sourceOptions = useMemo(() => optionsFor(dayRowsT, 'source'), [dayRowsT])
@@ -599,7 +657,8 @@ export default function LeverageCareersDashboard() {
   // synchronously by the panel to build BOTH the live preview and the real send
   // (see SlackReportPanel.jsx), so it must never depend on anything async.
   const buildCareersContext = useCallback(() => {
-    const scope = 'Program: ' + fProgram + ' \u00b7 Source: ' + fSource + ' \u00b7 Sub source: ' + fSubSource
+    const sc = (l, a) => l + ': ' + (a.length ? a.join(', ') : 'All')
+    const scope = sc('Program', fProgram) + ' \u00b7 ' + sc('Source', fSource) + ' \u00b7 ' + sc('Sub source', fSubSource)
     const v2 = buildCareersV2Ctx({
       rows: applyFilters(tagRows(slackRows || dayRows || [], programs), filters),
       win: activeWindow, preset, windowLabel, filterLine: scope, scopeLine: scope,
@@ -839,17 +898,26 @@ export default function LeverageCareersDashboard() {
                   funnel, table, exports) and both modals read the same applyFilters()
                   predicate off this one filters object. */}
               <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 11, border: '0.5px solid var(--card-border)', background: 'var(--card)', flex: '1 1 190px', minWidth: 170, maxWidth: 300 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-                  <input value={nameQuery} onChange={e => setNameQuery(e.target.value)} placeholder="Search ad name..."
-                    style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, width: '100%' }} />
-                </div>
-                <Dropdown label="Program" options={programOptions} value={fProgram} onChange={setFProgram} minWidth={170} />
-                <Dropdown label="Source" options={sourceOptions} value={fSource} onChange={setFSource} minWidth={130} />
-                <Dropdown label="Sub source" options={subSourceOptions} value={fSubSource} onChange={setFSubSource} minWidth={150} />
-                <Dropdown label="Won rate" options={CONV_OPTIONS} value={fConv} onChange={setFConv} minWidth={135} />
-                <Dropdown label="CPL" options={COST_OPTIONS} value={fCost} onChange={setFCost} minWidth={135} />
-                {filterCount > 0 && <Button size="sm" variant="secondary" onClick={resetFilters}>Reset filters</Button>}
+                <Button size="sm" variant="secondary" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setFiltersAnchor({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 400) }); setFiltersOpen(o => !o) }}>
+                  Filters{filterCount > 0 ? ' (' + filterCount + ')' : ''}
+                </Button>
+                {[['Program', fProgram, setFProgram], ['Source', fSource, setFSource], ['Sub source', fSubSource, setFSubSource],
+                  ['Won rate', fConv, setFConv, CONV_OPTIONS], ['CPL', fCost, setFCost, COST_OPTIONS]].map(([lab, arr, set, opts]) => arr.length ? (
+                  <FilterChip key={lab} label={lab} text={arr.map(v => (opts ? (opts.find(o => o.value === v) || {}).label : v)).join(', ')} onRemove={() => set([])} />
+                ) : null)}
+                {nameQueryDebounced.trim() ? <FilterChip label="Campaign" text={'contains "' + nameQueryDebounced.trim() + '"'} onRemove={() => setNameQuery('')} /> : null}
+                {filterCount > 0 && <Button size="sm" variant="secondary" onClick={resetFilters}>Clear all</Button>}
+                {filtersOpen && filtersAnchor && (
+                  <CareersFilterPanel anchor={filtersAnchor} onClose={() => setFiltersOpen(false)}
+                    nameQuery={nameQuery} setNameQuery={setNameQuery}
+                    sections={[
+                      { label: 'Program', options: programOptions.map(v => ({ value: v, label: v })), value: fProgram, onChange: setFProgram },
+                      { label: 'Source', options: sourceOptions.map(v => ({ value: v, label: v })), value: fSource, onChange: setFSource },
+                      { label: 'Sub source', options: subSourceOptions.map(v => ({ value: v, label: v })), value: fSubSource, onChange: setFSubSource },
+                      { label: 'Won rate (per campaign)', options: CONV_OPTIONS, value: fConv, onChange: setFConv },
+                      { label: 'CPL (per campaign)', options: COST_OPTIONS, value: fCost, onChange: setFCost },
+                    ]} />
+                )}
               </div>
               {filterCount > 0 && (
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
