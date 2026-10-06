@@ -798,7 +798,8 @@ export default function LeverageCareersDashboard() {
     Spend: Math.round(d.spend),
     'Leads': d.leads,
     Interested: d.interested,
-    Won: d.won,
+    'Won (Funnel)': d.won,
+    'Won (Snapshot)': d.wonSnapshot,
     'CPL': d.cpl != null ? Math.round(d.cpl) : null,
     'Won rate': d.interested > 0 ? +((d.won / d.interested) * 100).toFixed(2) : 0,
   })), [rows])
@@ -1065,7 +1066,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 </Card>
 
-                <Card title="Interested and Won" sub={windowLabel + ' \u2014 by day'} noPad>
+                <Card title="Interested and Won" sub={windowLabel + ' \u2014 by day. Won (Snapshot) is the navy line, separate from the funnel'} noPad>
                   <div style={{ padding: '12px 16px 6px' }}>
                     <ResponsiveContainer width="100%" height={230}>
                       <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
@@ -1079,7 +1080,8 @@ export default function LeverageCareersDashboard() {
                         <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                         <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
                         <Bar dataKey="Interested" fill={barFill('g-lc-int')} radius={BAR_RADIUS} barSize={9} />
-                        <Bar dataKey="Won" fill={barFill('g-lc-won')} radius={BAR_RADIUS} barSize={9} />
+                        <Bar dataKey="Won (Funnel)" fill={barFill('g-lc-won')} radius={BAR_RADIUS} barSize={9} />
+                        <Line type="monotone" dataKey="Won (Snapshot)" stroke={C.navy} strokeWidth={2} dot={{ r: 2.5, fill: C.navy }} activeDot={{ r: 4 }} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
