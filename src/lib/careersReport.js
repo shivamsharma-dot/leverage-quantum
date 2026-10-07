@@ -7,6 +7,7 @@
 // send -- there is no second code path that could drift from what's sent.
 
 import { CAREERS_V2 } from './careersReportV2'
+import { CAREERS_V3 } from './careersReportV3'
 
 const fmtINR = n => n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN')
 const fmtN = n => n == null ? '—' : Math.round(n).toLocaleString('en-IN')
@@ -61,7 +62,7 @@ function buildCareers(ctx) {
   }]
 }
 
-export const CAREERS_REPORT_VERSIONS = [CAREERS_V2, {
+export const CAREERS_REPORT_VERSIONS = [CAREERS_V3, CAREERS_V2, {
   id: 'leverage_careers',
   code: 'CAREERS',
   msgKeys: ['leverage_careers'],

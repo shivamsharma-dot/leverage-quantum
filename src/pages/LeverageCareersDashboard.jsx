@@ -15,6 +15,7 @@ import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, RankedBars, sourceColor, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
 import { careersV2Windows, comparableSpan, buildCareersV2Ctx, isPaidSource } from '../lib/careersReportV2'
+import { buildCareersV3Ctx } from '../lib/careersReportV3'
 import { DEFAULT_PROGRAMS, classifyProgram, normalizePrograms } from '../lib/careersPrograms'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
@@ -747,11 +748,13 @@ export default function LeverageCareersDashboard() {
       win: activeWindow, preset, windowLabel, filterLine: scope, scopeLine: scope,
       hasPrevData: !!slackRows,
     })
+    const v3 = buildCareersV3Ctx({ rows: tagRows(slackRows || dayRows || [], programs), win: activeWindow, preset, windowLabel })
     return {
       windowLabel, totals, tableDim,
       tableRows: tableRows.map(r => ({ ...r, label: labelForDim(tableDim, r.label) })),
       campaignCount: campaignRows.length,
       ...v2,
+      ...v3,
     }
   }, [windowLabel, totals, tableDim, tableRows, campaignRows.length, slackRows, dayRows, programs, filters, activeWindow, preset, activeFilters, FILTER_FIELDS])
 
