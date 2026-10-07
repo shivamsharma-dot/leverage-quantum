@@ -426,7 +426,7 @@ async function loadCostExclusionPatterns() {
 // Reads the same hourly-synced overall_funnel_daily cache; no live-sheet
 // fallback (a plain totals question doesn't justify a 45s CSV download when
 // the cache is briefly stale -- it just returns an error to say so).
-async function fetchOverallTotals({ since, until, group_by, campaign_contains }) {
+export async function fetchOverallTotals({ since, until, group_by, campaign_contains }) {
   if (!since || !until) return { error: 'since and until are both required (YYYY-MM-DD).' }
   if (!SB_URL || !SB_KEY) return { error: 'Overall data cache is not configured.' }
   try {

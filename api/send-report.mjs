@@ -1,5 +1,6 @@
 import { SLACK_CHANNELS, DEFAULT_CHANNEL_ID, channelHandle, confirmPhrase, phraseMatches } from '../shared/slackChannels.mjs'
-import { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL } from './ask-ai.mjs'
+import { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL, fetchOverallTotals } from './ask-ai.mjs'
+import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantumUser, canRun, buildHomeReport } from '../lib/slackHome.mjs'
 // Plain ESM, no React/DOM -- safe as a static import from this .mjs handler
 // (unlike api/crm-leads.js below, which is bundled CommonJS and must only
 // ever be reached via a dynamic import()).
@@ -1527,6 +1528,44 @@ async function handleSlackThreadReply(event) {
   await answerOverallQuestion({ channel: event.channel, threadTs: event.thread_ts, question, priorTurns, deliver })
 }
 
+// ---- Quantum Slack Home tab (AI-free menu of fixed reports) ------------------
+// See lib/slackHome.mjs. Opening the Home tab publishes the menu; a button runs a
+// fixed report for people who are allowed to see that dashboard.
+async function handleSlackHomeOpened(event) {
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token || !event.user || event.tab === 'messages') return
+  await publishHome(token, event.user, menuBlocks())
+}
+
+async function handleSlackHomeAction(payload) {
+  const token = process.env.SLACK_BOT_TOKEN
+  const userId = payload.user && payload.user.id
+  const action = (payload.actions || [])[0]
+  if (!token || !userId || !action) return
+  if (action.action_id === 'qh_menu') return publishHome(token, userId, menuBlocks())
+  const rep = HOME_REPORTS.find(r => r.id === action.value)
+  if (!rep) return
+  const user = await resolveQuantumUser(token, userId)
+  if (!canRun(user, rep)) {
+    return publishHome(token, userId, menuBlocks({ notice: ':lock: You do not have access to *' + rep.group + '* in Quantum. Ask an admin to grant it, then try again.' }))
+  }
+  await publishHome(token, userId, [
+    { type: 'header', text: { type: 'plain_text', text: rep.group + ' — ' + rep.label } },
+    { type: 'section', text: { type: 'mrkdwn', text: ':hourglass_flowing_sand: Pulling the latest numbers…' } },
+  ]).catch(() => {})
+  try {
+    const result = await buildHomeReport(rep.id, { fetchOverallTotals, overallTotalsTable })
+    try {
+      await publishHome(token, userId, homeReportBlocks(result, { tableBlock: slackTableBlock }))
+    } catch {
+      // If Slack rejects a native table inside a Home view, fall back to a plain monospace table.
+      await publishHome(token, userId, homeReportBlocks(result, { asText: true }))
+    }
+  } catch (e) {
+    await publishHome(token, userId, menuBlocks({ notice: ':warning: Could not build that report just now (' + String(e.message || 'error').slice(0, 140) + '). Try again in a moment.' })).catch(() => {})
+  }
+}
+
 async function readRawBody(req) {
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
@@ -2729,6 +2768,10 @@ export default async function handler(req, res) {
     const form = new URLSearchParams(rawBody.toString('utf8'))
     let payload = null
     try { payload = JSON.parse(form.get('payload') || 'null') } catch { payload = null }
+    if (payload && payload.type === 'block_actions' && String(((payload.actions || [])[0] || {}).action_id || '').startsWith('qh_')) {
+      await handleSlackHomeAction(payload).catch(e => console.error('Slack home action failed:', e))
+      return res.status(200).end()
+    }
     if (payload && payload.type === 'block_actions') {
       await handleSlackBlockAction(payload).catch(e => console.error('Slack block_actions failed:', e))
       return res.status(200).end()
@@ -2765,7 +2808,9 @@ export default async function handler(req, res) {
     // though it means this response is slow.
     if (req.headers['x-slack-retry-num']) return res.status(200).end()
     const event = req.body.event || {}
-    if (event.type === 'app_mention' && !event.bot_id) {
+    if (event.type === 'app_home_opened') {
+      await handleSlackHomeOpened(event).catch(e => console.error('slack app_home_opened failed', e))
+    } else if (event.type === 'app_mention' && !event.bot_id) {
       await handleSlackAppMention(event).catch(e => console.error('slack app_mention failed', e))
     } else if (event.type === 'message') {
       await handleSlackThreadReply(event).catch(e => console.error('slack thread reply failed', e))
