@@ -4,7 +4,7 @@
 // Spend, Leads, Interested, CPL, CPI -- and no deltas, vs columns, Won or CPS.
 // Never respects the page's filters: the caller hands in every row, tagged with
 // its `program` (src/lib/careersPrograms.js). Programs come from keywords in the
-// campaign name; campaigns that match nothing sit under Other.
+// campaign name; campaigns that match nothing are left out unless they carry spend.
 //
 // This file is permanent once shipped, like every other report version: edit a new
 // file, not this one.
@@ -31,9 +31,12 @@ const hasData = g => g.spend > 0 || g.leads > 0 || g.interested > 0
 function programTable(rows) {
   const by = new Map()
   rows.forEach(r => { const k = r.program || 'Other'; if (!by.has(k)) by.set(k, []); by.get(k).push(r) })
-  const list = [...by.entries()].map(([name, rs]) => ({ name, g: agg(rs) })).filter(x => hasData(x.g))
+  // Other (campaigns matching no program) is hidden while it carries no spend: a
+  // zero-spend row says nothing. The moment it has spend it shows, so money is never hidden.
+  const list = [...by.entries()].map(([name, rs]) => ({ name, rs, g: agg(rs) }))
+    .filter(x => hasData(x.g) && !(x.name === 'Other' && !(x.g.spend > 0)))
   list.sort((a, b) => (a.name === 'Other') - (b.name === 'Other') || (b.g.spend - a.g.spend) || (b.g.leads - a.g.leads))
-  const tot = agg(rows)
+  const tot = agg(list.flatMap(x => x.rs)) // TOTAL always equals the rows shown
   const line = (label, g) => [label, money(g.spend), nfmt(g.leads), nfmt(g.interested), inr(g.cpl), inr(g.cpi)]
   return {
     empty: list.length === 0,
@@ -64,7 +67,7 @@ export function buildCareersV3Ctx({ rows, win, preset, windowLabel }) {
   }
 }
 
-const NOTE = '_Paid sources only. Programs are matched from keywords in the campaign name; campaigns that match none sit under Other._'
+const NOTE = '_Paid sources only. Programs are matched from keywords in the campaign name; campaigns that match none are left out unless they have spend._'
 
 function buildCareersV3(ctx) {
   const v = (ctx && ctx.v3) || null
