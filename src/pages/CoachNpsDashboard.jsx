@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, ComposedChart, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ReferenceLine,
 } from 'recharts'
@@ -467,6 +467,12 @@ export default function CoachNpsDashboard() {
   const [score, setScore] = useState(null) // 0..10
   const [moreCols, setMoreCols] = useState(false)
   const [grain, setGrain] = useState('day')
+  // Keep the table box from collapsing when a drill-down has fewer rows: otherwise the page
+  // gets shorter, the browser clamps the scroll position and the whole view jumps.
+  const tableBoxRef = useRef(null)
+  const tableMinH = useRef(0)
+  useLayoutEffect(() => { const h = tableBoxRef.current ? tableBoxRef.current.offsetHeight : 0; if (h > tableMinH.current) tableMinH.current = h })
+  useEffect(() => { tableMinH.current = 0 }, [range.since, range.until, min])
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState({ key: 'total', dir: -1 })
   const [page, setPage] = useState(0)
@@ -781,7 +787,7 @@ export default function CoachNpsDashboard() {
                       <button onClick={() => setMoreCols(v => !v)} style={chipBtn(moreCols)}>{moreCols ? 'Fewer columns' : 'More columns'}</button>
                     </div>
 
-                    <div style={{ overflow: 'auto', maxHeight: 620, border: `0.5px solid ${C.border}`, borderRadius: 10 }}>
+                    <div ref={tableBoxRef} style={{ overflow: 'auto', maxHeight: 620, minHeight: tableMinH.current || undefined, border: `0.5px solid ${C.border}`, borderRadius: 10 }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr>
