@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ReferenceLine,
+  ResponsiveContainer, BarChart, Bar, ComposedChart, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ReferenceLine,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
@@ -195,30 +195,66 @@ function TrendTip({ active, payload, label, fmtLabel, hint }) {
     <div style={{ background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 10, padding: '8px 12px', fontSize: 12, fontFamily: FONT, boxShadow: '0 8px 24px rgba(15,23,42,.14)' }}>
       <div style={{ fontWeight: 800, color: C.text, marginBottom: 4 }}>{fmtLabel(label)}</div>
       {row.pre !== null && row.pre !== undefined && <div style={{ color: C.navy }}>NPS <b>{row.pre}</b> from {fmtN(row.preN)} rating{row.preN === 1 ? '' : 's'}{row.preN < 5 ? ' (few ratings)' : ''}</div>}
+      {row.roll !== null && row.roll !== undefined && <div style={{ color: C.text }}>7-day rolling NPS <b>{row.roll}</b></div>}
       {row.post !== null && row.post !== undefined && <div style={{ color: C.cyan }}>Post-sales NPS <b>{row.post}</b> · {fmtN(row.postN)} ratings</div>}
       {hint && <div style={{ color: C.muted, marginTop: 4, fontSize: 11 }}>{hint}</div>}
     </div>
   )
 }
 
-function TrendChart({ rows, keyName, fmtLabel, hasPost, onPick, hint, height = 230 }) {
+function TrendChart({ rows, keyName, fmtLabel, hasPost, onPick, hint, height = 230, rolling = false }) {
   if (!rows.length) return <div style={{ padding: '36px 0', textAlign: 'center', color: C.muted, fontSize: 13, fontFamily: FONT }}>No ratings in this window.</div>
+  const vals = rows.flatMap(r => [r.pre, r.roll, hasPost ? r.post : null]).filter(v => v !== null && v !== undefined)
+  const lo = vals.length ? Math.max(-100, Math.floor((Math.min(...vals) - 10) / 25) * 25) : -100
+  const hi = vals.length ? Math.min(100, Math.ceil((Math.max(...vals) + 10) / 25) * 25) : 100
+  const maxN = Math.max(1, ...rows.map(r => r.preN || 0))
+  const tick = { fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }
+  const dot = props => {
+    const { cx, cy, payload } = props
+    if (cx === undefined || cy === undefined || payload.pre === null || payload.pre === undefined) return null
+    const few = (payload.preN || 0) < 5
+    return <circle key={payload[keyName]} cx={cx} cy={cy} r={few ? 2.5 : 3} fill={few ? '#fff' : C.navy} stroke={C.navy} strokeWidth={1.2} opacity={rolling ? 0.7 : 1} />
+  }
   return (
-    <div style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ top: 10, right: 12, left: -14, bottom: 0 }} style={{ cursor: onPick ? 'pointer' : 'default' }}
-          onClick={e => { if (onPick && e && e.activeLabel) onPick(e.activeLabel) }}>
-          <CartesianGrid vertical={false} stroke={GRID_STROKE} />
-          <XAxis dataKey={keyName} tickFormatter={fmtLabel} tick={{ fontSize: 10.5, fill: '#94A3B8' }} axisLine={false} tickLine={false} minTickGap={18} />
-          <YAxis domain={[-100, 100]} ticks={[-100, -50, 0, 50, 100]} tick={{ fontSize: 10.5, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-          <ReferenceLine y={0} stroke="#CBD5E1" />
-          <Tooltip content={<TrendTip fmtLabel={fmtLabel} hint={hint} />} />
-          <Line type="monotone" dataKey="pre" stroke={C.navy} strokeWidth={2.4} dot={{ r: 3.5 }} activeDot={{ r: 6 }} connectNulls name="Pre-sales" />
-          {hasPost && <Line type="monotone" dataKey="post" stroke={C.cyan} strokeWidth={2.4} dot={{ r: 3.5 }} activeDot={{ r: 6 }} connectNulls name="Post-sales" />}
-        </LineChart>
-      </ResponsiveContainer>
+    <div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: C.muted, fontFamily: FONT, margin: '0 0 6px 2px' }}>
+        <span><i style={{ display: 'inline-block', width: 9, height: 9, background: '#CBD5E1', borderRadius: 2, marginRight: 5 }} />Ratings (right axis)</span>
+        <span><i style={{ display: 'inline-block', width: 14, height: 0, borderTop: `1.5px solid ${C.navy}`, marginRight: 5, verticalAlign: 'middle' }} />{rolling ? 'Daily NPS' : 'NPS'}</span>
+        {rolling && <span><i style={{ display: 'inline-block', width: 14, height: 0, borderTop: `3px solid ${C.navy}`, marginRight: 5, verticalAlign: 'middle' }} />7-day rolling NPS (from 10+ ratings)</span>}
+        <span>Hollow point = fewer than 5 ratings</span>
+      </div>
+      <div style={{ height }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={rows} margin={{ top: 6, right: 4, left: -10, bottom: 0 }} style={{ cursor: onPick ? 'pointer' : 'default' }}
+            onClick={e => { if (onPick && e && e.activeLabel) onPick(e.activeLabel) }}>
+            <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
+            <XAxis dataKey={keyName} tickFormatter={fmtLabel} tick={tick} axisLine={{ stroke: '#E2E8F0' }} tickLine={false} minTickGap={24} />
+            <YAxis yAxisId="nps" domain={[lo, hi]} tick={tick} axisLine={false} tickLine={false} width={38} tickFormatter={v => (v > 0 ? `+${v}` : v)} />
+            <YAxis yAxisId="n" orientation="right" domain={[0, maxN * 4]} hide />
+            <ReferenceLine yAxisId="nps" y={0} stroke="#94A3B8" strokeWidth={1} />
+            <Tooltip content={<TrendTip fmtLabel={fmtLabel} hint={hint} />} cursor={{ stroke: '#CBD5E1', strokeDasharray: '3 3' }} />
+            <Bar yAxisId="n" dataKey="preN" fill="#CBD5E1" radius={[2, 2, 0, 0]} maxBarSize={14} name="Ratings" />
+            <Line yAxisId="nps" type="linear" dataKey="pre" stroke={C.navy} strokeWidth={rolling ? 1.2 : 2} strokeOpacity={rolling ? 0.7 : 1} dot={dot} activeDot={{ r: 5 }} connectNulls name="NPS" />
+            {rolling && <Line yAxisId="nps" type="linear" dataKey="roll" stroke={C.navy} strokeWidth={2.8} dot={false} activeDot={{ r: 5 }} connectNulls name="7-day rolling" />}
+            {hasPost && <Line yAxisId="nps" type="linear" dataKey="post" stroke={C.cyan} strokeWidth={2} dot={{ r: 3 }} connectNulls name="Post-sales" />}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
+}
+
+// 7-day rolling NPS, pooling the raw promoter/detractor counts (not averaging daily NPS),
+// shown only once the window holds 10+ ratings so it never rides on a handful of calls.
+function withRolling(data, series) {
+  const raw = forStage(data.by_day, 'pre').slice().sort((a, b) => (a.d < b.d ? -1 : 1))
+  const day = d => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 86400000
+  return series.map(r => {
+    const t = day(r.d)
+    let n = 0, p = 0, u = 0
+    for (const x of raw) { const k = day(x.d); if (k <= t && k > t - 7) { n += x.total; p += x.promoters; u += x.detractors } }
+    return { ...r, roll: n >= 10 ? npsOf(p, u, n) : null }
+  })
 }
 
 function seriesFor(data, field, keyName) {
@@ -449,7 +485,7 @@ export default function CoachNpsDashboard() {
   const prevPre = useMemo(() => (prevData ? overallOf(prevData, 'pre') : null), [prevData])
   const post = useMemo(() => (ready ? overallOf(data, 'post') : null), [data, ready])
   const hasPost = !!(ready && post && post.total > 0)
-  const daySeries = useMemo(() => (ready ? seriesFor(data, 'by_day', 'd') : []), [data, ready])
+  const daySeries = useMemo(() => (ready ? withRolling(data, seriesFor(data, 'by_day', 'd')) : []), [data, ready])
   const monthSeries = useMemo(() => (ready ? seriesFor(data, 'by_month', 'm') : []), [data, ready])
   const distPre = useMemo(() => (ready ? forStage(data.distribution, 'pre') : []), [data, ready])
 
@@ -524,7 +560,7 @@ export default function CoachNpsDashboard() {
   }, [pre, prevPre, allCoachRows, min])
 
   const th = { padding: '9px 10px', textAlign: 'right', fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', background: 'var(--bg2)', position: 'sticky', top: 0, cursor: 'pointer', userSelect: 'none', fontFamily: FONT }
-  const td = { padding: '9px 10px', textAlign: 'right', fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', borderTop: `0.5px solid ${C.border}`, fontFamily: FONT }
+  const td = { padding: '9px 10px', textAlign: 'right', fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', borderTop: `0.5px solid ${C.border}`, fontFamily: FONT, fontVariantNumeric: 'tabular-nums' }
   const colCount = 6 + (level === 'coach' ? 1 : 0) + (moreCols ? 4 : 0)
 
   const subtitle = !scopeLevel ? 'How customers rate coaching calls, by coach.'
@@ -655,12 +691,12 @@ export default function CoachNpsDashboard() {
               {/* 4. Trends (clickable) */}
               {pre && pre.total > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, padding: '16px 28px 0' }}>
-                  <Card title="Day-on-day NPS" >
-                    <TrendChart rows={daySeries} keyName="d" fmtLabel={dayLabel} hasPost={hasPost} onPick={d => setDayOpen(d)} hint="Click to see who was rated" />
+                  <Card title="Day-on-day NPS" sub="Click a day to see who was rated">
+                    <TrendChart rows={daySeries} rolling keyName="d" fmtLabel={dayLabel} hasPost={hasPost} onPick={d => setDayOpen(d)} hint="Click to see who was rated" />
                   </Card>
                   {monthSeries.length >= 3 && <Card title="Month-on-month NPS" >
                     <TrendChart rows={monthSeries} keyName="m" fmtLabel={monthLabel} hasPost={hasPost} onPick={zoomMonth} hint="Click to zoom into this month" />
-                  </Card>}}
+                  </Card>}
                 </div>
               )}
 
