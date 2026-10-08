@@ -28,7 +28,8 @@ const PRESETS = [
   ['last_month', 'Last month'], ['all', 'All time'],
 ]
 const MIN_OPTIONS = [5, 10, 20, 30]
-const TOP_OPTIONS = [3, 5, 10]
+const TOP_N = 5        // how many coaches the Top / Needs attention lists show
+const RANK_MIN = 10    // a coach needs at least this many ratings to be ranked best or worst
 const PAGE_SIZE = 25
 const ORDER = ['ssm', 'manager', 'coach']
 const LEVEL_NAME = { ssm: 'Senior manager', manager: 'Manager', coach: 'Coach' }
@@ -462,8 +463,8 @@ export default function CoachNpsDashboard() {
   const [syncedAt, setSyncedAt] = useState(null)
   const [path, setPath] = useState([]) // drill-down: [{level, name}]
   const [flat, setFlat] = useState(false) // list every coach instead of drilling
-  const [min, setMin] = useState(10)
-  const [topN, setTopN] = useState(5)
+  const [min, setMin] = useState(5)
+  const topN = TOP_N
   const [quick, setQuick] = useState('all') // all | attention | top
   const [bucket, setBucket] = useState(null) // happy | neutral | unhappy
   const [score, setScore] = useState(null) // 0..10
@@ -544,8 +545,8 @@ export default function CoachNpsDashboard() {
     if (q) out = out.filter(r => r.name.toLowerCase().includes(q) || (r.email || '').includes(q) || (r.manager || '').toLowerCase().includes(q) || (r.ssm || '').toLowerCase().includes(q))
     if (bucket) out = out.filter(r => bucketCount(r, bucket) > 0)
     if (score !== null) out = out.filter(r => (r.pre.scores[score] || 0) > 0)
-    if (quick === 'attention') return out.filter(r => r.pre.total >= min).sort((a, b) => a.pre.nps - b.pre.nps || b.pre.total - a.pre.total).slice(0, topN)
-    if (quick === 'top') return out.filter(r => r.pre.total >= min).sort((a, b) => b.pre.nps - a.pre.nps || b.pre.total - a.pre.total).slice(0, topN)
+    if (quick === 'attention') return out.filter(r => r.pre.total >= RANK_MIN).sort((a, b) => a.pre.nps - b.pre.nps || b.pre.total - a.pre.total).slice(0, topN)
+    if (quick === 'top') return out.filter(r => r.pre.total >= RANK_MIN).sort((a, b) => b.pre.nps - a.pre.nps || b.pre.total - a.pre.total).slice(0, topN)
     const val = r => {
       const k = sort.key
       if (bucket && sort.key === 'total' && sort.auto) return bucketCount(r, bucket)
@@ -592,7 +593,7 @@ export default function CoachNpsDashboard() {
     if (!pre) return null
     if (pre.total === 0) return { empty: true }
     const dN = prevPre && prevPre.total >= 1 && pre.nps !== null && prevPre.nps !== null ? pre.nps - prevPre.nps : null
-    const eligible = allCoachRows.filter(r => r.pre && r.pre.total >= min)
+    const eligible = allCoachRows.filter(r => r.pre && r.pre.total >= RANK_MIN)
     const best = [...eligible].sort((a, b) => b.pre.nps - a.pre.nps || b.pre.total - a.pre.total)[0]
     const worst = [...eligible].sort((a, b) => a.pre.nps - b.pre.nps || b.pre.total - a.pre.total)[0]
     return { dN, best: eligible.length > 1 ? best : null, worst: eligible.length > 1 && worst !== best ? worst : null, coaches: allCoachRows.length }
@@ -656,7 +657,7 @@ export default function CoachNpsDashboard() {
                   <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>How to read this page</div>
                   <div><b>Rating</b> — the 0–10 score a customer gives after a coaching call. <b>Happy</b> = 9–10, <b>Neutral</b> = 7–8, <b>Unhappy</b> = 0–6.</div>
                   <div style={{ marginTop: 5 }}><b>NPS (Net Promoter Score)</b> = % happy minus % unhappy, from −100 to +100. Below 0: more unhappy than happy. 0–49: OK. 50+: strong. 70+: excellent.</div>
-                  <div style={{ marginTop: 5 }}><b>* and grey</b> — fewer ratings than the minimum (5, or the "with at least" setting on Top performers / Needs attention). Top and bottom lists only include coaches above that minimum. With 2 ratings, one unhappy customer moves NPS by 50 points, so don't judge on it.</div>
+                  <div style={{ marginTop: 5 }}><b>* and grey</b> — fewer than 5 ratings. Top performers and Needs attention show the 5 best / worst coaches among those with at least 10 ratings. With 2 ratings, one unhappy customer moves NPS by 50 points, so don't judge on it.</div>
                   <div style={{ marginTop: 5 }}><b>vs previous</b> — compared with the window of the same length right before the one you picked.</div>
                   <div style={{ marginTop: 5 }}><b>Unique students</b> — distinct students rated (a student rating twice counts once). In a manager or senior-manager row it is the sum of each coach's unique students.</div>
                   <div style={{ marginTop: 5 }}><b>Click around</b> — a row to drill down (senior manager → manager → coach → a side panel), a bar or colour segment to filter the table, a day to see who was rated that day, a month to zoom into it.</div>
@@ -780,17 +781,8 @@ export default function CoachNpsDashboard() {
                       )}
                       {[['all', 'Everyone'], ['attention', 'Needs attention'], ['top', 'Top performers']].map(([k, l]) => (
                         <button key={k} onClick={() => { setQuick(k); setBucket(null); setScore(null) }} style={chipBtn(quick === k)}
-                          title={k === 'attention' ? `The ${topN} lowest NPS among rows with ${min}+ ratings` : k === 'top' ? `The ${topN} highest NPS among rows with ${min}+ ratings` : ''}>{l}</button>
+                          title={k === 'attention' ? `The ${topN} lowest NPS among rows with ${RANK_MIN}+ ratings` : k === 'top' ? `The ${topN} highest NPS among rows with ${RANK_MIN}+ ratings` : ''}>{l}</button>
                       ))}
-                      {quick !== 'all' && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, fontFamily: FONT }}>
-                          Show
-                          <span style={segWrap}>{TOP_OPTIONS.map(n => <button key={n} onClick={() => setTopN(n)} style={pillBtn(topN === n)}>{n}</button>)}</span>
-                          with at least
-                          <span style={segWrap}>{MIN_OPTIONS.map(n => <button key={n} onClick={() => setMin(n)} style={pillBtn(min === n)}>{n}</button>)}</span>
-                          ratings
-                        </span>
-                      )}
                       {canDrill && level !== 'coach' && <button onClick={() => setFlat(true)} style={chipBtn(false)}>List all coaches</button>}
                       {bucket && <button onClick={() => setBucket(null)} style={{ ...chipBtn(true, BUCKETS[bucket].color) }}>With {BUCKETS[bucket].label.toLowerCase()} ratings ×</button>}
                       {score !== null && <button onClick={() => setScore(null)} style={{ ...chipBtn(true) }}>Rated exactly {score} ×</button>}
