@@ -1,8 +1,10 @@
 -- Coach NPS: one row per call-level NPS rating, mirrored from BigQuery
 -- (leverage_direct.call_nps = PRE-sales) by api/crm-leads.js's call_nps_sync mode.
 -- `stage` is part of the primary key so a future post-sales table can be loaded
--- into this same table without id collisions. RLS stays OFF like every other
--- cache table in this project: the browser never reads this table directly, only
+-- into this same table without id collisions. RLS is ON (no policies) unlike the other
+-- cache tables: this one holds student ids and review text, and the public anon key
+-- must NOT be able to read it, or the per-person scoping could be bypassed. The service
+-- role used by the API ignores RLS, so nothing else is affected. Also: the browser never reads this table directly, only
 -- api/crm-leads.js (service role) does, and it applies the per-person access
 -- scoping before anything is returned.
 
@@ -30,7 +32,7 @@ create table if not exists public.call_nps_feed (
   primary key (stage, id)
 );
 
-alter table public.call_nps_feed disable row level security;
+alter table public.call_nps_feed enable row level security;
 
 create index if not exists call_nps_feed_date_idx  on public.call_nps_feed (rated_date);
 create index if not exists call_nps_feed_coach_idx on public.call_nps_feed (coach_email, rated_date);
