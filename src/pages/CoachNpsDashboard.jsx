@@ -563,12 +563,7 @@ export default function CoachNpsDashboard() {
                 </div>
               )}
             </div>
-            <div style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '0 2px' }} />
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted }} title="An NPS built on only a few ratings swings wildly, so it is greyed out and marked * below this many ratings.">Trust NPS from</span>
-            {MIN_OPTIONS.map(n => <button key={n} onClick={() => setMin(n)} style={{ ...chipBtn(min === n), padding: '6px 10px' }}>{n}+</button>)}
-            <span style={{ fontSize: 11.5, color: C.muted }}>ratings</span>
             <div style={{ flex: 1 }} />
-            {syncedAt && <span style={{ fontSize: 11.5, color: C.muted }} title={syncedAt.toLocaleString()}>Loaded {syncedAt.toLocaleTimeString()}</span>}
             <Button size="sm" variant="secondary" onClick={() => load(true)} disabled={loading}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 5, animation: loading ? 'spin 1s linear infinite' : 'none' }}>
                 <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
@@ -628,45 +623,18 @@ export default function CoachNpsDashboard() {
                             <b style={{ color: C.navy }}>Needs attention</b> · {headline.worst.name} — NPS {headline.worst.pre.nps} ({headline.worst.pre.total} ratings)
                           </button>
                         )}
-                        <span style={{ color: C.muted, alignSelf: 'center', fontSize: 11.5 }}>among coaches with {min}+ ratings · click to open</span>
+                        
                       </div>
                     )}
                   </>
                 ) : null}
               </div>
 
-              {/* 2. One snapshot row, each with change vs previous */}
-              {pre && pre.total > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, padding: '16px 28px 0' }}>
-                  {(() => {
-                    const hasPrev = !!prevPre && prevPre.total > 0
-                    const dNps = hasPrev && pre.nps !== null && prevPre.nps !== null ? pre.nps - prevPre.nps : null
-                    const dAvg = hasPrev && pre.avg !== null && prevPre.avg !== null ? Math.round((pre.avg - prevPre.avg) * 10) / 10 : null
-                    const dRat = hasPrev ? Math.round(((pre.total - prevPre.total) / prevPre.total) * 100) : null
-                    const dStu = hasPrev ? Math.round(((pre.students - prevPre.students) / prevPre.students) * 100) : null
-                    const dHap = hasPrev ? pct(pre.promoters, pre.total) - pct(prevPre.promoters, prevPre.total) : null
-                    const dUnh = hasPrev ? pct(pre.detractors, pre.total) - pct(prevPre.detractors, prevPre.total) : null
-                    const vs = t => (t ? `${t} vs prev` : 'happy % minus unhappy %')
-                    const clickable = (b, node) => <div role="button" tabIndex={0} title={`Filter the table to coaches with ${BUCKETS[b].label.toLowerCase()} ratings`} onClickCapture={e => { e.stopPropagation(); pickBucket(b) }} style={{ cursor: 'pointer', outline: bucket === b ? `2px solid ${BUCKETS[b].color}` : 'none', borderRadius: 14 }}>{node}</div>
-                    return (
-                      <>
-                        <PremKPI label="NPS" value={nf(pre.nps)} sub={dNps === null ? 'happy % minus unhappy %' : vs(ptsText(dNps))} accent={toneOf(pre.nps).color} icon={KPI_ICONS.total} />
-                        <PremKPI label="Average rating" value={pre.avg === null ? '—' : pre.avg.toFixed(2)} sub={dAvg === null ? 'out of 10' : vs(ptsText(dAvg, ''))} accent={C.navy} icon={KPI_ICONS.total} />
-                        <PremKPI label="Total ratings" value={fmtN(pre.total)} sub={dRat === null ? 'pre-sales' : vs(ptsText(dRat, '%'))} accent={C.navy} icon={KPI_ICONS.agent} />
-                        <PremKPI label="Unique students" value={fmtN(pre.students)} sub={dStu === null ? 'distinct students rated' : vs(ptsText(dStu, '%'))} accent={C.navy} icon={KPI_ICONS.agent} />
-                        {clickable('happy', <PremKPI label="Happy (9–10)" value={pct(pre.promoters, pre.total) + '%'} sub={dHap === null ? `${fmtN(pre.promoters)} ratings` : vs(ptsText(dHap))} accent={C.green} icon={KPI_ICONS.total} />)}
-                        {clickable('unhappy', <PremKPI label="Unhappy (0–6)" value={pct(pre.detractors, pre.total) + '%'} sub={dUnh === null ? `${fmtN(pre.detractors)} ratings` : vs(ptsText(dUnh))} accent={C.navy} icon={KPI_ICONS.total} />)}
-                      </>
-                    )
-                  })()}
-                </div>
-              )}
-
               {/* 3. How customers rated (clickable) + post-sales */}
               {pre && pre.total > 0 && (
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: '16px 28px 0' }}>
                   <div style={{ flex: '1 1 520px', minWidth: 0 }}>
-                    <Card title="How customers rated" sub="Click a colour segment or a score bar to filter the table below to the coaches who got those ratings">
+                    <Card title="How customers rated" >
                       <MixBar p={pre.promoters} pa={pre.passives} d={pre.detractors} height={14} active={bucket} onPick={pickBucket} />
                       <MixLegend p={pre.promoters} pa={pre.passives} d={pre.detractors} active={bucket} onPick={pickBucket} />
                       <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: C.muted, margin: '14px 0 0' }}>Score distribution (0–10){score !== null ? ` · showing score ${score}` : ''}</div>
@@ -684,22 +652,15 @@ export default function CoachNpsDashboard() {
                   )}
                 </div>
               )}
-              {!hasPost && (
-                <div style={{ margin: '12px 28px 0', padding: '10px 16px', borderRadius: 12, border: `0.5px dashed ${C.border}`, background: 'var(--bg2)', fontSize: 12.5, color: C.sub, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 8px', borderRadius: 99, background: 'var(--bg3)', color: C.muted }}>Post-sales · soon</span>
-                  Post-sales ratings aren't connected yet. When they are, they appear here and in the table, side by side with pre-sales.
-                </div>
-              )}
-
               {/* 4. Trends (clickable) */}
               {pre && pre.total > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, padding: '16px 28px 0' }}>
-                  <Card title="Day-on-day NPS" sub="Click a day to see who was rated that day">
+                  <Card title="Day-on-day NPS" >
                     <TrendChart rows={daySeries} keyName="d" fmtLabel={dayLabel} hasPost={hasPost} onPick={d => setDayOpen(d)} hint="Click to see who was rated" />
                   </Card>
-                  <Card title="Month-on-month NPS" sub="Full history for the coaches you can see · click a month to zoom into it">
+                  {monthSeries.length >= 3 && <Card title="Month-on-month NPS" >
                     <TrendChart rows={monthSeries} keyName="m" fmtLabel={monthLabel} hasPost={hasPost} onPick={zoomMonth} hint="Click to zoom into this month" />
-                  </Card>
+                  </Card>}}
                 </div>
               )}
 
