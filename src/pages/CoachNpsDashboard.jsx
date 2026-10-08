@@ -810,8 +810,8 @@ export default function CoachNpsDashboard() {
                             const pv = prevRows.get(r.key)
                             const dlt = pv && pv.pre && pv.pre.total >= 3 && r.pre.total >= 3 && r.pre.nps !== null && pv.pre.nps !== null ? r.pre.nps - pv.pre.nps : null
                             return (
-                              <tr key={r.key} onClick={() => onRowClick(r)} style={{ cursor: 'pointer', opacity: few ? 0.7 : 1, background: ri % 2 ? 'rgba(148,163,184,0.07)' : '' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = 'var(--navy-tint)' }} onMouseLeave={e => { e.currentTarget.style.background = ri % 2 ? 'rgba(148,163,184,0.07)' : '' }}>
+                              <tr key={r.key} onClick={() => onRowClick(r)} style={{ cursor: 'pointer', opacity: few ? 0.7 : 1, background: ri % 2 ? 'var(--bg2)' : '' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'var(--navy-tint)' }} onMouseLeave={e => { e.currentTarget.style.background = ri % 2 ? 'var(--bg2)' : '' }}>
                                 <td style={{ ...td, textAlign: 'left', fontWeight: 700, background: 'inherit', position: 'sticky', left: 0 }}>
                                   {r.name}{level !== 'coach' && <span style={{ color: C.blue, marginLeft: 6, fontWeight: 800 }}>›</span>}
                                 </td>
