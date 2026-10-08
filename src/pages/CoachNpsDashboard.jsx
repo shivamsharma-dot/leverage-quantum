@@ -468,7 +468,7 @@ export default function CoachNpsDashboard() {
   const [quick, setQuick] = useState('all') // all | attention | top
   const [bucket, setBucket] = useState(null) // happy | neutral | unhappy
   const [score, setScore] = useState(null) // 0..10
-  const [moreCols, setMoreCols] = useState(false)
+  const moreCols = true // every number is always shown
   const [grain, setGrain] = useState('day')
   // Keep the table box from collapsing when a drill-down has fewer rows: otherwise the page
   // gets shorter, the browser clamps the scroll position and the whole view jumps.
@@ -779,15 +779,21 @@ export default function CoachNpsDashboard() {
                           {flat && <><span style={{ color: C.muted }}>›</span><span style={{ fontWeight: 800, color: C.text }}>all coaches</span></>}
                         </div>
                       )}
-                      {[['all', 'Everyone'], ['attention', 'Needs attention'], ['top', 'Top performers']].map(([k, l]) => (
-                        <button key={k} onClick={() => { setQuick(k); setBucket(null); setScore(null) }} style={chipBtn(quick === k)}
-                          title={k === 'attention' ? `The ${topN} lowest NPS among rows with ${RANK_MIN}+ ratings` : k === 'top' ? `The ${topN} highest NPS among rows with ${RANK_MIN}+ ratings` : ''}>{l}</button>
-                      ))}
-                      {canDrill && level !== 'coach' && <button onClick={() => setFlat(true)} style={chipBtn(false)}>List all coaches</button>}
+                      <div style={segWrap}>
+                        {[['all', 'Everyone'], ['attention', 'Needs attention'], ['top', 'Top performers']].map(([k, l]) => (
+                          <button key={k} onClick={() => { setQuick(k); setBucket(null); setScore(null) }} style={pillBtn(quick === k)}
+                            title={k === 'attention' ? `The ${topN} lowest NPS among rows with ${RANK_MIN}+ ratings` : k === 'top' ? `The ${topN} highest NPS among rows with ${RANK_MIN}+ ratings` : 'Every row, sorted by the column you pick'}>{l}</button>
+                        ))}
+                      </div>
+                      {canDrill && scopeLevel !== 'coach' && (
+                        <div style={segWrap}>
+                          {[[false, 'Team view'], [true, 'All coaches']].map(([k, l]) => (
+                            <button key={l} onClick={() => setFlat(k)} style={pillBtn(flat === k)}>{l}</button>
+                          ))}
+                        </div>
+                      )}
                       {bucket && <button onClick={() => setBucket(null)} style={{ ...chipBtn(true, BUCKETS[bucket].color) }}>With {BUCKETS[bucket].label.toLowerCase()} ratings ×</button>}
                       {score !== null && <button onClick={() => setScore(null)} style={{ ...chipBtn(true) }}>Rated exactly {score} ×</button>}
-                      <div style={{ flex: 1 }} />
-                      <button onClick={() => setMoreCols(v => !v)} style={chipBtn(moreCols)}>{moreCols ? 'Fewer columns' : 'More columns'}</button>
                     </div>
 
                     <div ref={tableBoxRef} style={{ overflow: 'auto', maxHeight: 620, minHeight: tableMinH.current || undefined, border: `0.5px solid ${C.border}`, borderRadius: 10 }}>
