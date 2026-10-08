@@ -4321,6 +4321,122 @@ async function upsertBatchesConcurrent(supabaseAdmin, table, records, batchSize,
   }
 }
 
+// ---------------------------------------------------------------------------
+// Coach NPS (Quantum page /dashboard/coach-nps)
+//
+// Source: leverage_direct.call_nps = PRE-sales call-level NPS ratings (one row per
+// rating: coach_email, rating 0-10, student_id_uuid, call_id, call_type...). The
+// post-sales table doesn't exist yet -- `stage` is part of the Supabase primary key
+// so it can be loaded into the same table later without touching anything else.
+//
+// call_nps_sync mirrors a trailing window of it into call_nps_feed (idempotent upsert
+// on (stage,id); rows are never pruned -- ratings are immutable history). Default
+// window is the last 3 IST days, so a daily run is cheap; pass since/until to backfill.
+// Dates are IST (rated_at is UTC in BigQuery).
+// ---------------------------------------------------------------------------
+function callNpsSql(since, until) {
+  // since/until are validated YYYY-MM-DD by the caller (isIsoDate) before reaching here.
+  return `SELECT
+  id,
+  FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', rated_at) AS rated_at,
+  FORMAT_DATE('%Y-%m-%d', DATE(rated_at, 'Asia/Kolkata')) AS rated_date,
+  LOWER(TRIM(coach_email)) AS coach_email,
+  coach_name,
+  coach_id,
+  rating,
+  COALESCE(NULLIF(student_id_uuid, ''), prospect_id) AS student_id,
+  prospect_id,
+  opportunity_id,
+  call_id,
+  call_type,
+  call_status,
+  source,
+  duration,
+  review,
+  rating_url
+FROM \`leverage_direct.call_nps\`
+WHERE DATE(rated_at, 'Asia/Kolkata') BETWEEN DATE '${since}' AND DATE '${until}'
+  AND rating IS NOT NULL
+  AND coach_email IS NOT NULL AND TRIM(coach_email) != ''
+QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY _sdc_sequence DESC) = 1`
+}
+
+function istDateOffset(days) {
+  const d = new Date(Date.now() + 5.5 * 3600 * 1000 + days * 86400000)
+  return d.toISOString().slice(0, 10)
+}
+
+// Who can see whose ratings, derived from Team Mapping (team_mapping_manual):
+// a person sees their own ratings, plus every coach whose asm_sm_email (manager) or
+// ssm_email (senior manager) is them. Admins see everyone. Anyone not in Team Mapping
+// still sees their own ratings (if they are a coach in call_nps) and nothing else --
+// never "everyone" by default.
+async function resolveCoachNpsScope(me, supabaseAdmin) {
+  const email = String(me.email || '').trim().toLowerCase()
+  const r = await supabaseAdmin('team_mapping_manual?select=ls_email,asm_sm,asm_sm_email,ssm,ssm_email&limit=5000')
+  const rows = r.ok ? await r.json() : []
+  const team = {}
+  for (const x of rows) {
+    const e = String(x.ls_email || '').trim().toLowerCase()
+    if (!e) continue
+    team[e] = {
+      manager: x.asm_sm || null, managerEmail: String(x.asm_sm_email || '').trim().toLowerCase() || null,
+      ssm: x.ssm || null, ssmEmail: String(x.ssm_email || '').trim().toLowerCase() || null,
+    }
+  }
+  if (me.role === 'admin') return { level: 'admin', emails: null, team }
+  const mine = new Set([email])
+  let isManager = false, isSsm = false
+  for (const [e, t] of Object.entries(team)) {
+    if (t.managerEmail === email) { mine.add(e); isManager = true }
+    if (t.ssmEmail === email) { mine.add(e); isSsm = true }
+  }
+  return { level: isSsm ? 'ssm' : isManager ? 'manager' : 'coach', emails: [...mine], team }
+}
+
+async function handleCoachNps(req, res, me) {
+  const { canAccessDashboard, supabaseAdmin } = await import('../lib/auth.mjs')
+  if (!canAccessDashboard(me.role, 'coach_nps')) return res.status(403).json({ error: 'Forbidden' })
+  const q = req.query || {}
+  const from = isIsoDate(q.from) ? q.from : istDateOffset(-29)
+  const to = isIsoDate(q.to) ? q.to : istDateOffset(0)
+  try {
+    const scope = await resolveCoachNpsScope(me, supabaseAdmin)
+    let emails = scope.emails
+    const coach = q.coach ? String(q.coach).trim().toLowerCase() : null
+    if (coach) {
+      // Drill-down into one coach: must be inside the caller's own scope.
+      if (emails && !emails.includes(coach)) return res.status(403).json({ error: 'That coach is outside your access.' })
+      emails = [coach]
+    }
+    const rpc = await supabaseAdmin('rpc/coach_nps_summary', {
+      method: 'POST',
+      body: JSON.stringify({ p_from: from, p_to: to, p_emails: emails }),
+    })
+    if (!rpc.ok) {
+      const detail = (await rpc.text().catch(() => '')).slice(0, 300)
+      if (/coach_nps_summary|call_nps_feed|does not exist|PGRST202|42P01/.test(detail)) {
+        return res.status(200).json({ ready: false, error: 'Coach NPS tables are not set up yet -- run supabase/sql/call_nps_feed_setup.sql in the Supabase SQL editor, then trigger the call-nps-sync workflow.' })
+      }
+      return res.status(502).json({ error: 'Coach NPS read failed (' + rpc.status + '): ' + detail })
+    }
+    const summary = await rpc.json()
+    // Only ship Team Mapping rows for coaches that actually appear in the answer
+    // (names for rollups). An SSM never learns anyone else's mapping.
+    const seen = new Set((summary.by_coach || []).map(x => x.coach_email))
+    const team = {}
+    for (const e of seen) if (scope.team[e]) team[e] = scope.team[e]
+    res.setHeader('Cache-Control', 'private, no-store')
+    return res.status(200).json({
+      ready: true, from, to,
+      scope: { level: scope.level, coachCount: scope.emails ? scope.emails.length : null, email: me.email, coach: coach || null },
+      team, ...summary,
+    })
+  } catch (e) {
+    return res.status(500).json({ error: String((e && e.message) || e) })
+  }
+}
+
 // BigQuery lives behind this handler rather than its own file because the
 // Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
 // ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync|apps_sync|overall_bq_sync.
@@ -4845,6 +4961,55 @@ async function handleBigQuery(req, res, me) {
         await supabaseAdmin(`apps_feed?sync_id=neq.${syncId}`, { method: 'DELETE' })
       }
       return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed, pruned: rows.length > 0 })
+    }
+    // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
+    // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
+    // per call keeps each run well inside Vercel's 60s limit.
+    if (mode === 'call_nps_sync') {
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      const crypto = await import('crypto')
+      const q = req.query || {}
+      const since = isIsoDate(q.since) ? q.since : istDateOffset(-3)
+      const until = isIsoDate(q.until) ? q.until : istDateOffset(0)
+      if (since > until) return res.status(400).json({ error: 'since must be on or before until' })
+      if ((new Date(until) - new Date(since)) / 86400000 > 40) {
+        return res.status(400).json({ error: 'Window too large for one call -- sync at most 40 days at a time.' })
+      }
+      const out = await bq.bigQuerySelectAll(callNpsSql(since, until), {
+        maxBytes: 5_000_000_000, mode: 'call_nps_sync', dashboardId: 'coach_nps', userEmail: me.email,
+      })
+      const rows = out.rows || []
+      const syncId = crypto.randomUUID()
+      const syncedAt = new Date().toISOString()
+      const num = v => (v === null || v === undefined || v === '' ? null : Number(v))
+      const payload = rows.map(r => ({
+        stage: 'pre',
+        id: num(r.id),
+        rated_at: r.rated_at || null,
+        rated_date: r.rated_date,
+        coach_email: r.coach_email,
+        coach_name: r.coach_name || null,
+        coach_id: num(r.coach_id),
+        rating: num(r.rating),
+        student_id: r.student_id || null,
+        prospect_id: r.prospect_id || null,
+        opportunity_id: r.opportunity_id || null,
+        call_id: r.call_id || null,
+        call_type: r.call_type || null,
+        call_status: r.call_status || null,
+        source: r.source || null,
+        duration: num(r.duration),
+        review: r.review || null,
+        rating_url: r.rating_url || null,
+        sync_id: syncId,
+        synced_at: syncedAt,
+      })).filter(p => p.id !== null && p.rating !== null && p.rated_date && p.coach_email)
+      try {
+        await upsertBatchesConcurrent(supabaseAdmin, 'call_nps_feed', payload, 500, 4)
+      } catch (err) {
+        return res.status(502).json({ configured: true, ok: false, error: String((err && err.message) || err), rowCount: payload.length })
+      }
+      return res.status(200).json({ configured: true, ok: true, rowCount: payload.length, since, until, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
     }
     // Mirrors the "Overall" BigQuery saved query into overall_bq_daily (and its
     // pre-aggregated companion overall_bq_daily_agg), row for row -- the exact
@@ -5818,6 +5983,15 @@ export default async function handler(req, res) {
   ) {
     return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
   }
+  // Same reasoning, for the Coach NPS (pre-sales) BigQuery mirror.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'call_nps_sync' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
+  }
   // Same reasoning, for the Overall BigQuery cache sync -- triggered by
   // cron-job.org (3x/day, sharp) instead of GitHub Actions' own scheduler,
   // which was confirmed live to silently drop scheduled runs on this repo.
@@ -5896,6 +6070,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'instagram') return handleInstagram(req, res, me)
   if ((req.query && req.query.source) === 'ga4') return handleGA4(req, res, me)
   if ((req.query && req.query.source) === 'super_tracker') return handleSuperTracker(req, res, me)
+  if ((req.query && req.query.source) === 'coach_nps') return handleCoachNps(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })

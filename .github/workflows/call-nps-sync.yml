@@ -1,0 +1,56 @@
+name: Coach NPS BigQuery Sync
+
+# Mirrors leverage_direct.call_nps (pre-sales call-level NPS) into public.call_nps_feed
+# (see supabase/sql/call_nps_feed_setup.sql) by calling the call_nps_sync mode on
+# api/crm-leads.js -- that endpoint owns the BigQuery query, the Supabase upsert and
+# the (none) prune: ratings are immutable history, so rows are only ever upserted.
+#
+# Default run = the last 3 IST days (cheap, idempotent). To backfill, run it manually
+# from the Actions tab and fill `since` / `until` (YYYY-MM-DD); keep each run to about
+# a week so it finishes inside Vercel's 60s limit, e.g. 2026-09-15 -> 2026-09-22.
+#
+# Scheduled by cron-job.org -> workflow_dispatch (NOT GitHub's own `schedule:`, which
+# this repo has repeatedly seen drop runs), once a day, alongside the other syncs.
+# Needs the CRON_SECRET repository Actions secret (already used by the other syncs).
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Backfill start, YYYY-MM-DD (blank = last 3 days)'
+        required: false
+        default: ''
+      until:
+        description: 'Backfill end, YYYY-MM-DD (blank = today)'
+        required: false
+        default: ''
+
+concurrency:
+  group: call-nps-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger the Coach NPS sync
+        env:
+          SINCE: ${{ github.event.inputs.since }}
+          UNTIL: ${{ github.event.inputs.until }}
+        run: |
+          URL="https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=call_nps_sync"
+          if [ -n "$SINCE" ]; then URL="$URL&since=$SINCE"; fi
+          if [ -n "$UNTIL" ]; then URL="$URL&until=$UNTIL"; fi
+          BODY=$(curl -s -w "\n%{http_code}" -X GET "$URL" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          OK=$(echo "$JSON" | jq -r '.ok')
+          ROWCOUNT=$(echo "$JSON" | jq -r '.rowCount')
+          if [ "$OK" != "true" ]; then echo "Response body reports ok=$OK -- failing"; exit 1; fi
+          if [ "$ROWCOUNT" = "0" ]; then
+            echo "::warning::call_nps_sync returned 0 rows -- normal on a quiet day, otherwise check BigQuery."
+          fi
+          echo "Coach NPS synced ($ROWCOUNT rows)."

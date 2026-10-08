@@ -142,6 +142,7 @@ export const NAV = [
       },
       { to: '/dashboard/live-qls', icon: <LiveQLsIcon />, label: 'Live QLs', end: false },
       { to: '/dashboard/not-attempted', icon: <NotAttemptedIcon />, label: 'Not Attempted', end: false },
+      { to: '/dashboard/coach-nps', icon: <CoachNpsIcon />, label: 'Coach NPS', end: false },
       { to: '/dashboard/team-mapping', icon: <TeamMappingIcon />, label: 'Team Mapping', end: false },
       { to: '/dashboard/super-tracker', icon: <SuperTrackerIcon />, label: 'Super Tracker', end: false },
     ]
@@ -239,6 +240,18 @@ function NotAttemptedIcon() {
     </svg>
   )
 }
+// A gauge/needle glyph -- NPS is a single score on a scale, distinct from the
+// plain people icon Leads uses.
+function CoachNpsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 17a8 8 0 1 1 16 0" opacity="0.55" />
+      <path d="M12 17l4-5" />
+      <circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none" />
+      <line x1="4" y1="20.5" x2="20" y2="20.5" opacity="0.55" />
+    </svg>
+  )
+}
 // Org-chart glyph (three people, one linked above the other two) -- distinct
 // from LeadSquaredIcon's brand mark since this page is Quantum's own manual
 // mapping layer, not another LeadSquared-native view.
@@ -282,7 +295,7 @@ const ICON_MAP = {
   'Conversions': <CheckCircleIcon/>, 'Devices': <DeviceIcon/>, 'Locations': <PinIcon/>,
   'Audiences': <PeopleIcon/>, 'Schedule': <ClockIcon/>, 'Assets': <FolderIcon/>,
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
-  'LeadSquared': <LeadSquaredIcon/>, 'Live QLs': <LiveQLsIcon/>, 'Not Attempted': <NotAttemptedIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
+  'LeadSquared': <LeadSquaredIcon/>, 'Live QLs': <LiveQLsIcon/>, 'Not Attempted': <NotAttemptedIcon/>, 'Coach NPS': <CoachNpsIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
   'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>, 'Create Opportunity': <CreateOpportunityIcon/>,
   'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }
