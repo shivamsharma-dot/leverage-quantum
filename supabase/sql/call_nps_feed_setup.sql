@@ -75,7 +75,15 @@ as $$
                round(avg(rating)::numeric, 2)              as avg,
                count(*) filter (where rating >= 9)         as promoters,
                count(*) filter (where rating between 7 and 8) as passives,
-               count(*) filter (where rating <= 6)         as detractors
+               count(*) filter (where rating <= 6)         as detractors,
+               array[
+                 count(*) filter (where rating = 0),  count(*) filter (where rating = 1),
+                 count(*) filter (where rating = 2),  count(*) filter (where rating = 3),
+                 count(*) filter (where rating = 4),  count(*) filter (where rating = 5),
+                 count(*) filter (where rating = 6),  count(*) filter (where rating = 7),
+                 count(*) filter (where rating = 8),  count(*) filter (where rating = 9),
+                 count(*) filter (where rating = 10)
+               ]                                           as scores
         from ranged group by stage, coach_email
       ) t), '[]'::jsonb),
     'distribution', coalesce((
