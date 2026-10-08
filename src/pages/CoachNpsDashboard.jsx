@@ -472,7 +472,6 @@ export default function CoachNpsDashboard() {
   const tableBoxRef = useRef(null)
   const tableMinH = useRef(0)
   useLayoutEffect(() => { const h = tableBoxRef.current ? tableBoxRef.current.offsetHeight : 0; if (h > tableMinH.current) tableMinH.current = h })
-  useEffect(() => { tableMinH.current = 0 }, [range.since, range.until, min])
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState({ key: 'total', dir: -1 })
   const [page, setPage] = useState(0)
@@ -482,6 +481,7 @@ export default function CoachNpsDashboard() {
   const [dayOpen, setDayOpen] = useState(null)
 
   const range = datePreset === 'custom' && customRange ? customRange : presetRange(datePreset)
+  useEffect(() => { tableMinH.current = 0 }, [range.since, range.until, min])
   const prevRange = datePreset === 'all' ? null : prevRangeOf(range)
 
   async function load(force) {
