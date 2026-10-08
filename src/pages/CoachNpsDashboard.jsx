@@ -7,7 +7,7 @@ import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import DateRangePicker from '../components/DateRangePicker'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
-import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN, GRID_STROKE } from '../ui/dashboardKit'
+import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN, GRID_STROKE, BarGrad, barFill, BAR_RADIUS } from '../ui/dashboardKit'
 import { getSession, setSession } from '../lib/sessionLoad'
 
 // ---------------------------------------------------------------------------
@@ -179,8 +179,13 @@ function DistChart({ dist, active, onPick, height = 150 }) {
           <XAxis dataKey="r" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip cursor={{ fill: 'rgba(31,60,132,0.06)' }} formatter={v => [fmtN(v), 'Ratings']} labelFormatter={l => `Score ${l}`} />
-          <Bar dataKey="n" radius={[4, 4, 0, 0]} maxBarSize={28}>
-            {counts.map(c => <Cell key={c.r} fill={colorOf(c.r)} fillOpacity={active !== null && active !== undefined && active !== c.r ? 0.28 : 1} />)}
+          <defs>
+            <BarGrad id="g-npsdist-happy" color={C.green} />
+            <BarGrad id="g-npsdist-neutral" color={C.cyan} />
+            <BarGrad id="g-npsdist-unhappy" color={C.navy} />
+          </defs>
+          <Bar dataKey="n" radius={BAR_RADIUS} maxBarSize={28}>
+            {counts.map(c => <Cell key={c.r} fill={barFill(c.r >= 9 ? 'g-npsdist-happy' : c.r >= 7 ? 'g-npsdist-neutral' : 'g-npsdist-unhappy')} fillOpacity={active !== null && active !== undefined && active !== c.r ? 0.28 : 1} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -274,6 +279,21 @@ function seriesFor(data, field, keyName) {
   })
 }
 
+// Weekly NPS (weeks start Monday), pooling raw counts; label = the Monday.
+function weekSeries(data) {
+  const raw = forStage(data.by_day, 'pre')
+  const map = new Map()
+  for (const x of raw) {
+    const dt = new Date(+x.d.slice(0, 4), +x.d.slice(5, 7) - 1, +x.d.slice(8, 10))
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7))
+    const k = fmtYmd(dt)
+    const g = map.get(k) || { d: k, total: 0, promoters: 0, detractors: 0 }
+    g.total += x.total; g.promoters += x.promoters; g.detractors += x.detractors
+    map.set(k, g)
+  }
+  return [...map.values()].sort((a, b) => (a.d < b.d ? -1 : 1)).map(g => ({ d: g.d, pre: npsOf(g.promoters, g.detractors, g.total), preN: g.total, post: null, postN: 0, roll: null }))
+}
+
 function overallOf(data, stage) {
   const o = data ? forStage(data.overall, stage)[0] : null
   if (!o) return { total: 0, students: 0, avg: null, promoters: 0, passives: 0, detractors: 0, nps: null }
@@ -285,6 +305,13 @@ const chipBtn = (on, color) => ({
   background: on ? 'var(--navy-tint)' : 'var(--card)', color: on ? (color || C.navy) : C.text,
   fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap',
 })
+
+const pillBtn = on => ({
+  padding: '6px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, whiteSpace: 'nowrap', transition: 'all .15s',
+  background: on ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: on ? '#fff' : C.sub,
+  boxShadow: on ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
+})
+const segWrap = { display: 'inline-flex', gap: 2, padding: 3, borderRadius: 10, background: 'var(--bg2)', border: `0.5px solid ${C.border}` }
 
 // ---- coach drawer (click a coach) -----------------------------------------
 
@@ -439,6 +466,7 @@ export default function CoachNpsDashboard() {
   const [bucket, setBucket] = useState(null) // happy | neutral | unhappy
   const [score, setScore] = useState(null) // 0..10
   const [moreCols, setMoreCols] = useState(false)
+  const [grain, setGrain] = useState('day')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState({ key: 'total', dir: -1 })
   const [page, setPage] = useState(0)
@@ -563,6 +591,7 @@ export default function CoachNpsDashboard() {
   }, [pre, prevPre, allCoachRows, min])
 
   const th = { padding: '9px 10px', textAlign: 'right', fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', background: 'var(--bg2)', position: 'sticky', top: 0, cursor: 'pointer', userSelect: 'none', fontFamily: FONT }
+  const thFor = key => ({ ...th, ...(sort.key === key && quick === 'all' ? { color: '#1F3C84', background: '#EEF2FB' } : null) })
   const td = { padding: '9px 10px', textAlign: 'right', fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', borderTop: `0.5px solid ${C.border}`, fontFamily: FONT, fontVariantNumeric: 'tabular-nums' }
   const colCount = 6 + (level === 'coach' ? 1 : 0) + (moreCols ? 4 : 0)
 
@@ -590,11 +619,13 @@ export default function CoachNpsDashboard() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '16px 28px 0', padding: '10px 12px', background: 'var(--bg2)', border: `0.5px solid ${C.border}`, borderRadius: 12 }}>
+            <div style={segWrap}>
             {PRESETS.map(([k, l]) => (
-              <button key={k} onClick={() => { setDatePreset(k); setCustomRange(null) }} style={chipBtn(datePreset === k)}>{l}</button>
+              <button key={k} onClick={() => { setDatePreset(k); setCustomRange(null) }} style={pillBtn(datePreset === k)}>{l}</button>
             ))}
+            </div>
             <div ref={calRef} style={{ position: 'relative' }}>
-              <button onClick={() => setShowCalendar(v => !v)} style={chipBtn(datePreset === 'custom')}>{datePreset === 'custom' && customRange ? presetLabel : 'Custom range'}</button>
+              <button onClick={() => setShowCalendar(v => !v)} style={datePreset === 'custom' ? pillBtn(true) : chipBtn(false)}>{datePreset === 'custom' && customRange ? presetLabel : 'Custom range'}</button>
               {showCalendar && (
                 <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', zIndex: 50, background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16)', overflow: 'hidden' }}>
                   <DateRangePicker from={parseYmd(customRange && customRange.since)} to={parseYmd(customRange && customRange.until)}
@@ -642,16 +673,8 @@ export default function CoachNpsDashboard() {
                   <div style={{ fontSize: 14, color: C.sub }}>No ratings in <b>{presetLabel}</b>. Try a wider date range.</div>
                 ) : headline ? (
                   <>
-                    <div style={{ fontSize: 15, lineHeight: 1.65, color: C.text }}>
-                      NPS is <NpsChip v={pre.nps} total={pre.total} min={1} big />
-                      {headline.dN !== null && prevLabel && (
-                        <span style={{ fontWeight: 800, color: headline.dN >= 0 ? C.green : C.navy }}> {headline.dN === 0 ? 'unchanged' : `${headline.dN > 0 ? 'up' : 'down'} ${Math.abs(headline.dN)} points`}</span>
-                      )}
-                      {headline.dN !== null && prevLabel && <span style={{ color: C.muted }}> vs {prevLabel}</span>}
-                      . <b style={{ color: C.green }}>{pct(pre.promoters, pre.total)}%</b> of customers were happy (rated 9–10) and <b style={{ color: C.navy }}>{pct(pre.detractors, pre.total)}%</b> unhappy (0–6), from <b>{fmtN(pre.total)}</b> ratings by <b>{fmtN(pre.students)}</b> students{headline.coaches > 1 ? <> across <b>{fmtN(headline.coaches)}</b> coaches</> : ''}.
-                    </div>
                     {(headline.best || headline.worst) && (
-                      <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}>
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}>
                         {headline.best && (
                           <button onClick={() => openCoach(headline.best)} style={{ border: `0.5px solid ${C.border}`, background: 'var(--greenBg, #E9F8EF)', color: C.text, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }}>
                             <b style={{ color: C.green }}>Best</b> · {headline.best.name} — NPS {headline.best.pre.nps} ({headline.best.pre.total} ratings)
@@ -668,6 +691,24 @@ export default function CoachNpsDashboard() {
                   </>
                 ) : null}
               </div>
+
+              {/* 2. KPI row (app standard PremKPI) */}
+              {pre && pre.total > 0 && (() => {
+                const hasPrev = !!prevPre && prevPre.total > 0
+                const pts = (a, b, unit = ' pts') => (hasPrev && a !== null && b !== null ? `${a - b >= 0 ? '▲' : '▼'} ${Math.abs(Math.round((a - b) * 10) / 10)}${unit} vs prev` : null)
+                const chg = (a, b) => (hasPrev && b > 0 ? Math.round(((a - b) / b) * 1000) / 10 : null)
+                const happyPct = pre.total ? (pre.promoters / pre.total) * 100 : null
+                const prevHappy = hasPrev && prevPre.total ? (prevPre.promoters / prevPre.total) * 100 : null
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, padding: '16px 28px 0' }}>
+                    <PremKPI label="NPS" value={nf(pre.nps)} sub={pts(pre.nps, prevPre && prevPre.nps) || 'Happy % minus unhappy %'} accent={toneOf(pre.nps).color} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+                    <PremKPI label="Average rating" value={pre.avg === null ? '—' : pre.avg.toFixed(2)} sub={pts(pre.avg, prevPre && prevPre.avg, '') || 'Out of 10'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
+                    <PremKPI label="Total ratings" value={fmtN(pre.total)} sub="Pre-sales" delta={chg(pre.total, prevPre && prevPre.total)} prevValue={hasPrev ? fmtN(prevPre.total) : undefined} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.agent} />
+                    <PremKPI label="Unique students" value={fmtN(pre.students)} sub="Distinct students rated" delta={chg(pre.students, prevPre && prevPre.students)} prevValue={hasPrev ? fmtN(prevPre.students) : undefined} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
+                    <PremKPI label="Happy (9–10)" value={happyPct === null ? '—' : Math.round(happyPct) + '%'} sub={pts(happyPct, prevHappy) || `${fmtN(pre.promoters)} ratings`} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} />
+                  </div>
+                )
+              })()}
 
               {/* 3. How customers rated (clickable) + post-sales */}
               {pre && pre.total > 0 && (
@@ -694,8 +735,11 @@ export default function CoachNpsDashboard() {
               {/* 4. Trends (clickable) */}
               {pre && pre.total > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, padding: '16px 28px 0' }}>
-                  <Card title="Day-on-day NPS" sub="Click a day to see who was rated">
-                    <TrendChart rows={daySeries} rolling keyName="d" fmtLabel={dayLabel} hasPost={hasPost} onPick={d => setDayOpen(d)} hint="Click to see who was rated" />
+                  <Card title={grain === 'day' ? 'Day-on-day NPS' : 'Week-on-week NPS'} sub={grain === 'day' ? 'Click a day to see who was rated' : 'Weeks start Monday · click a week to zoom into it'}
+                    action={<div style={segWrap}>{[['day', 'Daily'], ['week', 'Weekly']].map(([k, l]) => <button key={k} onClick={() => setGrain(k)} style={pillBtn(grain === k)}>{l}</button>)}</div>}>
+                    {grain === 'day'
+                      ? <TrendChart rows={daySeries} rolling keyName="d" fmtLabel={dayLabel} hasPost={hasPost} onPick={d => setDayOpen(d)} hint="Click to see who was rated" />
+                      : <TrendChart rows={weekSeries(data)} keyName="d" fmtLabel={d => 'Wk ' + dayLabel(d)} hasPost={false} onPick={d => { const e = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10) + 6); setCustomRange({ since: d, until: fmtYmd(e) }); setDatePreset('custom') }} hint="Click to zoom into this week" />}
                   </Card>
                   {monthSeries.length >= 3 && <Card title="Month-on-month NPS" >
                     <TrendChart rows={monthSeries} keyName="m" fmtLabel={monthLabel} hasPost={hasPost} onPick={zoomMonth} hint="Click to zoom into this month" />
@@ -743,17 +787,17 @@ export default function CoachNpsDashboard() {
                           <tr>
                             <th style={{ ...th, textAlign: 'left', left: 0, zIndex: 2 }} onClick={() => sortBy('name')}>{LEVEL_NAME[level]}{arrow('name')}</th>
                             {level === 'coach' && <th style={{ ...th, textAlign: 'left', cursor: 'default' }}>Manager</th>}
-                            {level !== 'coach' && <th style={th} onClick={() => sortBy('coaches')}>Coaches{arrow('coaches')}</th>}
-                            <th style={th} onClick={() => sortBy('total')}>Ratings{arrow('total')}</th>
-                            <th style={th} onClick={() => sortBy('avg')}>Avg{arrow('avg')}</th>
-                            <th style={th} onClick={() => sortBy('nps')}>NPS{arrow('nps')}</th>
+                            {level !== 'coach' && <th style={thFor('coaches')} onClick={() => sortBy('coaches')}>Coaches{arrow('coaches')}</th>}
+                            <th style={thFor('total')} onClick={() => sortBy('total')}>Ratings{arrow('total')}</th>
+                            <th style={thFor('avg')} onClick={() => sortBy('avg')}>Avg{arrow('avg')}</th>
+                            <th style={thFor('nps')} onClick={() => sortBy('nps')}>NPS{arrow('nps')}</th>
                             <th style={{ ...th, cursor: 'default' }} title="Change in NPS vs the previous window of the same length (shown when both have 3+ ratings)">vs prev</th>
                             <th style={{ ...th, cursor: 'default', minWidth: 130 }}>Happy / Neutral / Unhappy</th>
                             {moreCols && <>
-                              <th style={th} onClick={() => sortBy('students')}>Students{arrow('students')}</th>
-                              <th style={th} onClick={() => sortBy('promoters')}>Happy{arrow('promoters')}</th>
-                              <th style={th} onClick={() => sortBy('passives')}>Neutral{arrow('passives')}</th>
-                              <th style={th} onClick={() => sortBy('detractors')}>Unhappy{arrow('detractors')}</th>
+                              <th style={thFor('students')} onClick={() => sortBy('students')}>Students{arrow('students')}</th>
+                              <th style={thFor('promoters')} onClick={() => sortBy('promoters')}>Happy{arrow('promoters')}</th>
+                              <th style={thFor('passives')} onClick={() => sortBy('passives')}>Neutral{arrow('passives')}</th>
+                              <th style={thFor('detractors')} onClick={() => sortBy('detractors')}>Unhappy{arrow('detractors')}</th>
                             </>}
                           </tr>
                         </thead>
@@ -761,13 +805,13 @@ export default function CoachNpsDashboard() {
                           {pageRows.length === 0 && (
                             <tr><td colSpan={colCount + 1} style={{ ...td, textAlign: 'center', color: C.muted, padding: 28 }}>No {LEVEL_PLURAL[level]} match these filters.</td></tr>
                           )}
-                          {pageRows.map(r => {
+                          {pageRows.map((r, ri) => {
                             const few = r.pre.total < min
                             const pv = prevRows.get(r.key)
                             const dlt = pv && pv.pre && pv.pre.total >= 3 && r.pre.total >= 3 && r.pre.nps !== null && pv.pre.nps !== null ? r.pre.nps - pv.pre.nps : null
                             return (
-                              <tr key={r.key} onClick={() => onRowClick(r)} style={{ cursor: 'pointer', opacity: few ? 0.7 : 1 }}
-                                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg2)' }} onMouseLeave={e => { e.currentTarget.style.background = '' }}>
+                              <tr key={r.key} onClick={() => onRowClick(r)} style={{ cursor: 'pointer', opacity: few ? 0.7 : 1, background: ri % 2 ? 'rgba(148,163,184,0.07)' : '' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'var(--navy-tint)' }} onMouseLeave={e => { e.currentTarget.style.background = ri % 2 ? 'rgba(148,163,184,0.07)' : '' }}>
                                 <td style={{ ...td, textAlign: 'left', fontWeight: 700, background: 'inherit', position: 'sticky', left: 0 }}>
                                   {r.name}{level !== 'coach' && <span style={{ color: C.blue, marginLeft: 6, fontWeight: 800 }}>›</span>}
                                 </td>
@@ -793,13 +837,20 @@ export default function CoachNpsDashboard() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 12, color: C.muted, flexWrap: 'wrap' }}>
                       <span>* / greyed = fewer than {min} ratings, so the NPS is a rough signal. Post-sales columns appear here once that data is connected.</span>
                       <div style={{ flex: 1 }} />
-                      {pages > 1 && (
-                        <>
-                          <button disabled={safePage === 0} onClick={() => setPage(safePage - 1)} style={{ padding: '5px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', cursor: safePage === 0 ? 'default' : 'pointer', opacity: safePage === 0 ? 0.4 : 1, fontFamily: FONT, fontWeight: 700 }}>Prev</button>
-                          <span style={{ color: C.sub }}>Page {safePage + 1} of {pages}</span>
-                          <button disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)} style={{ padding: '5px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', cursor: safePage >= pages - 1 ? 'default' : 'pointer', opacity: safePage >= pages - 1 ? 0.4 : 1, fontFamily: FONT, fontWeight: 700 }}>Next</button>
-                        </>
-                      )}
+                      {pages > 1 && (() => {
+                        const nums = []
+                        for (let n = 0; n < pages; n++) if (n === 0 || n === pages - 1 || Math.abs(n - safePage) <= 1) nums.push(n)
+                        const out = []
+                        nums.forEach((n, k) => { if (k && n - nums[k - 1] > 1) out.push('gap' + n); out.push(n) })
+                        const nb = on => ({ minWidth: 30, height: 30, padding: '0 8px', borderRadius: 8, border: on ? 'none' : `0.5px solid ${C.border}`, background: on ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'var(--card)', color: on ? '#fff' : C.sub, boxShadow: on ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', fontFamily: FONT, fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontVariantNumeric: 'tabular-nums' })
+                        return (
+                          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                            <button disabled={safePage === 0} onClick={() => setPage(safePage - 1)} style={{ ...nb(false), opacity: safePage === 0 ? 0.4 : 1, cursor: safePage === 0 ? 'default' : 'pointer' }}>‹</button>
+                            {out.map(n => (typeof n === 'string' ? <span key={n} style={{ color: C.muted }}>…</span> : <button key={n} onClick={() => setPage(n)} style={nb(n === safePage)}>{n + 1}</button>))}
+                            <button disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)} style={{ ...nb(false), opacity: safePage >= pages - 1 ? 0.4 : 1, cursor: safePage >= pages - 1 ? 'default' : 'pointer' }}>›</button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </Card>
                 </div>
