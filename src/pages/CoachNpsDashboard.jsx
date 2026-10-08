@@ -208,6 +208,9 @@ function TrendChart({ rows, keyName, fmtLabel, hasPost, onPick, hint, height = 2
   const lo = vals.length ? Math.max(-100, Math.floor((Math.min(...vals) - 10) / 25) * 25) : -100
   const hi = vals.length ? Math.min(100, Math.ceil((Math.max(...vals) + 10) / 25) * 25) : 100
   const maxN = Math.max(1, ...rows.map(r => r.preN || 0))
+  const step = hi - lo > 100 ? 50 : 25
+  const ticks = []
+  for (let v = lo; v <= hi; v += step) ticks.push(v)
   const tick = { fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }
   const dot = props => {
     const { cx, cy, payload } = props
@@ -229,7 +232,7 @@ function TrendChart({ rows, keyName, fmtLabel, hasPost, onPick, hint, height = 2
             onClick={e => { if (onPick && e && e.activeLabel) onPick(e.activeLabel) }}>
             <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
             <XAxis dataKey={keyName} tickFormatter={fmtLabel} tick={tick} axisLine={{ stroke: '#E2E8F0' }} tickLine={false} minTickGap={24} />
-            <YAxis yAxisId="nps" domain={[lo, hi]} tick={tick} axisLine={false} tickLine={false} width={38} tickFormatter={v => (v > 0 ? `+${v}` : v)} />
+            <YAxis yAxisId="nps" domain={[lo, hi]} ticks={ticks} tick={tick} axisLine={false} tickLine={false} width={38} tickFormatter={v => (v > 0 ? `+${v}` : v)} />
             <YAxis yAxisId="n" orientation="right" domain={[0, maxN * 4]} hide />
             <ReferenceLine yAxisId="nps" y={0} stroke="#94A3B8" strokeWidth={1} />
             <Tooltip content={<TrendTip fmtLabel={fmtLabel} hint={hint} />} cursor={{ stroke: '#CBD5E1', strokeDasharray: '3 3' }} />
