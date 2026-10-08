@@ -4409,6 +4409,21 @@ async function handleCoachNps(req, res, me) {
       if (emails && !emails.includes(coach)) return res.status(403).json({ error: 'That coach is outside your access.' })
       emails = [coach]
     }
+    // Rating-level rows (newest first) for the coach drawer / day panel. Same access scope as the
+    // summary: only coaches the caller may see. No student ids leave the server.
+    if (q.ratings) {
+      const maxR = Number.isFinite(Number(q.max_rating)) ? Math.min(10, Math.max(0, Number(q.max_rating))) : 10
+      let path = 'call_nps_feed?select=rated_at,rated_date,coach_email,coach_name,rating,review,call_type,call_status,duration'
+        + '&stage=eq.pre&rated_date=gte.' + from + '&rated_date=lte.' + to + '&rating=lte.' + maxR + '&order=rated_at.desc&limit=300'
+      if (emails) path += '&coach_email=in.(' + emails.map(e => '"' + String(e).replace(/["\\,()]/g, '') + '"').join(',') + ')'
+      const rr = await supabaseAdmin(path, { method: 'GET' })
+      if (!rr.ok) return res.status(502).json({ error: 'Ratings read failed (' + rr.status + ')' })
+      const rows = await rr.json()
+      const team = {}
+      for (const x of rows) if (scope.team[x.coach_email]) team[x.coach_email] = scope.team[x.coach_email]
+      res.setHeader('Cache-Control', 'private, no-store')
+      return res.status(200).json({ ready: true, from, to, ratings: rows, team })
+    }
     const rpc = await supabaseAdmin('rpc/coach_nps_summary', {
       method: 'POST',
       body: JSON.stringify({ p_from: from, p_to: to, p_emails: emails }),

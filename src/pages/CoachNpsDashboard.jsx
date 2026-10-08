@@ -315,6 +315,37 @@ const pillBtn = on => ({
 })
 const segWrap = { display: 'inline-flex', gap: 2, padding: 3, borderRadius: 10, background: 'var(--bg2)', border: `0.5px solid ${C.border}` }
 
+// Rating-level list: score, date, the student's comment. Unhappy scores stand out so a
+// manager can see at a glance what went wrong.
+function RatingsList({ ratings, showCoach, empty, toggle = true }) {
+  const [only, setOnly] = useState('all')
+  if (!ratings) return <div style={{ padding: 18, textAlign: 'center', color: C.muted, fontSize: 13 }}>Loading ratings…</div>
+  const rows = only === 'low' ? ratings.filter(r => r.rating <= 6) : ratings
+  const col = r => (r >= 9 ? C.green : r >= 7 ? C.cyan : C.navy)
+  return (
+    <div>
+      {toggle && <div style={{ ...segWrap, marginBottom: 10 }}>
+        <button onClick={() => setOnly('all')} style={pillBtn(only === 'all')}>All ({ratings.length})</button>
+        <button onClick={() => setOnly('low')} style={pillBtn(only === 'low')}>Unhappy only ({ratings.filter(r => r.rating <= 6).length})</button>
+      </div>}
+      {rows.length === 0 ? <div style={{ padding: 18, textAlign: 'center', color: C.muted, fontSize: 13 }}>{empty || 'No ratings.'}</div> : (
+        <div style={{ maxHeight: 340, overflowY: 'auto', border: `0.5px solid ${C.border}`, borderRadius: 10 }}>
+          {rows.slice(0, 60).map((r, i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 12px', borderTop: i ? `0.5px solid ${C.border}` : 'none' }}>
+              <span style={{ minWidth: 34, height: 28, borderRadius: 8, background: col(r.rating) + '22', color: col(r.rating), fontWeight: 800, fontSize: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>{r.rating}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: C.muted }}>{showCoach && <b style={{ color: C.text }}>{r.coach_name || r.coach_email} · </b>}{dayLabel(r.rated_date)}{r.call_type ? ` · ${r.call_type}` : ''}{r.duration ? ` · ${Math.round(r.duration / 60)} min call` : ''}</div>
+                <div style={{ fontSize: 13, color: r.review ? C.text : C.muted, marginTop: 2, lineHeight: 1.45, wordBreak: 'break-word' }}>{r.review && String(r.review).trim() ? String(r.review).trim() : 'No comment left'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {rows.length > 60 && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>Showing the latest 60 of {rows.length}.</div>}
+    </div>
+  )
+}
+
 // ---- coach drawer (click a coach) -----------------------------------------
 
 function CoachDrawer({ row, range, min, onClose }) {
@@ -324,6 +355,14 @@ function CoachDrawer({ row, range, min, onClose }) {
     let dead = false
     fetchJson(`/api/crm-leads?source=coach_nps&from=${range.since}&to=${range.until}&coach=${encodeURIComponent(row.email)}`)
       .then(d => { if (!dead) setData(d) }).catch(e => { if (!dead) setErr(e.message) })
+    return () => { dead = true }
+  }, [row.email, range.since, range.until])
+  const [ratings, setRatings] = useState(null)
+  useEffect(() => {
+    let dead = false
+    setRatings(null)
+    fetchJson(`/api/crm-leads?source=coach_nps&ratings=1&from=${range.since}&to=${range.until}&coach=${encodeURIComponent(row.email)}`)
+      .then(d => { if (!dead) setRatings(d.ratings || []) }).catch(() => { if (!dead) setRatings([]) })
     return () => { dead = true }
   }, [row.email, range.since, range.until])
   useEffect(() => {
@@ -349,7 +388,7 @@ function CoachDrawer({ row, range, min, onClose }) {
           {data && data.ready === false && <div style={{ color: C.muted, fontSize: 13 }}>{data.error}</div>}
           {ov && (
             <>
-              <div style={{ fontSize: 12.5, color: C.muted }}>{range.since} → {range.until}</div>
+              <div style={{ fontSize: 12.5, color: C.muted }}>{dayLabel(range.since)} → {dayLabel(range.until)}</div>
               {ov.total === 0 ? (
                 <div style={{ padding: '28px 12px', textAlign: 'center', color: C.muted, fontSize: 13 }}>No ratings from this coach in this window.</div>
               ) : (
@@ -372,7 +411,8 @@ function CoachDrawer({ row, range, min, onClose }) {
                     <MixLegend p={ov.promoters} pa={ov.passives} d={ov.detractors} />
                     <div style={{ marginTop: 10 }}><DistChart dist={forStage(data.distribution, 'pre')} height={130} /></div>
                   </Card>
-                  <Card title="Day-on-day NPS" sub="One point per day this coach was rated"><TrendChart rows={seriesFor(data, 'by_day', 'd')} keyName="d" fmtLabel={dayLabel} hasPost={false} height={190} /></Card>
+                  <Card title="Ratings and comments" sub="Newest first. Low scores are where to listen for what went wrong"><RatingsList ratings={ratings} empty="No unhappy ratings in this window." /></Card>
+                  <Card title="Week-on-week NPS" sub="A coach gets 1 or 2 ratings a day, so a weekly view is steadier than daily"><TrendChart rows={weekSeries(data)} keyName="d" fmtLabel={d => 'Wk ' + dayLabel(d)} hasPost={false} height={190} /></Card>
                   <Card title="Month-on-month NPS" sub="Full history, not limited to the date range"><TrendChart rows={seriesFor(data, 'by_month', 'm')} keyName="m" fmtLabel={monthLabel} hasPost={false} height={190} /></Card>
                   <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg2)', border: `0.5px dashed ${C.border}`, fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
                     <b style={{ color: C.text }}>Call recordings</b> — a play button for each rating, so a manager can hear what went wrong, is the next step. It needs a recording link on each NPS row from the data team; it will appear here as this coach's list of ratings.
@@ -391,10 +431,13 @@ function CoachDrawer({ row, range, min, onClose }) {
 
 function DayPanel({ day, min, onClose, onOpenCoach }) {
   const [data, setData] = useState(null)
+  const [low, setLow] = useState(null)
   const [err, setErr] = useState(null)
   useEffect(() => {
     let dead = false
     fetchJson(`/api/crm-leads?source=coach_nps&from=${day}&to=${day}`).then(d => { if (!dead) setData(d) }).catch(e => { if (!dead) setErr(e.message) })
+    setLow(null)
+    fetchJson(`/api/crm-leads?source=coach_nps&ratings=1&max_rating=6&from=${day}&to=${day}`).then(d => { if (!dead) setLow(d.ratings || []) }).catch(() => { if (!dead) setLow([]) })
     return () => { dead = true }
   }, [day])
   useEffect(() => {
@@ -418,8 +461,15 @@ function DayPanel({ day, min, onClose, onOpenCoach }) {
           {err && <div style={{ color: C.navy, fontSize: 13 }}>{err}</div>}
           {!data && !err && <DashboardSkeleton />}
           {data && coaches.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: C.muted, fontSize: 13 }}>No ratings on this day.</div>}
+          {data && coaches.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: C.muted, marginBottom: 8 }}>Unhappy ratings this day (score 0 to 6)</div>
+              <RatingsList ratings={low} showCoach toggle={false} empty="No unhappy ratings on this day." />
+            </div>
+          )}
+          {coaches.length > 0 && <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: C.muted, marginBottom: 8 }}>Every coach rated this day</div>}
           {coaches.length > 0 && (
-            <div style={{ maxHeight: '55vh', overflow: 'auto', border: `0.5px solid ${C.border}`, borderRadius: 10 }}>
+            <div style={{ maxHeight: '40vh', overflow: 'auto', border: `0.5px solid ${C.border}`, borderRadius: 10 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                 <thead><tr style={{ background: 'var(--bg2)', color: C.muted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                   <th style={{ textAlign: 'left', padding: '8px 10px' }}>Coach</th><th style={{ padding: '8px 10px', textAlign: 'right' }}>Ratings</th><th style={{ padding: '8px 10px', textAlign: 'right' }}>Avg</th><th style={{ padding: '8px 10px', textAlign: 'right' }}>NPS</th><th style={{ padding: '8px 10px', minWidth: 90 }}>Mix</th>
