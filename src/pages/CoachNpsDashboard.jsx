@@ -602,7 +602,8 @@ export default function CoachNpsDashboard() {
   const th = { padding: '9px 10px', textAlign: 'right', fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', background: 'var(--bg2)', position: 'sticky', top: 0, cursor: 'pointer', userSelect: 'none', fontFamily: FONT }
   const thFor = key => ({ ...th, ...(sort.key === key && quick === 'all' ? { color: '#1F3C84', background: '#EEF2FB' } : null) })
   const td = { padding: '9px 10px', textAlign: 'right', fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', borderTop: `0.5px solid ${C.border}`, fontFamily: FONT, fontVariantNumeric: 'tabular-nums' }
-  const colCount = 6 + (level === 'coach' ? 1 : 0) + (moreCols ? 4 : 0)
+  const colCount = 7 + (level === 'coach' ? 1 : 0) + (moreCols ? 4 : 0)
+  const maxRatings = Math.max(1, ...filtered.map(r => r.pre.total))
 
   const subtitle = !scopeLevel ? 'How customers rate coaching calls, by coach.'
     : scopeLevel === 'admin' ? 'How customers rate coaching calls, across every coach. Click a senior manager to drill down.'
@@ -765,20 +766,25 @@ export default function CoachNpsDashboard() {
                       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email or manager…"
                         style={{ width: 230, padding: '7px 11px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', color: C.text, fontSize: 12.5, fontFamily: FONT, outline: 'none' }} />
                     }>
-                    {/* breadcrumb + quick filters */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {canDrill && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: FONT, marginRight: 8 }}>
-                          <button onClick={() => { setPath([]); setFlat(false) }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: path.length || flat ? C.blue : C.text, fontWeight: 800, fontFamily: FONT, fontSize: 12.5, padding: 2 }}>{scopeLevel === 'admin' ? 'All senior managers' : 'All managers'}</button>
-                          {path.map((p, i) => (
+                    {/* breadcrumb: its own fixed-height row so nothing below it moves when it changes */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 30, marginBottom: 8, fontFamily: FONT, fontSize: 12.5, flexWrap: 'wrap' }}>
+                      {canDrill ? (() => {
+                        const crumbs = [{ label: scopeLevel === 'admin' ? 'All senior managers' : 'All managers', go: () => { setPath([]); setFlat(false) } },
+                          ...path.map((p, i) => ({ label: p.name, go: () => { setPath(path.slice(0, i + 1)); setFlat(false) } })),
+                          ...(flat ? [{ label: 'All coaches', go: null }] : [])]
+                        return crumbs.map((c, i) => {
+                          const last = i === crumbs.length - 1
+                          return (
                             <React.Fragment key={i}>
-                              <span style={{ color: C.muted }}>›</span>
-                              <button onClick={() => { setPath(path.slice(0, i + 1)); setFlat(false) }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: i === path.length - 1 && !flat ? C.text : C.blue, fontWeight: 800, fontFamily: FONT, fontSize: 12.5, padding: 2 }}>{p.name}</button>
+                              {i > 0 && <span style={{ color: C.muted }}>›</span>}
+                              <button onClick={c.go || undefined} disabled={last} style={{ border: 'none', cursor: last ? 'default' : 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: last ? 'var(--bg3)' : 'transparent', color: last ? C.text : C.blue }}>{c.label}</button>
                             </React.Fragment>
-                          ))}
-                          {flat && <><span style={{ color: C.muted }}>›</span><span style={{ fontWeight: 800, color: C.text }}>all coaches</span></>}
-                        </div>
-                      )}
+                          )
+                        })
+                      })() : <span style={{ color: C.muted }}>Your team</span>}
+                    </div>
+                    {/* quick filters */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12, minHeight: 40 }}>
                       <div style={segWrap}>
                         {[['all', 'Everyone'], ['attention', 'Needs attention'], ['top', 'Top performers']].map(([k, l]) => (
                           <button key={k} onClick={() => { setQuick(k); setBucket(null); setScore(null) }} style={pillBtn(quick === k)}
@@ -800,7 +806,8 @@ export default function CoachNpsDashboard() {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr>
-                            <th style={{ ...th, textAlign: 'left', left: 0, zIndex: 2 }} onClick={() => sortBy('name')}>{LEVEL_NAME[level]}{arrow('name')}</th>
+                            <th style={{ ...th, cursor: 'default', left: 0, zIndex: 2, width: 44, minWidth: 44, textAlign: 'center' }}>#</th>
+                            <th style={{ ...th, textAlign: 'left', left: 44, zIndex: 2 }} onClick={() => sortBy('name')}>{LEVEL_NAME[level]}{arrow('name')}</th>
                             {level === 'coach' && <th style={{ ...th, textAlign: 'left', cursor: 'default' }}>Manager</th>}
                             {level !== 'coach' && <th style={thFor('coaches')} onClick={() => sortBy('coaches')}>Coaches{arrow('coaches')}</th>}
                             <th style={thFor('total')} onClick={() => sortBy('total')}>Ratings{arrow('total')}</th>
@@ -827,14 +834,22 @@ export default function CoachNpsDashboard() {
                             return (
                               <tr key={r.key} onClick={() => onRowClick(r)} style={{ cursor: 'pointer', opacity: few ? 0.7 : 1, background: ri % 2 ? 'var(--bg2)' : '' }}
                                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--navy-tint)' }} onMouseLeave={e => { e.currentTarget.style.background = ri % 2 ? 'var(--bg2)' : '' }}>
-                                <td style={{ ...td, textAlign: 'left', fontWeight: 700, background: 'inherit', position: 'sticky', left: 0 }}>
+                                <td style={{ ...td, textAlign: 'center', color: C.muted, fontWeight: 700, background: 'inherit', position: 'sticky', left: 0, width: 44, minWidth: 44 }}>{safePage * PAGE_SIZE + ri + 1}</td>
+                                <td style={{ ...td, textAlign: 'left', fontWeight: 700, background: 'inherit', position: 'sticky', left: 44 }}>
                                   {r.name}{level !== 'coach' && <span style={{ color: C.blue, marginLeft: 6, fontWeight: 800 }}>›</span>}
                                 </td>
                                 {level === 'coach' && <td style={{ ...td, textAlign: 'left', color: C.sub }}>{r.manager || 'Unmapped'}</td>}
                                 {level !== 'coach' && <td style={td}>{fmtN(r.coachCount)}</td>}
-                                <td style={td}>{fmtN(r.pre.total)}</td>
+                                <td style={td}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                    <span style={{ width: 56, height: 6, borderRadius: 99, background: 'var(--bg3)', overflow: 'hidden', display: 'inline-block' }}>
+                                      <span style={{ display: 'block', height: '100%', width: `${Math.max(3, (r.pre.total / maxRatings) * 100)}%`, borderRadius: 99, background: 'linear-gradient(90deg, #1C9FD4, #29B9C3)' }} />
+                                    </span>
+                                    <span style={{ minWidth: 34, textAlign: 'right' }}>{fmtN(r.pre.total)}</span>
+                                  </span>
+                                </td>
                                 <td style={td}>{r.pre.avg !== null ? r.pre.avg.toFixed(1) : '—'}</td>
-                                <td style={td}><NpsChip v={r.pre.nps} total={r.pre.total} min={min} /></td>
+                                <td style={{ ...td, background: few || r.pre.nps === null ? undefined : toneOf(r.pre.nps).color + '1F' }}><NpsChip v={r.pre.nps} total={r.pre.total} min={min} /></td>
                                 <td style={{ ...td, color: dlt === null ? C.muted : dlt >= 0 ? C.green : C.navy, fontWeight: 700 }}>{dlt === null ? '—' : dlt === 0 ? '–' : `${dlt > 0 ? '▲' : '▼'} ${Math.abs(dlt)}`}</td>
                                 <td style={{ ...td, minWidth: 130 }}><MixBar p={r.pre.promoters} pa={r.pre.passives} d={r.pre.detractors} /></td>
                                 {moreCols && <>
