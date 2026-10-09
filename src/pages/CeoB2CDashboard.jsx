@@ -708,6 +708,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // Cash Flow only -- the hidden CashflowStatementImage node captured for
   // the 'b2c_cashflow_image' Slack version (see captureSlackFiles below).
   const cfImageRef = useRef(null)
+  // Second hidden image for the V2 version (MTD / H2 / YTD / H1).
+  const cfImageV2Ref = useRef(null)
   const [slackOpen, setSlackOpen] = useState(false)
 
   // Daily Report -- the scheduled 3 PM IST approval pipeline (posts a native
@@ -839,6 +841,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       // response this page already loads into `data`. Additive: the P&L
       // builder never reads this key.
       cfStatement: data && data.cashflowStatement,
+      // The V2 Cash Flow versions (MTD / H2 / YTD / H1) read this instead.
+      cfStatementV2: data && data.cashflowStatementV2,
       peopleMonthly: peopleMonthly,
       ytd: fy,
       // The closing sections of the message are arithmetic on these two windows.
@@ -905,11 +909,11 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     // CashflowStatementImage replica instead of the on-page revenue/cost
     // table below (which shows this page's own daily-derived MTD, not the
     // 'CF' tab's own MTD/YTD statement that version is reporting on).
-    if (versionId === 'b2c_cashflow_image') {
+    if (versionId === 'b2c_cashflow_image' || versionId === 'b2c_cashflow_image_v2') {
       // Image only -- no CSV. The sheet image already IS the whole report
       // for this version (per its own imageIsMessage note above); a
       // separate CSV of the same 16 rows was requested removed, 2026-09-12.
-      const cfNode = cfImageRef.current
+      const cfNode = (versionId === 'b2c_cashflow_image_v2' ? cfImageV2Ref : cfImageRef).current
       const cfShot = cfNode ? await captureNodePng(cfNode, { ratios: [3, 2, 1.5, 1] }) : null
       return { pngBase64: cfShot ? cfShot.base64 : null, pixelRatio: cfShot ? cfShot.pixelRatio : null, csv: null }
     }
@@ -1179,6 +1183,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               rowCount={rows.length}
             />
             {isCashFlow ? <CashflowStatementImage cf={data && data.cashflowStatement} ref={cfImageRef} /> : null}
+            {isCashFlow ? <CashflowStatementImage cf={data && (data.cashflowStatementV2 || data.cashflowStatement)} ref={cfImageV2Ref} /> : null}
           </div>
         </div>
         <div className={styles.scroll}>

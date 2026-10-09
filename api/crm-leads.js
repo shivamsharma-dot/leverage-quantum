@@ -5697,7 +5697,7 @@ function b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv) {
 // caller doesn't have).
 export async function fetchB2CData() {
   const id = await getB2CSheetId();
-  if (!id) return { configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, cashflowStatement: { configured: false, headerLabels: [], rows: [] }, ts: Date.now() };
+  if (!id) return { configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, cashflowStatement: { configured: false, headerLabels: [], rows: [] }, cashflowStatementV2: { configured: false, headerLabels: [], rows: [] }, ts: Date.now() };
   const base = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv';
   const grab = async function (u) {
     const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -5745,12 +5745,14 @@ export async function fetchB2CData() {
   const [titleCsv, groupCsv, subCsv, dataCsv] = await cfStatementPromise;
   const [title2, group2, sub2, data2] = await cfStatementV2Promise;
   const cfV2 = b2cParseCashflowStatement(title2, group2, sub2, data2);
-  // The wider MTD / H2 / YTD / H1 block wins when it is there and has real
-  // numbers in it; otherwise fall back to the original MTD / YTD block.
-  const cashflowStatement = (cfV2.configured && cfV2.columns.length >= 4)
-    ? cfV2
-    : b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv);
-  return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, cashflowStatement: cashflowStatement, ts: Date.now() };
+  // Two statements, never merged: cashflowStatement is Finance's original
+  // MTD / YTD block (G3:I25) exactly as before and feeds the original Cash Flow
+  // report versions; cashflowStatementV2 is the wider MTD / H2 / YTD / H1 block
+  // (Q3:U25) and feeds only the V2 versions. If the wider block is not in the
+  // sheet (or is empty) V2 falls back to the original statement.
+  const cashflowStatement = b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv);
+  const cashflowStatementV2 = (cfV2.configured && cfV2.columns.length >= 4) ? cfV2 : cashflowStatement;
+  return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, cashflowStatement: cashflowStatement, cashflowStatementV2: cashflowStatementV2, ts: Date.now() };
 }
 
 // Full-fidelity B2C Gazette data (2026-08-25 rebuild) -- revenue/cost LINE
@@ -5889,6 +5891,7 @@ async function handleB2C(req, res, me) {
       pnl: canPnl ? data.pnl : { days: [] },
       cashFlow: canCashFlow ? data.cashFlow : { days: [] },
       cashflowStatement: canCashFlow ? data.cashflowStatement : { configured: false, headerLabels: [], rows: [] },
+      cashflowStatementV2: canCashFlow ? data.cashflowStatementV2 : { configured: false, headerLabels: [], rows: [] },
     });
   } catch (e) {
     return res.status(502).json({ error: 'sheet fetch failed', detail: String((e && e.message) || e) });

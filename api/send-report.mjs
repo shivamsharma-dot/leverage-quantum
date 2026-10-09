@@ -2162,7 +2162,7 @@ async function slackSendDM(token, userId, text) {
 async function buildB2CDailyMessages(data, cfg, throughDate) {
   const jobs = [
     { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS.find(v => v.id === 'b2c_full_v2') || B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
-    { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement }) },
+    { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS.find(v => v.id === 'b2c_cashflow_v2') || B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement, cfStatementV2: data.cashflowStatementV2 }) },
   ]
   const built = []
   for (const job of jobs) {
@@ -2176,7 +2176,9 @@ async function buildB2CDailyMessages(data, cfg, throughDate) {
         // csv stays null rather than deleting the field: savePendingB2CReport
         // / the upload steps below already only attach it when truthy.
         const { renderCashflowStatementPng } = await import('../lib/cashflowStatementImage.mjs')
-        const cf = data.cashflowStatement
+        // The Daily Report posts the V2 statement (MTD / H2 / YTD / H1); the
+        // image draws the same data as the table above it.
+        const cf = data.cashflowStatementV2 || data.cashflowStatement
         const pngBuf = renderCashflowStatementPng(cf)
         image = {
           pngBase64: pngBuf.toString('base64'),
