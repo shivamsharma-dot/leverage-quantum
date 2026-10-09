@@ -586,14 +586,14 @@ function buildCacRows(aggRows, span, manual, affiliate, rauPct, srFee) {
     if (c.key === 'linkedin') perf += cacManualSum(manual, span, m => m.linkedin).total
     const brand = c.key === 'google' ? cacManualSum(manual, span, m => m.branding).total : 0
     const dep = src.dep
-    const rau = Math.max(0, Math.ceil(dep * (rauPct / 100) - 1e-9))
+    const rau = Math.ceil(dep * (rauPct / 100) - 1e-9)
     const ac = cacManualSum(manual, span, m => m.ac && m.ac[c.key])
     const vas = cacManualSum(manual, span, m => m.vas && m.vas[c.key])
     return { c, perf, brand, total: perf + brand, dep, rau, rauRev: rau * srFee / 1e7, ac, vas }
   })
   const sum = f => cols.reduce((a, x) => a + f(x), 0)
   const overall = { perf: sum(x => x.perf), brand: sum(x => x.brand), total: sum(x => x.total), dep: sum(x => x.dep) }
-  overall.rau = Math.max(0, Math.ceil(overall.dep * (rauPct / 100) - 1e-9))
+  overall.rau = Math.ceil(overall.dep * (rauPct / 100) - 1e-9)
   overall.rauRev = overall.rau * srFee / 1e7
   // A channel "needs" revenue inputs once it has any spend or deposits; the Overall revenue/ROAS cells only
   // show once every such channel has them, so a half-typed table never passes for a complete total.
