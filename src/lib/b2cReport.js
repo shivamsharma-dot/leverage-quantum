@@ -480,14 +480,20 @@ function buildB2CCashflowTable(ctx) {
   // has nothing to make the newline take effect -- NOT independently
   // confirmed against Slack's own docs (silent on this), so verify against
   // a real send before trusting the column narrows as expected.
-  const subHeader = (Array.isArray(cf.subHeader) && cf.subHeader.length === 3) ? cf.subHeader : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
-  const groupHeader = (Array.isArray(cf.groupHeader) && cf.groupHeader.length === 3) ? cf.groupHeader : ['', 'MTD', 'YTD']
-  const headerLabels = [
-    subHeader[0] || 'Particulars',
-    (groupHeader[1] || 'MTD') + '\n' + (subHeader[1] || 'Amount (INR CR.)'),
-    (groupHeader[2] || 'YTD') + '\n' + (subHeader[2] || 'Amount (INR CR.)'),
+  // One value column per entry in cf.columns (api/crm-leads.js): MTD / H2 /
+  // YTD / H1 when Finance's wider block is in the sheet, MTD / YTD otherwise.
+  // A row's numbers live in r.vals, in the same order; the legacy r.mtd/r.ytd
+  // fallback only covers a statement cached in the browser before this shape
+  // existed.
+  const cols0 = (Array.isArray(cf.columns) && cf.columns.length) ? cf.columns : [
+    { group: (cf.groupHeader && cf.groupHeader[1]) || 'MTD', sub: (cf.subHeader && cf.subHeader[1]) || 'Amount (INR CR.)' },
+    { group: (cf.groupHeader && cf.groupHeader[2]) || 'YTD', sub: (cf.subHeader && cf.subHeader[2]) || 'Amount (INR CR.)' },
   ]
-  const rows = [[cellBold(headerLabels[0]), cellBold(headerLabels[1]), cellBold(headerLabels[2])]]
+  const valsOf = function (r) { return Array.isArray(r.vals) ? r.vals : [r.mtd, r.ytd] }
+  const headerLabels = [(cf.subHeader && cf.subHeader[0]) || 'Particulars'].concat(cols0.map(function (c) {
+    return (c.group || '') + '\n' + (c.sub || 'Amount (INR CR.)')
+  }))
+  const rows = [headerLabels.map(cellBold)]
   // A blank row, matching the sheet's own gap before -- and only before -- a
   // section-total row (never after the very first data row), same rule the
   // 'sheet image' version (CashflowStatementImage) already follows. Slack
@@ -495,16 +501,16 @@ function buildB2CCashflowTable(ctx) {
   // than '' -- reads as blank, isn't actually empty. Not a true gap the way
   // the image has one (Slack still draws a border box around each of these
   // cells), but closer to the sheet's grouping than no gap at all.
-  const spacerRow = function () { return [cellText(' '), cellText(' '), cellText(' ')] }
+  const spacerRow = function () { return headerLabels.map(function () { return cellText(' ') }) }
   dataRows.forEach(function (r, i) {
     if (r.bold && i > 0) rows.push(spacerRow())
     const f = r.bold ? cellBold : cellText
-    rows.push([f(r.label), f(crAmt(r.mtd)), f(crAmt(r.ytd))])
+    rows.push([f(r.label)].concat(valsOf(r).map(function (v) { return f(crAmt(v)) })))
   })
-  const cols = [{ is_wrapped: true, align: 'left' }, { is_wrapped: true, align: 'right' }, { is_wrapped: true, align: 'right' }]
+  const cols = headerLabels.map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { is_wrapped: true, align: 'right' } })
   const L = []
   L.push(':bar_chart: *B2C - Daily Cashflow*')
-  L.push('_Straight off the Cash Flow statement’s own MTD/YTD table -- Finance’s numbers, verbatim. No day-level figure exists in this source._')
+  L.push('_Straight off the Cash Flow statement’s own table -- Finance’s numbers, verbatim. No day-level figure exists in this source._')
   return [{
     // attach:false -- unlike the older per-day version, there is no on-page
     // table showing this exact data to screenshot; the native table above
@@ -577,10 +583,10 @@ export const B2C_CASHFLOW_TABLE_VERSIONS = [{
   code: 'B2C-CF',
   msgKeys: ['b2c_cashflow_full'],
   name: 'B2C - Daily Cashflow (native table)',
-  tagline: 'One native Slack table, straight off the CF tab\'s own MTD/YTD Cash Flow statement.',
+  tagline: 'One native Slack table, straight off the CF tab\'s Cash Flow statement: MTD / H2 / YTD / H1.',
   what: [
     'Every line item verbatim off the \'CF\' tab -- Opening Balance, Cash Inflow (and its 5 lines), Cash Outflow (and its 7 heads), Closing Balance',
-    'Two columns: month to date and year to date (from the sheet\'s own fiscal-year start), both in ₹ Cr -- no Last Day column, since this source has no daily figure',
+    'Four columns: month to date, H2 (Oct-Mar), year to date (from the sheet\'s own fiscal-year start) and H1 (Apr-Sep), all in ₹ Cr -- no Last Day column, since this source has no daily figure. Falls back to MTD / YTD only until the sheet carries the H2 / H1 columns',
     'Bold section-total rows, matching the sheet\'s own formatting exactly',
     'A real Slack table block, not a code block or an image',
     'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Daily P&L report',

@@ -5628,6 +5628,17 @@ const B2C_CASHFLOW_STMT_TITLE_RANGE = 'G3:I3';
 const B2C_CASHFLOW_STMT_GROUP_RANGE = 'G5:I5';
 const B2C_CASHFLOW_STMT_SUB_RANGE = 'G6:I6';
 const B2C_CASHFLOW_STMT_DATA_RANGE = 'G7:I25';
+// 2026-10-09: a second, wider block on the same tab -- Particulars | MTD | H2
+// | YTD | H1 (Q:U, same rows 3-25 as G:I above), built by formulas off the
+// 'Daily Cash Flow - Final_7 Sep' tab so MTD follows the calendar month by
+// itself (see docs/b2c-cf-h1-h2-block.tsv for the exact formulas). Preferred
+// whenever it exists and has rows; if it has not been pasted into the sheet
+// yet (or is empty) the original 2-column G:I block above is used exactly as
+// before, so nothing breaks in the meantime.
+const B2C_CASHFLOW_STMT_V2_TITLE_RANGE = 'Q3:U3';
+const B2C_CASHFLOW_STMT_V2_GROUP_RANGE = 'Q5:U5';
+const B2C_CASHFLOW_STMT_V2_SUB_RANGE = 'Q6:U6';
+const B2C_CASHFLOW_STMT_V2_DATA_RANGE = 'Q7:U25';
 // The sheet's own bold (and underlined) section-total rows -- confirmed
 // 2026-09-10 via a direct XLSX export of this exact tab + cell-style
 // inspection (font.bold / font.underline), not guessed from a screenshot.
@@ -5643,23 +5654,39 @@ function b2cOneRow(csv) {
 }
 function b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv) {
   const title = (b2cOneRow(titleCsv)[0] || '').trim();
-  const groupHeader = b2cOneRow(groupCsv); // ['', 'MTD', 'YTD (From 1/4/2026)']
-  const subHeader = b2cOneRow(subCsv); // ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
+  const groupHeader = b2cOneRow(groupCsv); // ['', 'MTD', 'YTD (From 1/4/2026)'] or ['', 'MTD', 'H2 (Oct-Mar)', 'YTD ...', 'H1 (Apr-Sep)']
+  const subHeader = b2cOneRow(subCsv); // ['Particulars', 'Amount (INR CR.)', ...]
   const lines = splitCsvRows(dataCsv || '').filter(function (l) { return l.trim().length > 0 });
+  // One entry per value column, keyed by what its header says, so a consumer
+  // can ask for 'h2' without caring which position the sheet put it in.
+  const nCols = Math.max(groupHeader.length, subHeader.length, 3) - 1;
+  const keyOf = function (g, i) {
+    const u = String(g || '').toUpperCase();
+    if (/^MTD/.test(u)) return 'mtd';
+    if (/^H2/.test(u)) return 'h2';
+    if (/^YTD/.test(u)) return 'ytd';
+    if (/^H1/.test(u)) return 'h1';
+    return 'c' + i;
+  };
+  const columns = [];
+  for (let i = 1; i <= nCols; i++) {
+    columns.push({ key: keyOf(groupHeader[i], i), group: groupHeader[i] || '', sub: subHeader[i] || 'Amount (INR CR.)' });
+  }
   const rows = lines.map(splitCsvLine).map(function (cells) {
     const label = String(cells[0] == null ? '' : cells[0]).trim();
-    return { label: label, mtd: b2cNum(cells[1]), ytd: b2cNum(cells[2]), bold: B2C_CASHFLOW_STMT_BOLD_LABELS.has(label) };
+    const vals = columns.map(function (c, k) { return b2cNum(cells[k + 1]); });
+    const out = { label: label, vals: vals, bold: B2C_CASHFLOW_STMT_BOLD_LABELS.has(label) };
+    columns.forEach(function (c, k) { out[c.key] = vals[k]; });
+    return out;
   }).filter(function (r) { return r.label; });
-  if (!rows.length) return { configured: false, title: title, groupHeader: [], subHeader: [], headerLabels: [], rows: [] };
+  if (!rows.length) return { configured: false, title: title, groupHeader: [], subHeader: [], headerLabels: [], columns: [], rows: [] };
   // Merged single-line header, for the native Slack table -- e.g. 'MTD
   // Amount (INR CR.)' -- byte-identical to what gviz used to auto-merge when
   // this was read as one G5:I25 range (confirmed 2026-09-10).
-  const headerLabels = [
-    subHeader[0] || 'Particulars',
-    [groupHeader[1], subHeader[1]].filter(Boolean).join(' ') || 'MTD Amount (INR CR.)',
-    [groupHeader[2], subHeader[2]].filter(Boolean).join(' ') || 'YTD Amount (INR CR.)',
-  ];
-  return { configured: true, title: title, groupHeader: groupHeader, subHeader: subHeader, headerLabels: headerLabels, rows: rows };
+  const headerLabels = [subHeader[0] || 'Particulars'].concat(columns.map(function (c) {
+    return [c.group, c.sub].filter(Boolean).join(' ') || c.key.toUpperCase();
+  }));
+  return { configured: true, title: title, groupHeader: groupHeader, subHeader: subHeader, headerLabels: headerLabels, columns: columns, rows: rows };
 }
 
 // Pure data fetch, no req/res -- factored out of handleB2C so a server-side
@@ -5690,6 +5717,12 @@ export async function fetchB2CData() {
     cfGrab(B2C_CASHFLOW_STMT_SUB_RANGE),
     cfGrab(B2C_CASHFLOW_STMT_DATA_RANGE),
   ]);
+  const cfStatementV2Promise = Promise.all([
+    cfGrab(B2C_CASHFLOW_STMT_V2_TITLE_RANGE),
+    cfGrab(B2C_CASHFLOW_STMT_V2_GROUP_RANGE),
+    cfGrab(B2C_CASHFLOW_STMT_V2_SUB_RANGE),
+    cfGrab(B2C_CASHFLOW_STMT_V2_DATA_RANGE),
+  ]);
   const csvs = await Promise.all([
     grab(base + '&sheet=' + encodeURIComponent(B2C_PNL_SHEET_TAB)),
     grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_SHEET_TAB)),
@@ -5710,7 +5743,13 @@ export async function fetchB2CData() {
     }).filter(function (m) { return m.month });
   });
   const [titleCsv, groupCsv, subCsv, dataCsv] = await cfStatementPromise;
-  const cashflowStatement = b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv);
+  const [title2, group2, sub2, data2] = await cfStatementV2Promise;
+  const cfV2 = b2cParseCashflowStatement(title2, group2, sub2, data2);
+  // The wider MTD / H2 / YTD / H1 block wins when it is there and has real
+  // numbers in it; otherwise fall back to the original MTD / YTD block.
+  const cashflowStatement = (cfV2.configured && cfV2.columns.length >= 4)
+    ? cfV2
+    : b2cParseCashflowStatement(titleCsv, groupCsv, subCsv, dataCsv);
   return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, cashflowStatement: cashflowStatement, ts: Date.now() };
 }
 

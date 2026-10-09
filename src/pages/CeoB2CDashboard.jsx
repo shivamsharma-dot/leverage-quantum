@@ -284,7 +284,7 @@ const STATEMENT_LABELS = {
 const CF_IMG_BOLD_LABELS = new Set(['Opening Balance :', 'Cash Inflow', 'Cash Outflow :', 'Closing Balance'])
 function cfImgAmt(n) { return (n == null || !isFinite(n)) ? '' : n.toFixed(2) }
 const CF_IMG_CELL = { border: '1px solid #000', padding: '5px 10px', fontSize: 13, lineHeight: 1.3, boxSizing: 'border-box' }
-const CF_IMG_W = { label: 320, mtd: 180, ytd: 200 }
+const CF_IMG_W = { label: 320, val: 170 }
 // slackShare.js's captureNodePng unconditionally adds `style:{padding:'18px'}`
 // to the clone it rasterizes (all 4 sides), but sizes the capture canvas
 // from THIS node's own pre-padding box -- so the padded clone is reliably
@@ -312,10 +312,18 @@ const CF_IMG_SAFETY_MARGIN = 48
 // fixed pixel widths sidestep that whole class of bug and look identical.
 const CashflowStatementImage = React.forwardRef(function CashflowStatementImage({ cf }, ref) {
   const rows = (cf && cf.rows) || []
-  const groupHeader = (cf && cf.groupHeader && cf.groupHeader.length) ? cf.groupHeader : ['', 'MTD', 'YTD']
-  const subHeader = (cf && cf.subHeader && cf.subHeader.length) ? cf.subHeader : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
+  // Same column logic as lib/cashflowStatementImage.mjs (the server renderer
+  // of this exact image): one number column per header Finance's sheet gives,
+  // MTD / H2 / YTD / H1 when the wider block is there, MTD / YTD otherwise.
+  const gH = (cf && cf.groupHeader) || []
+  const sH = (cf && cf.subHeader) || []
+  const nVal = (cf && Array.isArray(cf.columns) && cf.columns.length) ? cf.columns.length : Math.max(gH.length, sH.length, 3) - 1
+  const groupHeader = gH.length ? gH : ['', 'MTD', 'YTD']
+  const subHeader = sH.length ? sH : ['Particulars', 'Amount (INR CR.)', 'Amount (INR CR.)']
+  const valIdx = Array.from({ length: nVal }, function (_, i) { return i })
+  const valsOf = function (r) { return Array.isArray(r.vals) ? r.vals : [r.mtd, r.ytd] }
   const title = (cf && cf.title) || 'B2C Student Mobility'
-  const totalW = CF_IMG_W.label + CF_IMG_W.mtd + CF_IMG_W.ytd
+  const totalW = CF_IMG_W.label + CF_IMG_W.val * nVal
   const cellStyle = function (bold) { return { ...CF_IMG_CELL, fontWeight: bold ? 700 : 400, textDecoration: bold ? 'underline' : 'none' } }
   return (
     // Zero-size, overflow:hidden ancestor at the real page origin (0,0) --
@@ -333,13 +341,11 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
         <div style={{ height: 10 }} />
         <div style={{ display: 'flex' }}>
           <div style={{ width: CF_IMG_W.label }} />
-          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.mtd, textAlign: 'center', fontWeight: 700 }}>{groupHeader[1] || 'MTD'}</div>
-          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.ytd, textAlign: 'center', fontWeight: 700 }}>{groupHeader[2] || 'YTD'}</div>
+          {valIdx.map(function (i) { return <div key={i} style={{ ...CF_IMG_CELL, width: CF_IMG_W.val, textAlign: 'center', fontWeight: 700 }}>{groupHeader[i + 1] || ''}</div> })}
         </div>
         <div style={{ display: 'flex' }}>
           <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.label, textAlign: 'left' }}>{subHeader[0] || 'Particulars'}</div>
-          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.mtd, textAlign: 'center' }}>{subHeader[1] || 'Amount (INR CR.)'}</div>
-          <div style={{ ...CF_IMG_CELL, width: CF_IMG_W.ytd, textAlign: 'center' }}>{subHeader[2] || 'Amount (INR CR.)'}</div>
+          {valIdx.map(function (i) { return <div key={i} style={{ ...CF_IMG_CELL, width: CF_IMG_W.val, textAlign: 'center' }}>{subHeader[i + 1] || 'Amount (INR CR.)'}</div> })}
         </div>
         {rows.map(function (r, i) {
           const bold = CF_IMG_BOLD_LABELS.has(r.label)
@@ -349,8 +355,7 @@ const CashflowStatementImage = React.forwardRef(function CashflowStatementImage(
               {bold && i > 0 ? <div style={{ height: 10 }} /> : null}
               <div style={{ display: 'flex' }}>
                 <div style={{ ...c, width: CF_IMG_W.label, textAlign: bold ? 'left' : 'right' }}>{r.label}</div>
-                <div style={{ ...c, width: CF_IMG_W.mtd, textAlign: 'right' }}>{cfImgAmt(r.mtd)}</div>
-                <div style={{ ...c, width: CF_IMG_W.ytd, textAlign: 'right' }}>{cfImgAmt(r.ytd)}</div>
+                {valIdx.map(function (k) { return <div key={k} style={{ ...c, width: CF_IMG_W.val, textAlign: 'right' }}>{cfImgAmt(valsOf(r)[k])}</div> })}
               </div>
             </React.Fragment>
           )
