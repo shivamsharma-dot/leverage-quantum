@@ -543,101 +543,8 @@ function SectionKicker({ label, title }) {
 const MarketingReviewDataContext = React.createContext(null)
 function useMarketingReviewData() { return React.useContext(MarketingReviewDataContext) }
 
-/* ---------- "CAC and ROAS by channel" slide: built live (it used to read Finance's hand-kept sheet) ----------
-   Live from Overall's BigQuery cache: spend per Source, deposits per Source. Affiliate spend comes from the
-   monthly manual entry Overall already uses (affiliate_spend_manual, in rupees). Typed by hand on the slide
-   (app_preferences key mr_cac_manual, all in Rs Cr, per month): LinkedIn spend, Branding spend, AC revenue and
-   VAS revenue per channel. Projected RAU = Deposits x the shared RAU % (Settings), rounded up; Proj RAU revenue
-   = RAU x the shared SR Fee (Settings).
-   Formula choices (changed from the sheet, flagged to the user): Overall = the sum of the paid channels shown
-   (the sheet mixed all-source deposits into a paid-spend CAC); ROAS divides by TOTAL spend, the same spend CAC
-   uses (the sheet's ROAS used performance spend only, so the two disagreed on branding). */
-const CAC_MANUAL_KEY = 'mr_cac_manual'
-const CAC_CHANNELS = [
-  { key: 'meta', label: 'Meta', source: 'facebook' },
-  { key: 'google', label: 'Google', source: 'google' },
-  { key: 'affiliate', label: 'Affiliate', source: 'affiliate' },
-  { key: 'linkedin', label: 'LinkedIn', source: 'linkedin' },
-  { key: 'bing', label: 'Bing', source: 'bing' },
-  { key: 'remarketing', label: 'Remarketing', source: 'remarketing' },
-]
-function cacManualSum(manual, span, pick) {
-  let total = 0, entered = 0
-  for (const ym of span.ymKeys) {
-    const v = pick((manual && manual[ym]) || {})
-    if (v != null && v !== '' && Number.isFinite(Number(v))) { total += Number(v); entered++ }
-  }
-  return { total, entered }
-}
-function buildCacRows(aggRows, span, manual, affiliate, rauPct, srFee) {
-  const mk = new Set(span.monthKeys)
-  const bySrc = {}
-  for (const r of aggRows) {
-    if (!mk.has(r.month)) continue
-    const k = String(r.Source || '').toLowerCase()
-    const e = bySrc[k] || (bySrc[k] = { spend: 0, dep: 0 })
-    e.spend += reviewNum(r.Total_Spends)
-    e.dep += reviewNum(r['Total Deposits'])
-  }
-  const cols = CAC_CHANNELS.map(c => {
-    const src = bySrc[c.source] || { spend: 0, dep: 0 }
-    let perf = src.spend / 1e7
-    if (c.key === 'affiliate') perf += cacManualSum(affiliate ? Object.fromEntries(Object.entries(affiliate).map(([ym, v]) => [ym, { v }])) : {}, span, m => m.v).total / 1e7
-    if (c.key === 'linkedin') perf += cacManualSum(manual, span, m => m.linkedin).total
-    const brand = c.key === 'google' ? cacManualSum(manual, span, m => m.branding).total : 0
-    const dep = src.dep
-    const rau = Math.ceil(dep * (rauPct / 100) - 1e-9)
-    const ac = cacManualSum(manual, span, m => m.ac && m.ac[c.key])
-    const vas = cacManualSum(manual, span, m => m.vas && m.vas[c.key])
-    return { c, perf, brand, total: perf + brand, dep, rau, rauRev: rau * srFee / 1e7, ac, vas }
-  })
-  const sum = f => cols.reduce((a, x) => a + f(x), 0)
-  const overall = { perf: sum(x => x.perf), brand: sum(x => x.brand), total: sum(x => x.total), dep: sum(x => x.dep) }
-  overall.rau = Math.ceil(overall.dep * (rauPct / 100) - 1e-9)
-  overall.rauRev = overall.rau * srFee / 1e7
-  // A channel "needs" revenue inputs once it has any spend or deposits; the Overall revenue/ROAS cells only
-  // show once every such channel has them, so a half-typed table never passes for a complete total.
-  const needing = cols.filter(x => x.total > 0 || x.dep > 0)
-  const allAc = needing.every(x => x.ac.entered > 0), allVas = needing.every(x => x.vas.entered > 0)
-  overall.ac = { total: sum(x => x.ac.total), entered: allAc && needing.length ? 1 : 0 }
-  overall.vas = { total: sum(x => x.vas.total), entered: allVas && needing.length ? 1 : 0 }
-  const cr = n => (n > 0 ? '\u20B9' + n.toFixed(2) : '')
-  const cnt = n => Math.round(n).toLocaleString('en-IN')
-  const col = x => {
-    const hasAc = x.ac.entered > 0, hasVas = x.vas.entered > 0
-    const revExcl = hasAc ? x.rauRev + x.ac.total : null
-    const revTot = hasAc && hasVas ? x.rauRev + x.ac.total + x.vas.total : null
-    return {
-      perf: cr(x.perf), brand: cr(x.brand), total: cr(x.total),
-      dep: cnt(x.dep), rau: cnt(x.rau),
-      cac: x.rau > 0 && x.total > 0 ? '\u20B9' + cnt(x.total * 1e7 / x.rau) : '',
-      rauRev: x.rau > 0 ? '\u20B9' + x.rauRev.toFixed(2) : '',
-      ac: hasAc ? '\u20B9' + x.ac.total.toFixed(2) : '', vas: hasVas ? '\u20B9' + x.vas.total.toFixed(2) : '',
-      revTot: revTot != null ? '\u20B9' + revTot.toFixed(2) : '', revExcl: revExcl != null ? '\u20B9' + revExcl.toFixed(2) : '',
-      roas: revTot != null && x.total > 0 ? (revTot / x.total).toFixed(2) : '',
-      roasExcl: revExcl != null && x.total > 0 ? (revExcl / x.total).toFixed(2) : '',
-    }
-  }
-  const all = [col(overall)].concat(cols.map(col))
-  const line = (label, k) => [label].concat(all.map(c => c[k]))
-  const d0 = span.monthDates[0], d1 = span.monthDates[span.monthDates.length - 1]
-  return [
-    ['Spend, deposits and return (' + monthLong(d0) + ' to ' + monthLong(d1) + ')', 'Overall (paid)'].concat(CAC_CHANNELS.map(c => c.label)),
-    line('Perf marketing spend (Cr)', 'perf'),
-    line('Branding spend (Cr)', 'brand'),
-    line('Total spend (Cr)', 'total'),
-    line('Total deposits', 'dep'),
-    line('Projected RAU', 'rau'),
-    line('CAC per projected RAU', 'cac'),
-    line('Proj RAU revenue (Cr)', 'rauRev'),
-    line('AC revenue (Cr)', 'ac'),
-    line('VAS revenue (Cr)', 'vas'),
-    line('Rev total (Cr)', 'revTot'),
-    line('Rev excl. VAS (Cr)', 'revExcl'),
-    line('ROAS', 'roas'),
-    line('ROAS excl. VAS', 'roasExcl'),
-  ]
-}
+// The Finance sheet behind the "CAC and ROAS by channel" slide only covers one period (H1 FY26-27).
+const CAC_SHEET_SPEC_KEY = 'half:2026-1'
 
 // `spec` is the period being reviewed. `snapshot` (optional) is a FROZEN review's saved numbers:
 // when present nothing is fetched and every slide reads the snapshot, so a finalized review never
@@ -646,7 +553,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
   const sKey = specKey(spec)
   const months = useMemo(() => computeReviewMonths(spec), [sKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const frozen = !!snapshot
-  const cacApplies = true
+  const cacApplies = sKey === CAC_SHEET_SPEC_KEY
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
   const [retryToken, setRetryToken] = useState(0)
@@ -657,12 +564,13 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
   const [acRevenueSaving, setAcRevenueSaving] = useState(false)
   const [syncedAt, setSyncedAt] = useState(null)
   const [organicSubRows, setOrganicSubRows] = useState(null)
-  // "CAC and ROAS by channel" inputs that Quantum does not have: typed per month in Rs Cr
-  // (LinkedIn spend, Branding spend, AC and VAS revenue per channel), plus Overall's own
-  // monthly Affiliate spend entry (rupees).
-  const [cacManual, setCacManual] = useState({})
-  const [cacSaving, setCacSaving] = useState(false)
-  const [affiliateManual, setAffiliateManual] = useState({})
+  // The "H1 CAC" sheet slide's own table (A1:I20 of a hand-maintained Finance sheet,
+  // read server-side with the service account). Independent of the Overall rows above,
+  // so a sheet problem never blanks the other slides.
+  const [cacSheet, setCacSheet] = useState(null)
+  const [cacError, setCacError] = useState(null)
+  const [cacToken, setCacToken] = useState(0)
+  const retryCac = useCallback(() => setCacToken(t => t + 1), [])
   // GA4 website traffic for the review half, whole half plus each month (one read per range --
   // the existing source=ga4 endpoint returns users per default channel group for a range).
   const [gaTraffic, setGaTraffic] = useState(null)
@@ -690,6 +598,21 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       .catch(e => { if (!dead) setGaError(String((e && e.message) || e)) })
     return () => { dead = true }
   }, [months, gaToken, frozen])
+
+  useEffect(() => {
+    if (frozen || !cacApplies) return undefined
+    let dead = false
+    setCacSheet(null); setCacError(null)
+    fetch('/api/crm-leads?source=bigquery&mode=marketing_review_cac', { credentials: 'include' })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status))
+        return d
+      })
+      .then(d => { if (!dead) setCacSheet(d) })
+      .catch(e => { if (!dead) setCacError(String((e && e.message) || e)) })
+    return () => { dead = true }
+  }, [cacToken, frozen, cacApplies])
 
   useEffect(() => {
     if (frozen) return undefined
@@ -798,8 +721,6 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
         if (!dead) {
           setAcSales((d.prefs && d.prefs.ac_sales_manual) || {})
           setAcRevenue((d.prefs && d.prefs.ac_actual_revenue_manual) || {})
-          setCacManual((d.prefs && d.prefs[CAC_MANUAL_KEY]) || {})
-          setAffiliateManual((d.prefs && d.prefs.affiliate_spend_manual) || {})
           setAcSalesLoaded(true)
         }
       })
@@ -848,32 +769,6 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       setAcRevenueSaving(false)
     }
   }, [acRevenue])
-
-  const saveCacManual = useCallback(async (next) => {
-    const prev = cacManual
-    setCacManual(next); setCacSaving(true)
-    try {
-      const r = await fetch('/api/preferences', {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: CAC_MANUAL_KEY, value: next }),
-      })
-      if (!r.ok) throw new Error('Save failed')
-      return true
-    } catch (e) {
-      setCacManual(prev)
-      return false
-    } finally {
-      setCacSaving(false)
-    }
-  }, [cacManual])
-
-  // The slide's table, as rows of ready-to-print text (the same shape a frozen review stores).
-  const cacSheet = useMemo(() => {
-    if (!rows || !acSalesLoaded) return null
-    return { rows: buildCacRows(rows, months.current, cacManual, affiliateManual, readRauPct(), readSrFee()) }
-  }, [rows, acSalesLoaded, months, cacManual, affiliateManual])
-  const cacError = error
-  const retryCac = useCallback(() => setRetryToken(t => t + 1), [])
 
   const aggByMonth = useMemo(() => {
     if (!rows) return null
@@ -936,7 +831,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     if (!headlineRows || !aggByMonth || !byChannelByMonth || !channelRowsByChannel) throw new Error('The figures are still loading. Wait for them to finish, then freeze.')
     if (error) throw new Error('The figures failed to load: ' + error)
     if (organicSubRows == null) throw new Error('Organic sub-source figures are still loading.')
-    if (cacApplies && (cacError || !cacSheet)) throw new Error(cacError ? 'The CAC table failed to load: ' + cacError : 'The CAC table is still loading.')
+    if (cacApplies && (cacError || !cacSheet)) throw new Error(cacError ? 'The CAC sheet failed to load: ' + cacError : 'The CAC sheet is still loading.')
     if (gaError || !gaTraffic) throw new Error(gaError ? 'Website traffic failed to load: ' + gaError : 'Website traffic is still loading.')
     const campaigns = {}
     for (const ch of REVIEW_CHANNELS) {
@@ -970,11 +865,10 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     months, frozen: false, cacApplies, buildSnapshot,
     loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
-    cacManual, cacSaving, saveCacManual,
     aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
     organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, cacManual, cacSaving, saveCacManual, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa])
+  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa])
 
   // A frozen review: the same shape, read from the saved snapshot. Nothing here fetches.
   const frozenValue = useMemo(() => {
@@ -986,7 +880,6 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       loading: false, error: null, headlineRows: snapshot.headlineRows,
       acSales: snapshot.acSales || {}, acSaving: false, saveAcSales: noopSave,
       acRevenue: snapshot.acRevenue || {}, acRevenueSaving: false, saveAcRevenue: noopSave,
-      cacManual: {}, cacSaving: false, saveCacManual: noopSave,
       syncedAt: snapshot.syncedAt ? new Date(snapshot.syncedAt) : null,
       aggByMonth: snapshot.aggByMonth, byChannelByMonth: mapOf(snapshot.byChannelByMonth),
       channelRowsByChannel: snapshot.channelRowsByChannel, organicSubRows: snapshot.organicSubRows || [],
@@ -1738,73 +1631,27 @@ const CAC_GROUP_BY_LABEL = (label) => {
 }
 function CacSheetSlide({ active, period }) {
   const ctx = useMarketingReviewData()
-  const [editOpen, setEditOpen] = useState(false)
-  const [draft, setDraft] = useState({})
   const sheet = ctx && ctx.cacSheet
   const error = ctx && ctx.cacError
   const rows = sheet && sheet.rows
   const header = rows && rows[0]
   const body = rows ? rows.slice(1) : []
-  const colW = 'minmax(210px, 1.7fr) repeat(7, minmax(0, 1fr))'
-  const span = ctx && ctx.months && ctx.months.current
-  // Fields typed by hand, all per month in Rs Cr: LinkedIn spend, Branding spend, AC revenue and VAS
-  // revenue for each channel. Draft keys look like 'ac|meta|2026-04'.
-  const draftKeys = (() => {
-    const out = [{ id: 'linkedin', title: 'LinkedIn spend (₹ Cr)', rows: [{ k: 'linkedin|-', label: 'LinkedIn' }] },
-      { id: 'branding', title: 'Branding spend (₹ Cr), shown under Google', rows: [{ k: 'branding|-', label: 'Branding' }] },
-      { id: 'ac', title: 'AC revenue (₹ Cr, net of GST)', rows: CAC_CHANNELS.map(c => ({ k: 'ac|' + c.key, label: c.label })) },
-      { id: 'vas', title: 'VAS revenue (₹ Cr, net of GST)', rows: CAC_CHANNELS.map(c => ({ k: 'vas|' + c.key, label: c.label })) }]
-    return out
-  })()
-  const readDraftValue = (manual, k, ym) => {
-    const [field, ch] = k.split('|')
-    const m = (manual && manual[ym]) || {}
-    const v = (field === 'ac' || field === 'vas') ? (m[field] && m[field][ch]) : m[field]
-    return v != null ? String(v) : ''
-  }
-  const openEdit = () => {
-    const d = {}
-    draftKeys.forEach(g => g.rows.forEach(r => span.ymKeys.forEach(ym => { d[r.k + '|' + ym] = readDraftValue(ctx.cacManual, r.k, ym) })))
-    setDraft(d)
-    setEditOpen(true)
-  }
-  const saveDraft = async () => {
-    const next = { ...(ctx.cacManual || {}) }
-    for (const ym of span.ymKeys) {
-      const m = { ...(next[ym] || {}) }
-      for (const g of draftKeys) for (const r of g.rows) {
-        const [field, ch] = r.k.split('|')
-        const raw = String(draft[r.k + '|' + ym] == null ? '' : draft[r.k + '|' + ym]).trim()
-        let val = null
-        if (raw !== '') { val = Number(raw); if (!Number.isFinite(val) || val < 0) return }
-        if (field === 'ac' || field === 'vas') {
-          const sub = { ...(m[field] || {}) }
-          if (val == null) delete sub[ch]; else sub[ch] = val
-          if (Object.keys(sub).length) m[field] = sub; else delete m[field]
-        } else if (val == null) delete m[field]
-        else m[field] = val
-      }
-      if (Object.keys(m).length) next[ym] = m; else delete next[ym]
-    }
-    if (await ctx.saveCacManual(next)) setEditOpen(false)
-  }
+  const colW = 'minmax(210px, 1.7fr) repeat(8, minmax(0, 1fr))'
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '60px 56px 40px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} live />
       <SectionKicker label="Acquisition cost & return" title="CAC and ROAS by channel" />
-      {ctx && active && !ctx.frozen && ctx.cacSheet && (
-        <button type="button" onClick={openEdit} className={styles.noPrint}
-          style={{ position: 'absolute', top: 58, right: 56, border: '1px solid #E2E8F0', background: '#fff', color: NAVY, fontSize: 12, fontWeight: 700, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: FONT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <EditIcon />Enter spend &amp; revenue
-        </button>
-      )}
-      {!ctx || (!rows && !error) ? (
+      {ctx && !ctx.cacApplies ? (
+        <div style={{ color: '#64748B', fontSize: 15, lineHeight: 1.6, maxWidth: 640, padding: '30px 0' }}>
+          Not available for this period. This table comes from Finance's hand-maintained "B2C H1 CAC" sheet, which only covers H1 FY26-27 (Apr–Sep 2026). Hide this slide for other periods.
+        </div>
+      ) : !ctx || (!rows && !error) ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
-          <span className={styles.mrSpinner} />Loading live figures…
+          <span className={styles.mrSpinner} />Loading the CAC sheet…
         </div>
       ) : error ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, padding: '14px 18px', marginTop: 10 }}>
-          <span style={{ fontSize: 13.5, color: '#7A5C00', fontWeight: 600, flex: 1 }}>Couldn't load the CAC figures: {error}</span>
+          <span style={{ fontSize: 13.5, color: '#7A5C00', fontWeight: 600, flex: 1 }}>Couldn't load the CAC sheet: {error}</span>
           {active && (
             <button type="button" onClick={ctx.retryCac} className={styles.noPrint}
               style={{ border: 'none', background: NAVY, color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}>
@@ -1845,43 +1692,7 @@ function CacSheetSlide({ active, period }) {
                 ))}
               </div>
             )
- })}
-        </div>
-      )}
-      {rows && (
-        <div style={{ marginTop: 8, fontSize: 10.5, color: '#94A3B8', lineHeight: 1.45 }}>
-          Spend and deposits are live from Overall. Affiliate spend is the monthly manual entry; LinkedIn, Branding and the AC / VAS revenue are typed in. Projected RAU = deposits × {readRauPct()}% (rounded up); RAU revenue = RAU × ₹{(readSrFee() / 100000).toFixed(1)}L. Overall is the sum of the paid channels shown. CAC and ROAS use total spend. A blank means it has not been entered yet.
-        </div>
-      )}
-      {editOpen && span && (
-        <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '20px 24px', width: 1040, maxHeight: 650, overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter spend &amp; revenue</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12, lineHeight: 1.5 }}>Not tracked in Quantum. Type each month in ₹ Cr (for example 0.07). The slide adds the months of this review. Leave blank if not known.</div>
-            {draftKeys.map(g => (
-              <div key={g.id} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{g.title}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '110px repeat(' + span.ymKeys.length + ', minmax(0, 1fr))', gap: 6, alignItems: 'center' }}>
-                  <div />
-                  {span.monthDates.map((m, mi) => <div key={mi} style={{ fontSize: 11, fontWeight: 700, color: '#334155', textAlign: 'center' }}>{monthLong(m)}</div>)}
-                  {g.rows.map(r => (
-                    <React.Fragment key={r.k}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{r.label}</div>
-                      {span.ymKeys.map(ym => (
-                        <input key={ym} type="number" min="0" step="any" value={draft[r.k + '|' + ym] || ''} placeholder="0"
-                          onChange={e => setDraft(d => ({ ...d, [r.k + '|' + ym]: e.target.value }))}
-                          style={{ minWidth: 0, border: '1px solid #E2E8F0', borderRadius: 7, padding: '5px 6px', fontSize: 12, fontFamily: FONT, boxSizing: 'border-box' }} />
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-              <Button size="sm" variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
-              <Button size="sm" onClick={saveDraft} disabled={ctx.cacSaving}>{ctx.cacSaving ? 'Saving…' : 'Save'}</Button>
-            </div>
-          </div>
+          })}
         </div>
       )}
     </div>
@@ -2298,7 +2109,7 @@ function moveInOrder(order, dragId, targetId) {
   return out
 }
 // Slides that make no sense for a period start hidden (the CAC sheet only covers one period).
-function defaultHiddenFor(spec) { return [] }
+function defaultHiddenFor(spec) { return specKey(spec) === CAC_SHEET_SPEC_KEY ? [] : ['cac-sheet'] }
 
 /* ---------- the fixed-aspect canvas every render mode shares ---------- */
 
@@ -3247,7 +3058,8 @@ export default function MarketingReviewDashboard() {
   const onPeriodChange = useCallback((spec) => {
     setWork(w => {
       const wasAuto = w.name === autoReviewName(w.spec)
-      return { ...w, spec, name: wasAuto ? autoReviewName(spec) : w.name }
+      const hidden = specKey(spec) === CAC_SHEET_SPEC_KEY ? w.hidden : (w.hidden.includes('cac-sheet') ? w.hidden : w.hidden.concat('cac-sheet'))
+      return { ...w, spec, hidden, name: wasAuto ? autoReviewName(spec) : w.name }
     })
   }, [])
 
