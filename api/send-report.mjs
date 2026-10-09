@@ -2905,31 +2905,6 @@ export default async function handler(req, res) {
   if ((req.body?.type || req.query?.type) === 'b2c_daily_preview') {
     return handleB2CDailyPreview(req, res)
   }
-  // TEMPORARY DIAGNOSTIC (remove after use): posts P&L table width variants to #voxpath.
-  if ((req.body?.type || req.query?.type) === 'b2c_table_width_test') {
-    const { getSessionUser } = await import('../lib/auth.mjs')
-    const me = getSessionUser(req)
-    if (!me || me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-    try {
-      const data = await fetchB2CDataSafe()
-      const cfg = await getReportConfig()
-      const hook = resolveSlackTarget(cfg, 'test:' + findTestChannelId(cfg, 'voxpath'), {})
-      const v2 = B2C_FULL_TABLE_VERSIONS.find(v => v.id === 'b2c_full_v2')
-      const base = v2.build(buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', null))[0]
-      const SHORT = { 'Offline Cost (partner payout + experience centre)': 'Offline Cost', 'Product Operating Cost (AC, Leverage One)': 'Product Operating Cost' }
-      const variants = [
-        ['A: current (column 1 wrapped)', b => b],
-        ['B: column 1 NOT wrapped', b => { b.forEach(x => { if (x.type === 'table') x.column_settings[0] = { align: 'left' } }); return b }],
-        ['C: not wrapped + short labels', b => { b.forEach(x => { if (x.type === 'table') { x.column_settings[0] = { align: 'left' }; x.rows.forEach(r => { const c = r[0]; const el = c.type === 'raw_text' ? c : null; if (el && SHORT[el.text]) el.text = SHORT[el.text] }) } }); return b }],
-      ]
-      for (const [label, fn] of variants) {
-        const blocks = fn(JSON.parse(JSON.stringify(base.blocks)))
-        blocks.unshift({ type: 'section', text: { type: 'mrkdwn', text: '*TABLE WIDTH TEST - ' + label + '*' } })
-        await slackPostReportMessage(hook.token, hook.channel, { text: 'width test ' + label, blocks })
-      }
-      return res.status(200).json({ ok: true, posted: variants.length, channel: hook.channel })
-    } catch (e) { return res.status(500).json({ error: e.message }) }
-  }
 
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
