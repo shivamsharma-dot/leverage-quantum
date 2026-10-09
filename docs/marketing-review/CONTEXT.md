@@ -756,3 +756,7 @@ feedback message this whole thread has been working through. Deliberately held b
 rather than guessed at, given the shipped bar-shimmer was already built once this
 session and explicitly rejected — a short set of concrete, confirmable proposals should
 come before any more building here, not another built-first-asked-never round.
+
+## 2026-10-09 -- Deck is now half-year (H1 Apr-Sep), not monthly
+
+See the dated CLAUDE.md entry of the same day. Key points for future work here: period helpers are `makeHalf`/`mostRecentCompletedHalf`/`computeReviewMonths` (returns `{current, prior, lastYear}` halves with `monthKeys`/`ymKeys`/`monthDates`); `aggregateReviewMonth*` take a set of month keys; per-channel top-campaign drill-down is fetched month by month (a single six-month Facebook read times out with 57014). Manual AC entries remain per month, summed per half.
