@@ -311,11 +311,16 @@ function buildB2CFullTable(ctx) {
   const day = raw.day || {}
   const mtd = raw.mtd || {}
   const fy = raw.fy || {}
+  // H1 (Apr-Sep) / H2 (Oct-Mar) of the same fiscal year, between MTD and YTD.
+  // H2 is absent until the cut-off reaches 1 October -- shown as a dash then.
+  const h1 = raw.h1 || {}
+  const h2 = raw.h2 || {}
   const row = function (key, label, bold) {
     const f = bold ? cellBold : cellText
-    return [f(label), f(money(day[key])), f(money(mtd[key])), f(money(fy[key]))]
+    return [f(label), f(money(day[key])), f(money(mtd[key])), f(money(h1[key])), f(money(h2[key])), f(money(fy[key]))]
   }
-  const rows = [[cellBold('Line Item'), cellBold('Last Day'), cellBold('MTD'), cellBold(fy.label ? fy.label + ' (YTD)' : 'YTD')]]
+  const hHead = function (h, name) { return name + (h.from && h.complete === false ? ' (so far)' : '') }
+  const rows = [[cellBold('Line Item'), cellBold('Last Day'), cellBold('MTD'), cellBold(hHead(h1, 'H1')), cellBold(hHead(h2, 'H2')), cellBold(fy.label ? fy.label + ' (YTD)' : 'YTD')]]
   FULL_LINES.forEach(function (d) { rows.push(row(d[0], d[1])) })
   rows.push(row('rev', 'Total Revenue', true))
   FULL_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
@@ -325,7 +330,7 @@ function buildB2CFullTable(ctx) {
   const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
   const L = []
   L.push(':bar_chart: *B2C - Daily P & L*')
-  L.push('_Last completed day, month to date and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
+  L.push('_Last completed day, month to date, H1 (Apr-Sep), H2 (Oct-Mar) and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
   return [{
     key: 'b2c_full', label: 'B2C — full particulars', attach: true,
     text: L.join('\n'),
@@ -353,10 +358,10 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   code: 'B2C-FULL',
   msgKeys: ['b2c_full'],
   name: 'B2C — full particulars (native table)',
-  tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / YTD.',
+  tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / H1 / H2 / YTD.',
   what: [
     'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, Contribution Profit, then EBITDA After Corp. Overheads',
-    'Three columns: Last Day, MTD, and year to date',
+    'Five columns: Last Day, MTD, H1 (Apr-Sep), H2 (Oct-Mar) and year to date',
     'A real Slack table block, not a code block or an image',
     'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Cash Flow report',
   ],

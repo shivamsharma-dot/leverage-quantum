@@ -827,7 +827,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       // via `totals()` summing every REV_PNL key. The native full-particulars
       // Slack table reads these directly instead of the narrower rev/cost
       // slices above (which only ever carried the combined sr/offRev totals).
-      raw: { day: day, mtd: mtd, fy: fy },
+      raw: { day: day, mtd: mtd, fy: fy, h1: h1, h2: h2 },
       // Cash Flow's native table (only) reads this instead of raw/day/mtd/fy
       // above -- Finance's own pre-aggregated MTD/YTD statement off the 'CF'
       // tab (api/crm-leads.js), fetched as part of the same /api/crm-leads
