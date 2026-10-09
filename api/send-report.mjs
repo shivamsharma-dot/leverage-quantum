@@ -2161,7 +2161,7 @@ async function slackSendDM(token, userId, text) {
 // ships.
 async function buildB2CDailyMessages(data, cfg, throughDate) {
   const jobs = [
-    { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
+    { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS.find(v => v.id === 'b2c_full_v2') || B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
     { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement }) },
   ]
   const built = []

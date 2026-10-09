@@ -353,7 +353,88 @@ function buildB2CFullTable(ctx) {
   }]
 }
 
+// -- V2 of the full-particulars table (2026-10-09) -------------------------
+// Same sheet, same numbers, different layout, as its own version so the
+// original above keeps working exactly as before:
+//   * column order is Last Day, MTD, H2, YTD, H1 (H2 is the live half, so it
+//     sits next to MTD; H1 closes the row after YTD)
+//   * the H2 / H1 headers carry their month range (Oct-Mar / Apr-Sep)
+//   * the three separate Offline revenue lines (SR / AC / Leverage One) are
+//     one consolidated Offline line
+// The scheduled Daily Report (api/send-report.mjs) builds from this version.
+const FULL_LINES_V2 = [
+  ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'],
+  ['__offline', 'Offline (SR + AC + Leverage One)'],
+  ['upskilling', 'Upskilling'], ['ancillary', 'Ancillary'],
+]
+// Null only when every part is null, so a blank sheet never shows a confident zero.
+function offlineTotal(o) {
+  if (!o) return null
+  const parts = [o.srOffline, o.acOffline, o.vasOffline]
+  if (parts.every(function (v) { return v == null })) return null
+  return parts.reduce(function (a, v) { return a + (v == null ? 0 : v) }, 0)
+}
+function buildB2CFullTableV2(ctx) {
+  const c = ctx || {}
+  const raw = c.raw || {}
+  const day = raw.day || {}
+  const mtd = raw.mtd || {}
+  const fy = raw.fy || {}
+  const h1 = raw.h1 || {}
+  const h2 = raw.h2 || {}
+  const val = function (o, key) { return key === '__offline' ? offlineTotal(o) : o[key] }
+  const row = function (key, label, bold) {
+    const f = bold ? cellBold : cellText
+    return [f(label), f(money(val(day, key))), f(money(val(mtd, key))), f(money(val(h2, key))), f(money(val(fy, key))), f(money(val(h1, key)))]
+  }
+  const rows = [[cellBold('Line Item'), cellBold('Last Day'), cellBold('MTD'), cellBold('H2 (Oct-Mar)'),
+    cellBold(fy.label ? fy.label + ' (YTD)' : 'YTD'), cellBold('H1 (Apr-Sep)')]]
+  FULL_LINES_V2.forEach(function (d) { rows.push(row(d[0], d[1])) })
+  rows.push(row('rev', 'Total Revenue', true))
+  FULL_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
+  rows.push(row('cost', 'Total Cost', true))
+  rows.push(row('ebitdaBeforeCorp', 'Contribution Profit', true))
+  rows.push(row('net', 'EBITDA After Corp. Overheads', true))
+  const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
+  const partial = []
+  if (h2.from && h2.complete === false) partial.push('H2 runs from 1 Oct to the cut-off day')
+  if (h1.from && h1.complete === false) partial.push('H1 runs from 1 Apr to the cut-off day')
+  const L = []
+  L.push(':bar_chart: *B2C - Daily P & L*')
+  L.push('_Last completed day, month to date, H2 (Oct-Mar), year to date and H1 (Apr-Sep). ' + (c.through ? 'Through ' + c.through + '.' : '') + (partial.length ? ' ' + partial.join('; ') + '.' : '') + '_')
+  return [{
+    key: 'b2c_full_v2', label: 'B2C — full particulars', attach: true,
+    text: L.join('\n'),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
+      { type: 'table', block_id: 'b2c_full_v2_table', column_settings: cols, rows: rows },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: noteMrkdwn(c) }] },
+    ],
+    table: {
+      columns: rows[0].map(cellPlain),
+      rows: rows.slice(1).map(function (r) { return r.map(cellPlain) }),
+      strongRows: rows.slice(1).map(function (r, i) { return r[0].type === 'rich_text' ? i : -1 }).filter(function (i) { return i >= 0 }),
+    },
+    context: noteMrkdwn(c),
+  }]
+}
+
 export const B2C_FULL_TABLE_VERSIONS = [{
+  id: 'b2c_full_v2',
+  code: 'B2C-FULL-2',
+  msgKeys: ['b2c_full_v2'],
+  name: 'B2C — full particulars V2 (native table)',
+  tagline: 'Last Day / MTD / H2 / YTD / H1, Offline revenue consolidated into one line.',
+  what: [
+    'Five columns in this order: Last Day, MTD, H2 (Oct-Mar), year to date, H1 (Apr-Sep)',
+    'The month range sits in the H2 and H1 headers',
+    'Offline revenue is one consolidated line (SR + AC + Leverage One) instead of three',
+    'Everything else as the Daily P&L page shows it: Online lines, Upskilling, Ancillary, Total Revenue, each cost head, Total Cost, Contribution Profit, EBITDA After Corp. Overheads',
+    'This is the version the scheduled Daily Report posts',
+  ],
+  build: buildB2CFullTableV2,
+}, {
   id: 'b2c_full',
   code: 'B2C-FULL',
   msgKeys: ['b2c_full'],
