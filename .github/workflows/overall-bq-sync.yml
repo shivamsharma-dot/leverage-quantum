@@ -78,7 +78,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: '1'
           SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
-          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_ANON_KEY }}
           FULL_RESYNC: ${{ github.event.inputs.full_resync }}
           BQ_CLIENT_ID: ${{ secrets.BIGQUERY_CLIENT_ID }}
           BQ_CLIENT_SECRET: ${{ secrets.BIGQUERY_CLIENT_SECRET }}

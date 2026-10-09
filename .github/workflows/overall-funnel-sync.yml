@@ -20,7 +20,7 @@ jobs:
       - name: Fetch, aggregate, and upsert the Overall PM funnel sheet
         env:
           SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
-          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_ANON_KEY }}
         run: |
           python3 << 'PYEOF'
           import json, urllib.request, urllib.parse, re, os, time, calendar

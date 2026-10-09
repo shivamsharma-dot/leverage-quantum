@@ -49,7 +49,7 @@ jobs:
       - name: Query "Monthly QLs (with Vertical SR/AC)" and upsert into monthly_qls_daily
         env:
           SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
-          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_ANON_KEY }}
           BQ_CLIENT_ID: ${{ secrets.BIGQUERY_CLIENT_ID }}
           BQ_CLIENT_SECRET: ${{ secrets.BIGQUERY_CLIENT_SECRET }}
           BQ_REFRESH_TOKEN: ${{ secrets.BIGQUERY_REFRESH_TOKEN }}
