@@ -466,6 +466,26 @@ function MarketingReviewDataProvider({ children }) {
   const [acRevenueSaving, setAcRevenueSaving] = useState(false)
   const [syncedAt, setSyncedAt] = useState(null)
   const [organicSubRows, setOrganicSubRows] = useState(null)
+  // The "H1 CAC" sheet slide's own table (A1:I20 of a hand-maintained Finance sheet,
+  // read server-side with the service account). Independent of the Overall rows above,
+  // so a sheet problem never blanks the other slides.
+  const [cacSheet, setCacSheet] = useState(null)
+  const [cacError, setCacError] = useState(null)
+  const [cacToken, setCacToken] = useState(0)
+  const retryCac = useCallback(() => setCacToken(t => t + 1), [])
+  useEffect(() => {
+    let dead = false
+    setCacSheet(null); setCacError(null)
+    fetch('/api/crm-leads?source=bigquery&mode=marketing_review_cac', { credentials: 'include' })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status))
+        return d
+      })
+      .then(d => { if (!dead) setCacSheet(d) })
+      .catch(e => { if (!dead) setCacError(String((e && e.message) || e)) })
+    return () => { dead = true }
+  }, [cacToken])
 
   useEffect(() => {
     let dead = false
@@ -674,9 +694,9 @@ function MarketingReviewDataProvider({ children }) {
     months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
     aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
-    organicSubSourceBreakdown, fetchChannelCampaigns,
+    organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns])
+  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac])
 
   return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
@@ -716,6 +736,7 @@ const AGENDA_ITEMS = [
   'Executive summary — the headline numbers',
   'Channel performance — where the leads came from',
   'Funnel & conversion — how leads moved through the pipeline',
+  'Acquisition cost & return — CAC and ROAS by channel',
   'Wins & highlights',
   'Risks & watch-outs',
   'Next half-year’s priorities',
@@ -1396,6 +1417,83 @@ function OrganicChannelSlide({ active, period }) { return <ChannelSpotlightBody 
 // run in future months. Reuses organicSubRows (already fetched for the
 // Organic spotlight slide) -- no new data fetch.
 const TOF_SUB_SOURCE_PATTERN = /^(branding_|newspaper-|rj_|thinkschool_)/i
+// "H1 CAC" slide -- the hand-maintained Finance sheet (Overall + per-channel columns: spend, apps,
+// AC sales, deposits, CAC, revenue, ROAS) shown exactly as the sheet formats it. Row groups are
+// only visual (a thin divider + a label-based tint); every cell is the sheet's own text.
+const CAC_GROUP_BY_LABEL = (label) => {
+  const l = (label || '').toLowerCase()
+  if (l.includes('spend')) return 'spend'
+  if (l.includes('cac')) return 'cac'
+  if (l.includes('roas')) return 'roas'
+  if (l.includes('rev')) return 'rev'
+  return 'volume'
+}
+function CacSheetSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const sheet = ctx && ctx.cacSheet
+  const error = ctx && ctx.cacError
+  const rows = sheet && sheet.rows
+  const header = rows && rows[0]
+  const body = rows ? rows.slice(1) : []
+  const colW = 'minmax(210px, 1.7fr) repeat(8, minmax(0, 1fr))'
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '60px 56px 40px', boxSizing: 'border-box' }}>
+      <PeriodBadge period={period} live />
+      <SectionKicker label="Acquisition cost & return" title="H1 CAC and ROAS by channel" />
+      {!ctx || (!rows && !error) ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
+          <span className={styles.mrSpinner} />Loading the CAC sheet…
+        </div>
+      ) : error ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, padding: '14px 18px', marginTop: 10 }}>
+          <span style={{ fontSize: 13.5, color: '#7A5C00', fontWeight: 600, flex: 1 }}>Couldn't load the CAC sheet: {error}</span>
+          {active && (
+            <button type="button" onClick={ctx.retryCac} className={styles.noPrint}
+              style={{ border: 'none', background: NAVY, color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}>
+              Retry
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ border: '0.5px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', marginTop: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: colW, background: C.navyBg, borderBottom: '1px solid #E2E8F0' }}>
+            {header.map((h, ci) => (
+              <div key={ci} style={{
+                padding: '8px 10px', fontSize: 11.5, fontWeight: 800, color: NAVY, letterSpacing: '0.04em',
+                textAlign: ci === 0 ? 'left' : 'right', textTransform: ci === 0 ? 'uppercase' : 'none',
+                background: ci === 1 ? 'rgba(31,60,132,0.10)' : undefined,
+              }}>{h}</div>
+            ))}
+          </div>
+          {body.map((r, ri) => {
+            const g = CAC_GROUP_BY_LABEL(r[0])
+            const prevG = ri > 0 ? CAC_GROUP_BY_LABEL(body[ri - 1][0]) : g
+            const emphasis = /^(total spend|rev total|roas)/i.test((r[0] || '').trim())
+            return (
+              <div key={ri} className={active ? styles.staggerItem : undefined} style={{
+                display: 'grid', gridTemplateColumns: colW, alignItems: 'center',
+                borderTop: g !== prevG ? '1px solid #CBD5E1' : (ri === 0 ? 'none' : '0.5px solid #EEF2F7'),
+                animationDelay: active ? (0.025 * ri) + 's' : undefined,
+              }}>
+                {r.map((c, ci) => (
+                  <div key={ci} style={{
+                    padding: '4.5px 10px', fontSize: 12, lineHeight: 1.25, fontVariantNumeric: 'tabular-nums',
+                    textAlign: ci === 0 ? 'left' : 'right',
+                    fontWeight: ci === 0 ? 700 : (ci === 1 || emphasis ? 800 : 600),
+                    color: ci === 0 ? '#334155' : (c ? '#0F172A' : '#CBD5E1'),
+                    background: ci === 1 ? 'rgba(31,60,132,0.05)' : undefined,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{c || (ci === 0 ? '' : '—')}</div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TofCampaignsSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const tof = useMemo(() => {
@@ -1636,6 +1734,7 @@ const SLIDES = [
   { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide },
   { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide },
   { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide },
+  { id: 'cac-sheet', section: 'Acquisition Cost & Return', title: 'H1 CAC and ROAS by channel', Body: CacSheetSlide },
   { id: 'channel-google', section: 'Channel Spotlight', title: 'Google Ads', Body: GoogleAdsChannelSlide },
   { id: 'channel-meta', section: 'Channel Spotlight', title: 'Meta Ads', Body: MetaAdsChannelSlide },
   { id: 'channel-organic', section: 'Channel Spotlight', title: 'Organic', Body: OrganicChannelSlide },

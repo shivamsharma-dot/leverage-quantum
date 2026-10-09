@@ -2963,6 +2963,35 @@ async function fetchQlSplitSheetTotals(since, until) {
   return { srQl, acQl, totalQL: srQl + acQl, rowsInWindow, daysCovered: daysSeen.size }
 }
 
+// Marketing Review deck, "H1 CAC" slide only (2026-10-09, direct ask: "make a slide of this
+// sheet"). A small hand-maintained Finance/Marketing table (A1:I20: Overall + channel columns,
+// rows for spend, apps, AC sales, CAC, revenue, ROAS) read verbatim with its own formatting
+// ("FORMATTED_VALUE", so the slide shows exactly what the sheet shows). The sheet is private,
+// so this reads it with the same service account QL Split uses -- it has to be shared with
+// GOOGLE_SHEETS_CLIENT_EMAIL. The tab is located by gid, not by name, so renaming it is safe.
+const H1_CAC_SHEET_ID = '1DscyeC7ze653Uuo_SL-QJSD0Gc-BigdVQhcZFB9Rl7U'
+const H1_CAC_SHEET_GID = 1849218898
+async function fetchH1CacSheet() {
+  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+  const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  if (!clientEmail || !privateKey) throw new Error('GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY are not set')
+  const { JWT } = await import('google-auth-library')
+  const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
+  const { access_token } = await auth.authorize()
+  const headers = { Authorization: `Bearer ${access_token}` }
+  const mr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${H1_CAC_SHEET_ID}?fields=sheets.properties(sheetId,title)`, { headers })
+  const md = await mr.json().catch(() => ({}))
+  if (!mr.ok) throw new Error('H1 CAC sheet read failed (' + mr.status + '): ' + (md.error?.message || 'unknown') + (mr.status === 403 || mr.status === 404 ? ' -- share the sheet with ' + clientEmail : ''))
+  const tab = (md.sheets || []).map(x => x.properties).find(x => x && x.sheetId === H1_CAC_SHEET_GID)
+  if (!tab) throw new Error('H1 CAC sheet tab (gid ' + H1_CAC_SHEET_GID + ') not found')
+  const vr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${H1_CAC_SHEET_ID}/values/${encodeURIComponent("'" + tab.title.replace(/'/g, "''") + "'!A1:I20")}?valueRenderOption=FORMATTED_VALUE`, { headers })
+  const vd = await vr.json().catch(() => ({}))
+  if (!vr.ok) throw new Error('H1 CAC sheet read failed (' + vr.status + '): ' + (vd.error?.message || 'unknown'))
+  const width = 9
+  const rows = (vd.values || []).map(r => Array.from({ length: width }, (_, i) => (r[i] == null ? '' : String(r[i]))))
+  return { tab: tab.title, rows }
+}
+
 // The one function every save/delete/restore/finished-import routes through.
 // Best-effort and independent per connector -- one connector failing (a dead
 // webhook URL, the bot not yet invited to the Slack channel) never blocks or
@@ -4504,6 +4533,7 @@ async function handleBigQuery(req, res, me) {
   const mode = (req.query && req.query.mode) || 'ping'
   const gateId = mode === 'careers_leads' ? 'leverage_careers'
     : mode === 'ql_split_totals' ? 'overall'
+    : mode === 'marketing_review_cac' ? 'marketing_review'
     : OVERALL_BQ_READ_MODES.includes(mode) ? 'overall_bigquery'
     : 'settings'
   if (!auth.canAccessDashboard(me.role, gateId)) {
@@ -4592,6 +4622,13 @@ async function handleBigQuery(req, res, me) {
   // (message 1 only) have nothing in this sheet to bucket by, and Superbot is
   // deliberately excluded from Total QL here per direct confirmation, unlike
   // every other "Total QLs" figure elsewhere in this app.
+  if (mode === 'marketing_review_cac') {
+    try {
+      return res.status(200).json(await fetchH1CacSheet())
+    } catch (err) {
+      return res.status(502).json({ error: String((err && err.message) || err) })
+    }
+  }
   if (mode === 'ql_split_totals') {
     const { since, until } = req.query || {}
     if (!isIsoDate(since) || !isIsoDate(until)) {
