@@ -359,18 +359,18 @@ function buildB2CFullTable(ctx) {
 //   * column order is Last Day, MTD, H2, YTD, H1 (H2 is the live half, so it
 //     sits next to MTD; H1 closes the row after YTD)
 //   * the H2 / H1 headers carry their month range (Oct-Mar / Apr-Sep)
-//   * the three separate Offline revenue lines (SR / AC / Leverage One) are
-//     one consolidated Offline line
+//   * SR Offline and AC Offline are one consolidated Offline line;
+//     Leverage One Offline stays its own line
 // The scheduled Daily Report (api/send-report.mjs) builds from this version.
 const FULL_LINES_V2 = [
   ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'],
-  ['__offline', 'Offline (SR + AC + Leverage One)'],
+  ['__offline', 'Offline (SR + AC)'], ['vasOffline', 'Leverage One Offline'],
   ['upskilling', 'Upskilling'], ['ancillary', 'Ancillary'],
 ]
 // Null only when every part is null, so a blank sheet never shows a confident zero.
 function offlineTotal(o) {
   if (!o) return null
-  const parts = [o.srOffline, o.acOffline, o.vasOffline]
+  const parts = [o.srOffline, o.acOffline]
   if (parts.every(function (v) { return v == null })) return null
   return parts.reduce(function (a, v) { return a + (v == null ? 0 : v) }, 0)
 }
@@ -429,7 +429,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   what: [
     'Five columns in this order: Last Day, MTD, H2 (Oct-Mar), year to date, H1 (Apr-Sep)',
     'The month range sits in the H2 and H1 headers',
-    'Offline revenue is one consolidated line (SR + AC + Leverage One) instead of three',
+    'SR Offline and AC Offline are one consolidated Offline line; Leverage One Offline stays separate',
     'Everything else as the Daily P&L page shows it: Online lines, Upskilling, Ancillary, Total Revenue, each cost head, Total Cost, Contribution Profit, EBITDA After Corp. Overheads',
     'This is the version the scheduled Daily Report posts',
   ],
