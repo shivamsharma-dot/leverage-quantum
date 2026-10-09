@@ -914,6 +914,9 @@ const DEFAULT_VISIBLE_SUMMARY_KEYS = [
 // separately so paid efficiency is not diluted by organic volume.
 const PAID_SOURCE_KEYS = ['facebook', 'google', 'affiliate', 'linkedin', 'bing', 'remarketing']
 const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim().toLowerCase())
+// Branding is its own Source (2026-10-09, see docs/overall-query-source-fix.sql). It is not a paid
+// channel here and must never be folded into the scorecard's Organic row.
+const isBrandingSource = label => String(label || '').trim().toLowerCase() === 'branding'
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 const PIN_COLS_STORAGE_KEY = 'lq_overall_summary_pin_cols'
@@ -3680,11 +3683,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const buckets = [
         { label: 'Overall', test: () => true },
         { label: 'Paid', test: r => isPaidSource(r.source) },
-        { label: 'Organic', test: r => !isPaidSource(r.source) && r.source !== 'Referral' },
+        { label: 'Organic', test: r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source) },
         { label: 'Referral', test: r => r.source === 'Referral' },
       ].map(b => bucket(b.label, b.test))
       const [overallRow, paidRow, organicRow, referralRow] = buckets
-      const bucketTests = [() => true, r => isPaidSource(r.source), r => !isPaidSource(r.source) && r.source !== 'Referral', r => r.source === 'Referral']
+      const bucketTests = [() => true, r => isPaidSource(r.source), r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source), r => r.source === 'Referral']
 
       // SR/AC QL split -- Overall's own data has no vertical dimension on QL (only
       // Applications carry one), so the SR:AC RATIO comes from Monthly QLs' own,
@@ -3723,7 +3726,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         }
         applySplit(overallRow, () => true)
         applySplit(paidRow, r => isPaidSource(r.source))
-        applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral')
+        applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source))
         applySplit(referralRow, r => r.source === 'Referral')
         superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
       }

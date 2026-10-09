@@ -4271,8 +4271,24 @@ SELECT
     FORMAT_DATE('%d-%b-%Y', DATE(date_of_transaction)) AS lead_date,
     FORMAT_DATE("%B'%Y", DATE(date_of_transaction)) AS month,
     CASE
+        -- 2026-10-09 source fixes. Rules run top to bottom and the first match wins.
+        -- 1) Branding is its own Source and is never counted as Organic: raw 'branding',
+        --    the TOF_YouTube awareness campaigns (they sat under Google) and branding_ /
+        --    organic_branding campaign names.
+        WHEN LOWER(source_1) = 'branding'
+          OR STARTS_WITH(LOWER(campaign_name), 'tof_youtube')
+          OR STARTS_WITH(LOWER(campaign_name), 'branding_')
+          OR STARTS_WITH(LOWER(campaign_name), 'organic_branding') THEN 'Branding'
+        -- 2) Remarketing_* campaigns that arrive tagged as an offline / unpaid source.
+        --    Only rows that would otherwise land in Others are moved, never a paid source.
+        WHEN STARTS_WITH(LOWER(campaign_name), 'remarketing_')
+         AND LOWER(source_1) IN ('lead source na', 'others', 'offline') THEN 'Remarketing'
+        -- 3) Paid Facebook (PMX_FB_*) campaigns that arrive tagged as an offline / unpaid source.
+        WHEN STARTS_WITH(LOWER(campaign_name), 'pmx_fb')
+         AND LOWER(source_1) IN ('lead source na', 'others', 'offline') THEN 'Facebook'
+        -- Existing mapping, unchanged except that 'branding' no longer maps to Organic.
         WHEN LOWER(source_1) IN ('affiliate partner') THEN 'Affiliate'
-        WHEN LOWER(source_1) IN ('content+brand', 'branding') THEN 'Organic'
+        WHEN LOWER(source_1) IN ('content+brand') THEN 'Organic'
         WHEN LOWER(source_1) IN ('lead source na', 'others', 'offline') THEN 'Others'
         ELSE source_1
     END AS Source,

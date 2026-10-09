@@ -642,7 +642,9 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     if (frozen) return undefined
     let dead = false
     const since = isoDate(months.current.start), until = isoDate(months.current.end)
-    fetchOverallBqRows({ since, until, sources: ['Organic'] })
+    // 'Branding' is its own Source since 2026-10-09 (it used to be folded into Organic), and the
+    // Awareness & offline slide below still needs those rows, so both are fetched here.
+    fetchOverallBqRows({ since, until, sources: ['Organic', 'Branding'] })
       .then(r => { if (!dead) setOrganicSubRows(r) })
       .catch(() => { if (!dead) setOrganicSubRows([]) })
     return () => { dead = true }
@@ -809,6 +811,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     if (!organicSubRows) return null
     const bySub = new Map()
     for (const r of organicSubRows) {
+      if (String(r.Source || '').trim().toLowerCase() === 'branding') continue // Branding is not Organic
       const key = r.Sub_Source || 'Unlabeled'
       const e = bySub.get(key) || { name: key, ql: 0, leads: 0 }
       e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
@@ -1829,13 +1832,16 @@ function TofCampaignsSlide({ active, period }) {
     const bySub = new Map()
     for (const r of ctx.organicSubRows) {
       const sub = r.Sub_Source || ''
-      if (!TOF_SUB_SOURCE_PATTERN.test(sub)) continue
+      const isBrandingRow = String(r.Source || '').trim().toLowerCase() === 'branding'
+      if (!isBrandingRow && !TOF_SUB_SOURCE_PATTERN.test(sub)) continue
       const e = bySub.get(sub) || { name: sub, leads: 0, ql: 0 }
       e.leads += reviewNum(r['Total Leads Generated'])
       e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
       bySub.set(sub, e)
     }
-    return [...bySub.values()].sort((a, b) => b.leads - a.leads)
+    // Branding-source rows with no leads (e.g. a YouTube awareness buy, which has spend but no lead
+    // capture) would show as an empty row, so only entries with real activity are kept.
+    return [...bySub.values()].filter(e => e.leads > 0 || e.ql > 0).sort((a, b) => b.leads - a.leads)
   }, [ctx])
   if (!ctx) return null
   const { months } = ctx
