@@ -519,8 +519,39 @@ function MarketingReviewDataProvider({ children }) {
     const raw = RAW_SOURCE_BY_CHANNEL[channel]
     const sources = raw ? [raw] : otherSources
     if (!sources.length) return []
-    const rawRows = await fetchOverallBqRows({ since, until, sources })
-    return rankTopCampaigns(rawRows, channel !== 'Organic')
+    // A whole half-year of one big channel (Facebook runs 20,000-50,000+ rows a
+    // month) in ONE request trips Postgres's statement timeout (57014), so ask
+    // month by month, two at a time, with one retry each, and collapse each
+    // month to one pseudo-row per campaign straight away to keep memory small.
+    // A month that still fails is skipped; only if EVERY month fails do we throw
+    // (so the slide can say "could not load" rather than a false "no campaigns").
+    const slices = months.current.monthDates.map(d => ({
+      since: isoDate(new Date(d.getFullYear(), d.getMonth(), 1)),
+      until: isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
+    }))
+    const collapsed = []
+    let okMonths = 0
+    const runSlice = async (sl) => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const rs = await fetchOverallBqRows({ since: sl.since, until: sl.until, sources })
+          const m = new Map()
+          for (const r of rs) {
+            const k = r.campaign_name || ''
+            const e = m.get(k) || { campaign_name: k, 'Futwork Human QL': 0, 'Futwork AI QL': 0, 'Superbot AI QL': 0, 'Total Leads Generated': 0, Total_Spends: 0 }
+            for (const f of ['Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL', 'Total Leads Generated', 'Total_Spends']) e[f] += reviewNum(r[f])
+            m.set(k, e)
+          }
+          collapsed.push(...m.values())
+          okMonths++
+          return
+        } catch (e) { /* retry once, then skip this month */ }
+      }
+    }
+    const queue = slices.slice()
+    await Promise.all([0, 1].map(async () => { while (queue.length) await runSlice(queue.shift()) }))
+    if (!okMonths) throw new Error('campaign rows could not be loaded')
+    return rankTopCampaigns(collapsed, channel !== 'Organic')
   }, [months, otherSources])
 
   useEffect(() => {
@@ -976,6 +1007,7 @@ function LiveDataFrame({ ctx, label, title, period, active, children }) {
 // Ranked top-5-campaigns list revealed under a clicked channel bar. `isPaid`
 // controls whether CPQL is shown (Organic has no spend, so no cost column).
 function ChannelCampaignsList({ campaigns, isPaid, active }) {
+  if (campaigns && campaigns.error) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>Could not load campaigns just now. Close and reopen this channel to retry.</div>
   if (!campaigns.length) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>No named campaigns with QLs this half-year.</div>
   return (
     <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1015,13 +1047,13 @@ function ChannelPerformanceSlide({ active, period }) {
   const toggleChannel = useCallback((name) => {
     setOpenChannel(v => v === name ? null : name)
     setCampaignCache(prev => {
-      if (prev[name] !== undefined) return prev
+      if (prev[name] !== undefined && !(prev[name] && prev[name].error)) return prev
       setCampaignLoading(name)
       fetchChannelCampaigns(name).then(list => {
         setCampaignCache(c => ({ ...c, [name]: list }))
         setCampaignLoading(l => l === name ? null : l)
       }).catch(() => {
-        setCampaignCache(c => ({ ...c, [name]: [] }))
+        setCampaignCache(c => ({ ...c, [name]: { error: true } }))
         setCampaignLoading(l => l === name ? null : l)
       })
       return prev
