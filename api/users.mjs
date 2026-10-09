@@ -1,4 +1,5 @@
 import { getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
+import { sendWelcomeEmail } from '../lib/welcomeEmail.mjs'
 
 // Roles are free text in the DB, but only these shapes mean anything to
 // lib/auth.mjs -- anything else falls through canAccessDashboard's unknown-role
@@ -165,7 +166,17 @@ export default async function handler(req, res) {
     if (!added.length) {
       return res.status(400).json({ error: 'Could not add user (they may already exist).', added, failed })
     }
-    return res.status(200).json({ success: true, added, failed })
+    // Welcome email: on by default, an admin can switch it off per add (send_welcome:false).
+    // Best-effort -- sendWelcomeEmail never throws, and the grant above is already saved.
+    let welcomed = []
+    if (body.send_welcome !== false) {
+      const results = await Promise.all(added.map(async (email) => {
+        const r = await sendWelcomeEmail({ to: email, role, addedBy: me.email, jobTitle: row.job_title })
+        return r.ok ? email : null
+      }))
+      welcomed = results.filter(Boolean)
+    }
+    return res.status(200).json({ success: true, added, failed, welcomed })
   }
 
   if (req.method === 'PATCH') {

@@ -1604,6 +1604,7 @@ export default function SettingsPage() {
   const [addJobTitle, setAddJobTitle] = useState('')
   const [addDepartment, setAddDepartment] = useState('')
   const [addReports, setAddReports] = useState(false)
+  const [addWelcome, setAddWelcome] = useState(true)
   const [addFailed, setAddFailed] = useState([])
   // --- Report config (sender, subjects, auto switch) ---
   const [rcName, setRcName] = useState('')
@@ -2080,7 +2081,7 @@ export default function SettingsPage() {
   const ADD_STATUS_TEXT = { malformed: 'not an email', external: 'outside your org — signs in via emailed link', exists: 'already has access' }
   const resetAddForm = () => {
     setNewEmail(''); setAddRole('viewer'); setAddIds([]); setAddTemplate('')
-    setAddJobTitle(''); setAddDepartment(''); setAddReports(false); setAddFailed([])
+    setAddJobTitle(''); setAddDepartment(''); setAddReports(false); setAddWelcome(true); setAddFailed([])
   }
   const closeAddMember = () => { setAddMemberOpen(false); resetAddForm() }
   const applyTemplate = (tpl) => {
@@ -2111,7 +2112,7 @@ export default function SettingsPage() {
     let added = 0
     for (const p of ready) {
       let ok = false
-      try { ok = await withTimeout(addUserAccess(p.email, role)) } catch { ok = false }
+      try { ok = await withTimeout(addUserAccess(p.email, role, { sendWelcome: addWelcome, jobTitle: addJobTitle.trim() })) } catch { ok = false }
       if (!ok) { failed.push(p.email); continue }
       added += 1
       // POST /api/users stays a two-field create on purpose -- it already
@@ -2138,7 +2139,7 @@ export default function SettingsPage() {
     const howSignIn = addedExternal
       ? (ready.every(p => p.status === 'external') ? ' - they sign in via the emailed link on the login page' : ' - access applies next time they sign in with Google, or via the emailed link for anyone outside the org')
       : ' - access applies next time they sign in with Google'
-    setMsg('Added ' + added + (added === 1 ? ' person' : ' people') + howSignIn)
+    setMsg('Added ' + added + (added === 1 ? ' person' : ' people') + (addWelcome ? ' (welcome email sent)' : '') + howSignIn)
     closeAddMember()
   }
   const removeUser = async (email) => {
@@ -3411,6 +3412,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <label className={styles.addOptIn}>
                       <input type="checkbox" checked={addReports} onChange={e => setAddReports(e.target.checked)} />
                       Also send them the scheduled report emails
+                    </label>
+                    <label className={styles.addOptIn}>
+                      <input type="checkbox" checked={addWelcome} onChange={e => setAddWelcome(e.target.checked)} />
+                      Send them a welcome email with the sign-in link
                     </label>
 
                     {addFailed.length > 0 && (

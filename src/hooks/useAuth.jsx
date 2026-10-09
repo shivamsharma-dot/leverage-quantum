@@ -12,12 +12,12 @@ export async function getAccessList() {
   return data.users || []
 }
 
-export async function addUserAccess(email, role = 'viewer') {
+export async function addUserAccess(email, role = 'viewer', opts = {}) {
   const r = await fetch('/api/users', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, role }),
+    body: JSON.stringify({ email, role, send_welcome: opts.sendWelcome !== false, job_title: opts.jobTitle || undefined }),
   })
   return r.ok
 }
