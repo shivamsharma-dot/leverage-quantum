@@ -1,5 +1,6 @@
 import { SLACK_CHANNELS, DEFAULT_CHANNEL_ID, channelHandle, confirmPhrase, phraseMatches } from '../shared/slackChannels.mjs'
 import { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL, fetchOverallTotals } from './ask-ai.mjs'
+import { buildWelcomeEmail } from '../lib/welcomeEmail.mjs'
 import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantumUser, canRun, buildHomeReport } from '../lib/slackHome.mjs'
 // Plain ESM, no React/DOM -- safe as a static import from this .mjs handler
 // (unlike api/crm-leads.js below, which is bundled CommonJS and must only
@@ -2818,6 +2819,35 @@ export default async function handler(req, res) {
     return res.status(200).end()
   }
 
+  if ((req.body?.type || req.query?.type) === 'welcome_email_test') {
+    // Admin-only preview of the new-user welcome email. Goes ONLY to the caller's own
+    // address, never to anyone else, and is not wired to "add user" yet.
+    const me = getSessionUser(req)
+    if (!me) return res.status(401).json({ error: 'Not signed in' })
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const RESEND_KEY = process.env.RESEND_API_KEY
+    if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
+    const role = typeof req.body?.sampleRole === 'string' ? req.body.sampleRole : 'viewer:overall,meta_ads,leverage_careers,lq_ops'
+    try {
+      const cfg = await getReportConfig()
+      const fromAddr = cfg.report_from_email
+        ? `${cfg.report_from_name || 'Leverage Quantum'} <${cfg.report_from_email}>`
+        : (process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>')
+      const html = buildWelcomeEmail({ email: me.email, role, addedBy: me.email, jobTitle: req.body?.sampleTitle || 'Marketing' })
+      const sendRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_KEY}` },
+        body: JSON.stringify({ from: fromAddr, to: [me.email], subject: '[Test] Welcome to Leverage Quantum', html }),
+      })
+      const sendData = await sendRes.json()
+      if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
+      await logReport({ report_type: 'welcome email (test)', recipients: [me.email], status: 'sent', triggered_by: me.email })
+      return res.status(200).json({ ok: true, sentTo: me.email, id: sendData.id })
+    } catch (e) {
+      await logReport({ report_type: 'welcome email (test)', recipients: [me.email], status: 'failed', error: e.message, triggered_by: me.email })
+      return res.status(500).json({ error: e.message })
+    }
+  }
   if ((req.body?.type || req.query?.type) === 'chat_answer') {
     return handleChatAnswerEmail(req, res)
   }
