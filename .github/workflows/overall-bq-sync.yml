@@ -69,10 +69,14 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 2026-10-09: 30 was too tight for a full_resync (about 433k rows is roughly
+    # 28 min of upserts plus the prune); run #351 was cancelled by this limit.
+    # Normal windowed runs take about 2-3 minutes, so the higher cap costs nothing.
+    timeout-minutes: 90
     steps:
       - name: Query the Overall saved query and upsert into overall_bq_daily
         env:
+          PYTHONUNBUFFERED: '1'
           SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
           SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           FULL_RESYNC: ${{ github.event.inputs.full_resync }}
