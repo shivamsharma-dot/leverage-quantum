@@ -742,6 +742,16 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // Daily Report always sends both, never lets you pick one instead of the
   // other.
   const [dailySelected, setDailySelected] = useState('pnl')
+  // Which version of each statement the Daily Report sends. V2 is the default
+  // (and what the scheduled 3 PM run always sends); 'orig' is the earlier
+  // version kept so it can still be sent on request.
+  const [dailyVer, setDailyVer] = useState({ pnl: 'v2', cashflow: 'v2' })
+  const dailyVersionIds = useMemo(function () {
+    return {
+      pnl: dailyVer.pnl === 'v2' ? 'b2c_full_v2' : 'b2c_full',
+      cashflow: dailyVer.cashflow === 'v2' ? 'b2c_cashflow_v2' : 'b2c_cashflow_full',
+    }
+  }, [dailyVer])
 
   const openDaily = useCallback(function () {
     setDailyOpen(true)
@@ -766,7 +776,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     fetch('/api/send-report?type=b2c_daily_preview', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'b2c_daily_preview', throughDate: dailyThroughDate }),
+      body: JSON.stringify({ type: 'b2c_daily_preview', throughDate: dailyThroughDate, versions: dailyVersionIds }),
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d } }) })
       .then(function (res) {
@@ -777,7 +787,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       .catch(function (e) { if (alive) { setDailyPreviewErr(e.message); setDailyPreview(null) } })
       .finally(function () { if (alive) setDailyPreviewLoading(false) })
     return function () { alive = false }
-  }, [dailyOpen, dailyThroughDate])
+  }, [dailyOpen, dailyThroughDate, dailyVersionIds])
 
   useEffect(function () {
     function onKey(e) { if (e.key === 'Escape' && dailyOpen && !dailySending) setDailyOpen(false) }
@@ -800,7 +810,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       const r = await fetch('/api/send-report?type=b2c_daily_report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: (user && user.email) || 'manual', throughDate: dailyThroughDate }),
+        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: (user && user.email) || 'manual', throughDate: dailyThroughDate, versions: dailyVersionIds }),
       })
       const dd = await r.json()
       if (!r.ok) throw new Error(dd.error || 'Failed')
@@ -1098,7 +1108,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       </div>
                     </div>
                     <div style={{ fontSize: 10.5, color: 'var(--text3)' }}>
-                      Can't go later than {d1} &mdash; today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's current MTD/YTD figures, which have no daily grain to cut off.
+                      Can't go later than {d1} &mdash; today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's own figures, which have no daily grain to cut off.
                     </div>
                   </div>
 
@@ -1109,21 +1119,40 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       which SlackReportPanel's sends never do. */}
                   <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                     <div style={{ width: 220, flexShrink: 0, background: 'var(--bg2)', padding: 12, overflowY: 'auto', borderRight: '1px solid var(--card-border)' }}>
-                      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 9 }}>Both are sent</div>
+                      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 9 }}>Both are sent &middot; pick a version</div>
                       {[
-                        { id: 'pnl', name: 'Daily P&L', tagline: 'Revenue, cost, EBITDA -- native Slack table, Last Day / MTD / YTD.' },
-                        { id: 'cashflow', name: 'Cash Flow', tagline: 'The CF tab\'s own statement -- native table + sheet image, both attached.' },
+                        { id: 'pnl', name: 'Daily P&L', tagline: 'Revenue, cost, EBITDA -- native Slack table.', v2: 'V2: Last Day / MTD / H2 / YTD / H1; SR, AC, Leverage One rows.', orig: 'Original: Last Day / MTD / H1 / H2 / YTD.' },
+                        { id: 'cashflow', name: 'Cash Flow', tagline: 'The CF tab\'s own statement -- native table + sheet image, both attached.', v2: 'V2: MTD / H2 / YTD / H1.', orig: 'Original: MTD / YTD.' },
                       ].map(function (item) {
                         const sel = item.id === dailySelected
+                        const ver = dailyVer[item.id]
                         return (
-                          <button key={item.id} onClick={function () { setDailySelected(item.id) }} style={{
-                            display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                          <div key={item.id} onClick={function () { setDailySelected(item.id) }} style={{
+                            cursor: 'pointer', fontFamily: 'inherit',
                             background: sel ? 'rgba(31,60,132,0.05)' : 'var(--card)', borderRadius: 11, padding: '11px 12px', marginBottom: 8,
                             border: sel ? '1.5px solid #1F3C84' : '1px solid var(--card-border)',
                           }}>
                             <div style={{ fontSize: 12.5, fontWeight: 800, color: sel ? '#1F3C84' : 'var(--text)', marginBottom: 3 }}>{item.name}</div>
                             <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>{item.tagline}</div>
-                          </button>
+                            <div style={{ display: 'flex', gap: 4, marginTop: 9 }}>
+                              {[['v2', 'V2'], ['orig', 'Original']].map(function (o) {
+                                const on = ver === o[0]
+                                return (
+                                  <button key={o[0]} type="button" disabled={dailySending} onClick={function (e) {
+                                    e.stopPropagation()
+                                    setDailySelected(item.id)
+                                    setDailyVer(function (v) { return { ...v, [item.id]: o[0] } })
+                                  }} style={{
+                                    flex: 1, padding: '5px 0', borderRadius: 7, fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                                    cursor: dailySending ? 'default' : 'pointer',
+                                    border: '1px solid ' + (on ? '#1F3C84' : 'var(--card-border)'),
+                                    background: on ? '#1F3C84' : 'var(--card)', color: on ? '#fff' : 'var(--text2, var(--text))',
+                                  }}>{o[1]}</button>
+                                )
+                              })}
+                            </div>
+                            <div style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: 6 }}>{ver === 'v2' ? item.v2 : item.orig}</div>
+                          </div>
                         )
                       })}
                     </div>

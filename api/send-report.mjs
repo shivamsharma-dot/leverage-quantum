@@ -2159,10 +2159,16 @@ async function slackSendDM(token, userId, text) {
 // and the preview-only endpoint (handleB2CDailyPreview) build from ONE place
 // and can never show the approver something different from what actually
 // ships.
-async function buildB2CDailyMessages(data, cfg, throughDate) {
+async function buildB2CDailyMessages(data, cfg, throughDate, pick) {
+  // pick = { pnl, cashflow } version ids chosen in the Daily Report popover.
+  // Only known ids are honoured; anything else (and the scheduled cron, which
+  // sends nothing) falls back to V2.
+  const pickId = (key, allowed, dflt) => (pick && allowed.includes(pick[key]) ? pick[key] : dflt)
+  const pnlId = pickId('pnl', ['b2c_full_v2', 'b2c_full'], 'b2c_full_v2')
+  const cfId = pickId('cashflow', ['b2c_cashflow_v2', 'b2c_cashflow_full'], 'b2c_cashflow_v2')
   const jobs = [
-    { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS.find(v => v.id === 'b2c_full_v2') || B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
-    { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS.find(v => v.id === 'b2c_cashflow_v2') || B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement, cfStatementV2: data.cashflowStatementV2 }) },
+    { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS.find(v => v.id === pnlId) || B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
+    { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS.find(v => v.id === cfId) || B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement, cfStatementV2: data.cashflowStatementV2 }) },
   ]
   const built = []
   for (const job of jobs) {
@@ -2178,7 +2184,7 @@ async function buildB2CDailyMessages(data, cfg, throughDate) {
         const { renderCashflowStatementPng } = await import('../lib/cashflowStatementImage.mjs')
         // The Daily Report posts the V2 statement (MTD / H2 / YTD / H1); the
         // image draws the same data as the table above it.
-        const cf = data.cashflowStatementV2 || data.cashflowStatement
+        const cf = cfId === 'b2c_cashflow_v2' ? (data.cashflowStatementV2 || data.cashflowStatement) : data.cashflowStatement
         const pngBuf = renderCashflowStatementPng(cf)
         image = {
           pngBase64: pngBuf.toString('base64'),
@@ -2229,7 +2235,7 @@ async function handleB2CDailyPreview(req, res) {
       return res.status(500).json({ error: 'B2C sheet is not configured -- set it in Settings > Data.' })
     }
     const cfg = await getReportConfig()
-    const built = await buildB2CDailyMessages(data, cfg, throughDate)
+    const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.versions)
     return res.status(200).json({ ok: true, jobs: built })
   } catch (e) {
     return res.status(500).json({ error: e.message })
@@ -2309,7 +2315,7 @@ async function handleB2CDailyReport(req, res) {
     // nothing to act on here -- there is no daily grain to cut off at D-1).
     // buildB2CDailyMessages is the SAME builder handleB2CDailyPreview calls,
     // so a preview shown before sending can never disagree with this.
-    const built = await buildB2CDailyMessages(data, cfg, throughDate)
+    const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.versions)
     const posted = []
     for (const job of built) {
       const { statement, messages, image } = job // pristine -- this exact array is what gets stored AND what the real channel receives on approval
