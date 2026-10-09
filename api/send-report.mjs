@@ -2822,7 +2822,8 @@ export default async function handler(req, res) {
   if ((req.body?.type || req.query?.type) === 'welcome_email_test') {
     // Admin-only preview of the new-user welcome email. Goes ONLY to the caller's own
     // address, never to anyone else, and is not wired to "add user" yet.
-    const me = getSessionUser(req)
+    const { getSessionUser: _gsu } = await import('../lib/auth.mjs')
+    const me = _gsu(req)
     if (!me) return res.status(401).json({ error: 'Not signed in' })
     if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
     const RESEND_KEY = process.env.RESEND_API_KEY
