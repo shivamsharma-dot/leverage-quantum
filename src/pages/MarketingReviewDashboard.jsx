@@ -79,18 +79,42 @@ const SLIDE_W = 1280
 const SLIDE_H = 720
 const NAVY = C.navy, BLUE = C.blue, CYAN = C.cyan, GREEN = C.green
 
-// Most recently COMPLETED calendar month -- a monthly review covers the
-// month that just finished, not the in-progress one. Shared by the plain
-// display string below AND the headline-table month math (computeReviewMonths),
-// so the two can never disagree about which month "this review" means.
-function mostRecentCompletedMonth() {
-  const d = new Date()
-  d.setDate(1)
-  d.setMonth(d.getMonth() - 1)
-  return d
+// The review period is a HALF-YEAR of the Indian financial year (April to
+// March): H1 = Apr-Sep, H2 = Oct-Mar. Every number in the deck covers one
+// whole half-year, never a single month. The deck always reviews the most
+// recently COMPLETED half (H1 FY26-27 from 1 Oct 2026, H2 FY26-27 from 1 Apr
+// 2027, ...), so it rolls forward by itself. Shared by the display string below
+// AND all the data math (computeReviewMonths), so the two can never disagree.
+function fyLabel(startYear) { return 'FY' + String(startYear).slice(-2) + '-' + String(startYear + 1).slice(-2) }
+// half 1 = Apr-Sep of fyStartYear, half 2 = Oct fyStartYear to Mar fyStartYear+1
+function makeHalf(fyStartYear, half) {
+  const startMonth = half === 1 ? 3 : 9
+  const monthDates = []
+  for (let i = 0; i < 6; i++) monthDates.push(new Date(fyStartYear, startMonth + i, 1))
+  const first = monthDates[0], last = monthDates[5]
+  const mon = d => d.toLocaleDateString('en-US', { month: 'short' })
+  return {
+    half, fyStartYear,
+    label: 'H' + half + ' ' + fyLabel(fyStartYear),
+    range: first.getFullYear() === last.getFullYear()
+      ? mon(first) + '–' + mon(last) + ' ' + last.getFullYear()
+      : mon(first) + ' ' + first.getFullYear() + ' – ' + mon(last) + ' ' + last.getFullYear(),
+    start: first,
+    end: new Date(last.getFullYear(), last.getMonth() + 1, 0),
+    monthDates,
+    monthKeys: monthDates.map(d => REVIEW_MONTH_NAMES[d.getMonth()] + "'" + d.getFullYear()),
+    ymKeys: monthDates.map(d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')),
+  }
+}
+function mostRecentCompletedHalf(now = new Date()) {
+  const m = now.getMonth(), y = now.getFullYear()
+  if (m >= 9) return makeHalf(y, 1)       // Oct-Dec: H1 of this FY just finished
+  if (m >= 3) return makeHalf(y - 1, 2)   // Apr-Sep: last FY's H2 is the latest complete half
+  return makeHalf(y - 1, 1)               // Jan-Mar: H1 of the running FY
 }
 function defaultReviewPeriod() {
-  return mostRecentCompletedMonth().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const h = mostRecentCompletedHalf()
+  return h.label + ' · ' + h.range
 }
 
 // Same shared, admin-configurable assumptions OverallDashboard.jsx's own Est.
@@ -122,7 +146,6 @@ function fmtINRShort(n) {
   if (n >= 1e5) return '₹' + (n / 1e5).toFixed(1) + 'L'
   return '₹' + Math.round(n).toLocaleString('en-IN')
 }
-function monthShort(d) { return d.toLocaleDateString('en-US', { month: 'short' }) + "'" + String(d.getFullYear()).slice(-2) }
 
 /* ---------- headline-slide month math + live-data aggregation ----------
    The BigQuery-backed agg table (overall_bq_daily_agg, read via the same
@@ -136,21 +159,17 @@ function monthShort(d) { return d.toLocaleDateString('en-US', { month: 'short' }
    dashboard for the same month before trusting them again. */
 
 const REVIEW_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-function monthKeyStr(d) { return REVIEW_MONTH_NAMES[d.getMonth()] + "'" + d.getFullYear() }
 function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
-function monthStartOf(d) { return new Date(d.getFullYear(), d.getMonth(), 1) }
-function monthEndOf(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0) }
-function ymOf(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') }
+function monthLong(d) { return d.toLocaleDateString('en-US', { month: 'short' }) + "'" + String(d.getFullYear()).slice(-2) }
 
-// The 3 trailing months shown as table columns, plus the same month last
-// year -- used only for the "vs last year" delta, never shown as its own
-// column.
+// The three half-years shown as table columns: the same half last year, the
+// half just before the review half, and the review half itself. Both deltas
+// (vs the previous half, vs the same half last year) compare against these.
 function computeReviewMonths() {
-  const current = mostRecentCompletedMonth()
-  const prior = new Date(current.getFullYear(), current.getMonth() - 1, 1)
-  const twoBack = new Date(current.getFullYear(), current.getMonth() - 2, 1)
-  const lastYear = new Date(current.getFullYear() - 1, current.getMonth(), 1)
-  return { current, prior, twoBack, lastYear }
+  const current = mostRecentCompletedHalf()
+  const prior = current.half === 1 ? makeHalf(current.fyStartYear - 1, 2) : makeHalf(current.fyStartYear, 1)
+  const lastYear = makeHalf(current.fyStartYear - 1, current.half)
+  return { current, prior, lastYear }
 }
 
 function reviewNum(v) { return Number(v) || 0 }
@@ -163,9 +182,10 @@ function reviewNum(v) { return Number(v) || 0 }
 // unrestricted denominator understated CPL by ~26% on real data. "Paid" is
 // judged per Source (not per row), matching Overall's own classification.
 function aggregateReviewMonth(rows, key) {
+  const keys = new Set([].concat(key))
   const bySource = new Map()
   for (const r of rows) {
-    if (r.month !== key) continue
+    if (!keys.has(r.month)) continue
     const src = r.Source || 'Unknown'
     const e = bySource.get(src) || { leads: 0, ql: 0, humanQl: 0, aiQl: 0, superbotQl: 0, apps: 0, spend: 0, queued: 0, floorQueued: 0, deposits: 0 }
     e.leads += reviewNum(r['Total Leads Generated'])
@@ -216,9 +236,10 @@ function aggregateReviewMonth(rows, key) {
 // the "Other" bucket (several merged, mostly-unpaid Sources) could in
 // principle differ, and that bucket is never shown on its own slide.
 function aggregateReviewMonthByChannel(rows, key) {
+  const keys = new Set([].concat(key))
   const bySource = new Map()
   for (const r of rows) {
-    if (r.month !== key) continue
+    if (!keys.has(r.month)) continue
     const src = r.Source || 'Unknown'
     const e = bySource.get(src) || { leads: 0, ql: 0, apps: 0, spend: 0 }
     e.leads += reviewNum(r['Total Leads Generated'])
@@ -243,18 +264,18 @@ function aggregateReviewMonthByChannel(rows, key) {
   return byChannel
 }
 
-// Same 3-months + 2-deltas shape as buildHeadlineRows, scoped to one
+// Same 3-half-years + 2-deltas shape as buildHeadlineRows, scoped to one
 // channel -- AC Sales/CPS are dropped since neither has a real per-channel
 // figure (AC Sales is a whole-business manual entry).
 function buildChannelRows(months, byChannelByMonth, channel) {
   const emptyAgg = { hasData: false, leads: null, ql: null, apps: null, spend: null, cpl: null, cpql: null, cpa: null }
   const at = m => byChannelByMonth[m].get(channel) || emptyAgg
   const metric = (label, key, invert, money, getter) => {
-    const v2 = getter(at('twoBack')), v1 = getter(at('prior'))
+    const v1 = getter(at('prior'))
     const v0 = getter(at('current')), vLY = getter(at('lastYear'))
     return {
       key, label, invert, money,
-      values: [v2, v1, v0],
+      values: [vLY, v1, v0],
       deltaVsPrior: reviewPctDelta(v0, v1), priorForDeltaVsPrior: v1,
       deltaVsLastYear: reviewPctDelta(v0, vLY), priorForDeltaVsLastYear: vLY,
     }
@@ -291,19 +312,36 @@ function reviewPctDelta(cur, prev) {
 // One row per metric on the headline table. `invert` matches PremKPI's own
 // convention (dashboardKit.jsx) -- true for cost/spend metrics, where a
 // DECREASE is the good direction; false for volume/outcome metrics.
+// AC Sales is a manual per-MONTH entry (app_preferences.ac_sales_manual,
+// {'YYYY-MM': n}); a half-year figure is the sum of its six months. `entered`
+// counts how many of those six months actually have a value, so a half with
+// only some months typed in can be flagged as partial instead of passing for a
+// complete total. null total = no month entered at all (renders as a dash).
+function sumManualForPeriod(map, spec) {
+  let total = 0, entered = 0
+  for (const ym of spec.ymKeys) {
+    if (map && map[ym] != null) { total += Number(map[ym]) || 0; entered++ }
+  }
+  return { total: entered ? total : null, entered }
+}
+
 function buildHeadlineRows(months, aggByMonth, acSales) {
-  const ac2 = acSales[ymOf(months.twoBack)], ac1 = acSales[ymOf(months.prior)]
-  const ac0 = acSales[ymOf(months.current)], acLY = acSales[ymOf(months.lastYear)]
+  const acCur = sumManualForPeriod(acSales, months.current)
+  const acPrior = sumManualForPeriod(acSales, months.prior)
+  const acLY = sumManualForPeriod(acSales, months.lastYear)
+  const ac1 = acPrior.total, ac0 = acCur.total, acLYv = acLY.total
   const cpsOf = (agg, ac) => (ac != null && ac > 0 && agg.hasData) ? agg.spend / ac : null
 
   const metric = (label, key, invert, money, getter) => {
-    const v2 = getter(aggByMonth.twoBack, ac2), v1 = getter(aggByMonth.prior, ac1)
-    const v0 = getter(aggByMonth.current, ac0), vLY = getter(aggByMonth.lastYear, acLY)
+    const v1 = getter(aggByMonth.prior, ac1)
+    const v0 = getter(aggByMonth.current, ac0), vLY = getter(aggByMonth.lastYear, acLYv)
     return {
       key, label, invert, money,
-      values: [v2, v1, v0],
+      values: [vLY, v1, v0],
       deltaVsPrior: reviewPctDelta(v0, v1), priorForDeltaVsPrior: v1,
       deltaVsLastYear: reviewPctDelta(v0, vLY), priorForDeltaVsLastYear: vLY,
+      // months of manual AC Sales entered per column, same order as `values`
+      acEntered: key === 'acSales' || key === 'cps' ? [acLY.entered, acPrior.entered, acCur.entered] : undefined,
     }
   }
 
@@ -432,12 +470,13 @@ function MarketingReviewDataProvider({ children }) {
   useEffect(() => {
     let dead = false
     setRows(null); setError(null)
-    const sinceA = isoDate(monthStartOf(months.twoBack)), untilA = isoDate(monthEndOf(months.current))
-    const sinceB = isoDate(monthStartOf(months.lastYear)), untilB = isoDate(monthEndOf(months.lastYear))
-    Promise.all([
-      fetchOverallBqAggRows({ since: sinceA, until: untilA }),
-      fetchOverallBqAggRows({ since: sinceB, until: untilB }),
-    ]).then(([a, b]) => { if (!dead) setRows(a.concat(b)) })
+    // One continuous read from the start of the same half last year to the end
+    // of the review half -- covers all three half-years in the table (the
+    // half in between is contiguous), ~18 months of the small pre-aggregated
+    // table (a few thousand rows).
+    const since = isoDate(months.lastYear.start), until = isoDate(months.current.end)
+    fetchOverallBqAggRows({ since, until })
+      .then(a => { if (!dead) setRows(a) })
       .catch(e => { if (!dead) setError(e.message || 'Failed to load figures') })
     return () => { dead = true }
   }, [months, retryToken])
@@ -446,14 +485,14 @@ function MarketingReviewDataProvider({ children }) {
   // call/Blog/App/...) that the small pre-aggregated table above can't
   // provide (it has no Sub_Source column) -- so this is the one extra,
   // deliberately narrow fetch against the bigger per-campaign table:
-  // Source='Organic' only, current month only. Real Aug'26 size (~1,700
-  // rows) is small and fast; NOT the whole month across all sources, which
-  // this codebase has already learned the hard way runs 20,000-50,000+ rows
-  // (see CLAUDE.md's Overall-BigQuery Month-tab entry) and is too slow to
-  // prefetch unconditionally on every page load.
+  // Source='Organic' only, review half-year only (about 1,700 rows a month, so
+  // roughly 10,000 for six months, fetched in month chunks); NOT every source,
+  // which this codebase has already learned the hard way runs 20,000-50,000+
+  // rows A MONTH (see CLAUDE.md's Overall-BigQuery Month-tab entry) and is too
+  // slow to prefetch unconditionally on every page load.
   useEffect(() => {
     let dead = false
-    const since = isoDate(monthStartOf(months.current)), until = isoDate(monthEndOf(months.current))
+    const since = isoDate(months.current.start), until = isoDate(months.current.end)
     fetchOverallBqRows({ since, until, sources: ['Organic'] })
       .then(r => { if (!dead) setOrganicSubRows(r) })
       .catch(() => { if (!dead) setOrganicSubRows([]) })
@@ -463,17 +502,26 @@ function MarketingReviewDataProvider({ children }) {
   // On-demand only, never prefetched -- the top-5-campaigns drill-down on
   // the Channel Performance slide. Same reasoning as organicSubRows above:
   // fetching every channel's campaign-level data up front "just in case" it
-  // gets clicked would mean fetching the whole month regardless, since
-  // 'Other' alone requires an unfiltered query. Scoped to the CURRENT month
-  // only (the slide only ever shows this month's channel mix).
+  // gets clicked would mean fetching every source's campaign rows regardless.
+  // Scoped to the review half-year only (the slide only ever shows that
+  // period's channel mix). 'Other' has no single raw Source, so it asks for
+  // exactly the Sources seen in the already-loaded agg rows that map to
+  // 'Other' (Bing, Native Ads, Others, Referral, Linkedin, ...) instead of
+  // pulling every source and filtering afterwards.
+  const otherSources = useMemo(() => {
+    if (!rows) return []
+    const set = new Set()
+    for (const r of rows) if (r.Source && reviewMapChannel(r.Source) === 'Other') set.add(r.Source)
+    return [...set]
+  }, [rows])
   const fetchChannelCampaigns = useCallback(async (channel) => {
-    const since = isoDate(monthStartOf(months.current)), until = isoDate(monthEndOf(months.current))
+    const since = isoDate(months.current.start), until = isoDate(months.current.end)
     const raw = RAW_SOURCE_BY_CHANNEL[channel]
-    const rawRows = raw
-      ? await fetchOverallBqRows({ since, until, sources: [raw] })
-      : (await fetchOverallBqRows({ since, until })).filter(r => reviewMapChannel(r.Source) === 'Other')
+    const sources = raw ? [raw] : otherSources
+    if (!sources.length) return []
+    const rawRows = await fetchOverallBqRows({ since, until, sources })
     return rankTopCampaigns(rawRows, channel !== 'Organic')
-  }, [months])
+  }, [months, otherSources])
 
   useEffect(() => {
     let dead = false
@@ -541,10 +589,9 @@ function MarketingReviewDataProvider({ children }) {
   const aggByMonth = useMemo(() => {
     if (!rows) return null
     return {
-      twoBack: aggregateReviewMonth(rows, monthKeyStr(months.twoBack)),
-      prior: aggregateReviewMonth(rows, monthKeyStr(months.prior)),
-      current: aggregateReviewMonth(rows, monthKeyStr(months.current)),
-      lastYear: aggregateReviewMonth(rows, monthKeyStr(months.lastYear)),
+      prior: aggregateReviewMonth(rows, months.prior.monthKeys),
+      current: aggregateReviewMonth(rows, months.current.monthKeys),
+      lastYear: aggregateReviewMonth(rows, months.lastYear.monthKeys),
     }
   }, [rows, months])
 
@@ -553,10 +600,9 @@ function MarketingReviewDataProvider({ children }) {
   const byChannelByMonth = useMemo(() => {
     if (!rows) return null
     return {
-      twoBack: aggregateReviewMonthByChannel(rows, monthKeyStr(months.twoBack)),
-      prior: aggregateReviewMonthByChannel(rows, monthKeyStr(months.prior)),
-      current: aggregateReviewMonthByChannel(rows, monthKeyStr(months.current)),
-      lastYear: aggregateReviewMonthByChannel(rows, monthKeyStr(months.lastYear)),
+      prior: aggregateReviewMonthByChannel(rows, months.prior.monthKeys),
+      current: aggregateReviewMonthByChannel(rows, months.current.monthKeys),
+      lastYear: aggregateReviewMonthByChannel(rows, months.lastYear.monthKeys),
     }
   }, [rows, months])
 
@@ -617,7 +663,7 @@ function CoverSlide({ active, period }) {
         <div style={{
           fontSize: 13, fontWeight: 800, letterSpacing: '0.28em', color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase',
           marginBottom: 18, animation: active ? 'mrFadeUp .5s cubic-bezier(.22,1,.36,1) .1s both' : undefined,
-        }}>Monthly Marketing Review</div>
+        }}>Half-Year Marketing Review</div>
         <div style={{
           fontSize: 58, fontWeight: 800, color: '#fff', letterSpacing: '-1.5px', lineHeight: 1.05, marginBottom: 18,
           animation: active ? 'mrCoverTitleIn .6s cubic-bezier(.22,1,.36,1) .25s both' : undefined,
@@ -641,7 +687,7 @@ const AGENDA_ITEMS = [
   'Funnel & conversion — how leads moved through the pipeline',
   'Wins & highlights',
   'Risks & watch-outs',
-  'Next month’s priorities',
+  'Next half-year’s priorities',
 ]
 function AgendaSlide({ active }) {
   return (
@@ -730,6 +776,20 @@ function EditIcon() {
 
 const HEADLINE_GRID_COLS = '200px repeat(3, 130px) 185px 185px'
 
+// Column headers for the half-year tables: the half's name with its month range
+// underneath, so "H1 FY25-26" is never a guessing game.
+function PeriodColumnHead({ spec }) {
+  return (
+    <div style={{ textAlign: 'right' }}>
+      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{spec.label}</div>
+      <div style={{ fontSize: 9.5, fontWeight: 600, color: '#94A3B8', marginTop: 1 }}>{spec.range}</div>
+    </div>
+  )
+}
+function PeriodDeltaHead({ spec }) {
+  return <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em', alignSelf: 'end' }}>vs {spec.label}</div>
+}
+
 // The 9-metric monthly headline table -- Spend/Leads/QL/Apps/AC Sales/CPL/
 // CPQL/CPA/CPS across the trailing 3 months, each with a delta vs the prior
 // month and vs the same month last year. Reads live figures from Overall's
@@ -742,11 +802,12 @@ function HeadlineSlide({ active, period }) {
 
   if (!ctx) return null
   const { months, loading, error, headlineRows, acSales, acSaving, saveAcSales, retry } = ctx
-  const displayMonths = [months.twoBack, months.prior, months.current]
+  // oldest to newest: same half last year, the previous half, the review half
+  const displayPeriods = [months.lastYear, months.prior, months.current]
 
   const openEdit = () => {
     const d = {}
-    displayMonths.forEach(m => { const ym = ymOf(m); d[ym] = acSales[ym] != null ? String(acSales[ym]) : '' })
+    displayPeriods.forEach(h => h.ymKeys.forEach(ym => { d[ym] = acSales[ym] != null ? String(acSales[ym]) : '' }))
     setDraft(d)
     setEditOpen(true)
   }
@@ -789,11 +850,9 @@ function HeadlineSlide({ active, period }) {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, borderBottom: '2px solid #0F1B33', paddingBottom: 9, marginBottom: 2 }}>
             <div />
-            {displayMonths.map((m, i) => (
-              <div key={i} style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{monthShort(m)}</div>
-            ))}
-            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.prior)}</div>
-            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.lastYear)}</div>
+            {displayPeriods.map((h, i) => <PeriodColumnHead key={i} spec={h} />)}
+            <PeriodDeltaHead spec={months.prior} />
+            <PeriodDeltaHead spec={months.lastYear} />
           </div>
 
           {headlineRows.map((row, i) => (
@@ -811,14 +870,19 @@ function HeadlineSlide({ active, period }) {
                   </button>
                 )}
               </div>
-              {row.values.map((v, ci) => (
-                <div key={ci} title={exactHeadlineTitle(v, row.money)}
-                  style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />
-                </div>
-              ))}
+              {row.values.map((v, ci) => {
+                const entered = row.acEntered ? row.acEntered[ci] : 6
+                const partial = row.acEntered && entered > 0 && entered < 6
+                return (
+                  <div key={ci} title={partial ? 'AC Sales entered for ' + entered + ' of 6 months only, so this is a partial total' : exactHeadlineTitle(v, row.money)}
+                    style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />
+                    {partial && <span style={{ color: '#94A3B8', fontWeight: 700 }}> *</span>}
+                  </div>
+                )
+              })}
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} showPrior={false} /></div>
-              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} showPrior={false} /></div>
             </div>
           ))}
         </>
@@ -826,19 +890,26 @@ function HeadlineSlide({ active, period }) {
 
       {editOpen && (
         <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 360, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 640, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Sales</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — entered here by month. CPS (Spend ÷ AC Sales) is computed automatically.</div>
-            {displayMonths.map(m => {
-              const ym = ymOf(m)
-              return (
-                <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 70, fontSize: 12.5, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{monthShort(m)}</div>
-                  <input type="number" min="0" value={draft[ym] || ''} onChange={e => setDraft(d => ({ ...d, [ym]: e.target.value }))}
-                    placeholder="0" style={{ flex: 1, border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: FONT, boxSizing: 'border-box' }} />
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the sales count for each month. A half-year figure is the sum of its six months; leave a month blank if it is not known. CPS (Spend ÷ AC Sales) is computed automatically.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+              {displayPeriods.map(h => (
+                <div key={h.label}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>{h.label}</div>
+                  {h.monthDates.map((m, mi) => {
+                    const ym = h.ymKeys[mi]
+                    return (
+                      <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                        <div style={{ width: 52, fontSize: 12, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{monthLong(m)}</div>
+                        <input type="number" min="0" value={draft[ym] || ''} onChange={e => setDraft(d => ({ ...d, [ym]: e.target.value }))}
+                          placeholder="0" style={{ flex: 1, minWidth: 0, border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 8px', fontSize: 12.5, fontFamily: FONT, boxSizing: 'border-box' }} />
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+              ))}
+            </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
               <Button size="sm" variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
               <Button size="sm" onClick={saveDraft} disabled={acSaving}>{acSaving ? 'Saving…' : 'Save'}</Button>
@@ -905,7 +976,7 @@ function LiveDataFrame({ ctx, label, title, period, active, children }) {
 // Ranked top-5-campaigns list revealed under a clicked channel bar. `isPaid`
 // controls whether CPQL is shown (Organic has no spend, so no cost column).
 function ChannelCampaignsList({ campaigns, isPaid, active }) {
-  if (!campaigns.length) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>No named campaigns with QLs this month.</div>
+  if (!campaigns.length) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>No named campaigns with QLs this half-year.</div>
   return (
     <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
       {campaigns.map((c, i) => (
@@ -963,7 +1034,7 @@ function ChannelPerformanceSlide({ active, period }) {
   return (
     <LiveDataFrame ctx={ctx} label="Channel Performance" title="Where the QLs came from" period={period} active={active}>
       {channelRows.length === 0 ? (
-        <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No QLs recorded for {months ? monthShort(months.current) : 'this month'} yet.</div>
+        <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No QLs recorded for {months ? months.current.label : 'this half-year'} yet.</div>
       ) : (
         <div style={{ marginTop: 12 }}>
           {channelRows.map((c, i) => {
@@ -1026,7 +1097,7 @@ function FunnelSlide({ active, period }) {
   const months = ctx && ctx.months
   const [expanded, setExpanded] = useState(null)
   const [editOpen, setEditOpen] = useState(false)
-  const [draftRevenue, setDraftRevenue] = useState('')
+  const [draftRevenue, setDraftRevenue] = useState({})
   const [savingRevenue, setSavingRevenue] = useState(false)
   const stages = useMemo(() => {
     if (!aggByMonth) return []
@@ -1058,25 +1129,29 @@ function FunnelSlide({ active, period }) {
     const a = aggByMonth.current
     const estimatedRaus = a.deposits * (readRauPct() / 100)
     const estSrRevenue = estimatedRaus * readSrFee()
-    const ym = ymOf(months.current)
-    const hasAcActual = acRevenue && acRevenue[ym] != null
-    const acActual = hasAcActual ? acRevenue[ym] : 0
-    return { estSrRevenue, acActual, hasAcActual, total: estSrRevenue + acActual }
+    // AC Actual Revenue is entered per MONTH; the half-year figure is the sum
+    // of whichever of its six months have a value.
+    const mine = sumManualForPeriod(acRevenue, months.current)
+    const acActual = mine.total || 0
+    return { estSrRevenue, acActual, hasAcActual: mine.entered > 0, acEntered: mine.entered, total: estSrRevenue + acActual }
   }, [aggByMonth, acRevenue, months])
 
   const openRevenueEdit = () => {
-    const ym = months ? ymOf(months.current) : null
-    setDraftRevenue(ym && acRevenue && acRevenue[ym] != null ? String(acRevenue[ym]) : '')
+    const d = {}
+    if (months) months.current.ymKeys.forEach(ym => { d[ym] = acRevenue && acRevenue[ym] != null ? String(acRevenue[ym]) : '' })
+    setDraftRevenue(d)
     setEditOpen(true)
   }
   const saveRevenueDraft = async () => {
-    const trimmed = draftRevenue.trim()
-    const n = Number(trimmed)
-    if (trimmed !== '' && (!Number.isFinite(n) || n < 0)) return
-    setSavingRevenue(true)
-    const ym = ymOf(months.current)
     const next = { ...acRevenue }
-    if (trimmed === '') delete next[ym]; else next[ym] = n
+    for (const [ym, val] of Object.entries(draftRevenue)) {
+      const trimmed = String(val).trim()
+      if (trimmed === '') { delete next[ym]; continue }
+      const n = Number(trimmed)
+      if (!Number.isFinite(n) || n < 0) return
+      next[ym] = n
+    }
+    setSavingRevenue(true)
     const ok = await saveAcRevenue(next)
     setSavingRevenue(false)
     if (ok) setEditOpen(false)
@@ -1176,7 +1251,7 @@ function FunnelSlide({ active, period }) {
               <div className={styles.staggerItem} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, paddingTop: 4 }}>
                 <FunnelSubRow label="Estimated SR Revenue" value={revenue.estSrRevenue}
                   max={Math.max(1, revenue.estSrRevenue, revenue.acActual)} hue={NAVY} active={active} delay={0} money />
-                <FunnelSubRow label={revenue.hasAcActual ? 'AC Actual Revenue' : 'AC Actual Revenue (not entered yet)'} value={revenue.acActual}
+                <FunnelSubRow label={!revenue.hasAcActual ? 'AC Actual Revenue (not entered yet)' : revenue.acEntered < 6 ? 'AC Actual Revenue (' + revenue.acEntered + ' of 6 months entered)' : 'AC Actual Revenue'} value={revenue.acActual}
                   max={Math.max(1, revenue.estSrRevenue, revenue.acActual)} hue={BLUE} active={active} delay={0.08} money />
               </div>
             )}
@@ -1185,11 +1260,19 @@ function FunnelSlide({ active, period }) {
       </div>
       {editOpen && (
         <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 320, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 380, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Actual Revenue</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — entered here for {period}, in rupees.</div>
-            <input type="number" min="0" value={draftRevenue} onChange={e => setDraftRevenue(e.target.value)}
-              placeholder="0" style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, fontFamily: FONT, boxSizing: 'border-box' }} />
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the rupee revenue for each month of {months ? months.current.label : 'the half-year'}. The deck adds them up; leave a month blank if it is not known.</div>
+            {months && months.current.monthDates.map((m, mi) => {
+              const ym = months.current.ymKeys[mi]
+              return (
+                <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <div style={{ width: 58, fontSize: 12.5, fontWeight: 700, color: '#334155', flexShrink: 0 }}>{monthLong(m)}</div>
+                  <input type="number" min="0" value={draftRevenue[ym] || ''} onChange={e => setDraftRevenue(d => ({ ...d, [ym]: e.target.value }))}
+                    placeholder="0" style={{ flex: 1, border: '1px solid #E2E8F0', borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: FONT, boxSizing: 'border-box' }} />
+                </div>
+              )
+            })}
             <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
               <Button size="sm" variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
               <Button size="sm" onClick={saveRevenueDraft} disabled={savingRevenue}>{savingRevenue ? 'Saving…' : 'Save'}</Button>
@@ -1203,14 +1286,14 @@ function FunnelSlide({ active, period }) {
 
 // Per-channel spotlight -- one shared body, 3 named wrapper slides below
 // (Google Ads / Meta Ads / Organic) rather than threading a `channel` prop
-// through SLIDES' fixed {active, period} Body signature. Same 3-months +
+// through SLIDES' fixed {active, period} Body signature. Same 3-half-years +
 // 2-deltas table shape as the headline slide, scoped to one channel; AC
 // Sales/CPS are dropped since neither has a real per-channel figure.
 function ChannelSpotlightBody({ active, period, channel }) {
   const ctx = useMarketingReviewData()
   if (!ctx) return null
   const { months, channelRowsByChannel } = ctx
-  const displayMonths = months ? [months.twoBack, months.prior, months.current] : []
+  const displayPeriods = months ? [months.lastYear, months.prior, months.current] : []
   const rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
   return (
     <LiveDataFrame ctx={ctx} label="Channel Spotlight" title={channel} period={period} active={active}>
@@ -1218,11 +1301,9 @@ function ChannelSpotlightBody({ active, period, channel }) {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, borderBottom: '2px solid #0F1B33', paddingBottom: 9, marginBottom: 2 }}>
             <div />
-            {displayMonths.map((m, i) => (
-              <div key={i} style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{monthShort(m)}</div>
-            ))}
-            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.prior)}</div>
-            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em' }}>vs {monthShort(months.lastYear)}</div>
+            {displayPeriods.map((h, i) => <PeriodColumnHead key={i} spec={h} />)}
+            <PeriodDeltaHead spec={months.prior} />
+            <PeriodDeltaHead spec={months.lastYear} />
           </div>
           {rows.map((row, i) => (
             <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
@@ -1238,7 +1319,7 @@ function ChannelSpotlightBody({ active, period, channel }) {
                 </div>
               ))}
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsPrior} prior={row.priorForDeltaVsPrior} money={row.money} invert={row.invert} showPrior={false} /></div>
-              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} /></div>
+              <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} showPrior={false} /></div>
             </div>
           ))}
         </>
@@ -1246,14 +1327,14 @@ function ChannelSpotlightBody({ active, period, channel }) {
       {channel === 'Organic' && (
         <div style={{ marginTop: 26 }}>
           <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-            QL by sub-source, {months ? monthShort(months.current) : 'this month'}
+            QL by sub-source, {months ? months.current.label : 'this half-year'}
           </div>
           {ctx.organicSubSourceBreakdown == null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94A3B8', fontSize: 13 }}>
               <span className={styles.mrSpinner} />Loading sub-source breakdown…
             </div>
           ) : ctx.organicSubSourceBreakdown.length === 0 ? (
-            <div style={{ color: '#94A3B8', fontSize: 13 }}>No sub-source activity recorded this month.</div>
+            <div style={{ color: '#94A3B8', fontSize: 13 }}>No sub-source activity recorded this half-year.</div>
           ) : (
             (() => {
               const subMax = Math.max(1, ...ctx.organicSubSourceBreakdown.map(s => s.ql))
@@ -1311,7 +1392,7 @@ function TofCampaignsSlide({ active, period }) {
           <span className={styles.mrSpinner} />Loading campaign activity…
         </div>
       ) : tof.length === 0 ? (
-        <div style={{ color: '#94A3B8', fontSize: 14 }}>No branding/offline campaign activity recorded for {months ? monthShort(months.current) : 'this month'}.</div>
+        <div style={{ color: '#94A3B8', fontSize: 14 }}>No branding/offline campaign activity recorded for {months ? months.current.label : 'this half-year'}.</div>
       ) : (
         <div>
           {tof.map((t, i) => {
@@ -1390,8 +1471,8 @@ function buildInsights(headlineRows, byChannelByMonth, months) {
   const candidates = []
   if (headlineRows) {
     const comparisons = [
-      { key: 'deltaVsPrior', label: `vs ${monthShort(months.prior)}` },
-      { key: 'deltaVsLastYear', label: `vs ${monthShort(months.lastYear)}` },
+      { key: 'deltaVsPrior', label: `vs ${months.prior.label}` },
+      { key: 'deltaVsLastYear', label: `vs ${months.lastYear.label}` },
     ]
     for (const row of headlineRows) {
       if (row.key === 'acSales' || row.key === 'cps') continue // manual-entry-dependent, often incomplete
@@ -1406,7 +1487,7 @@ function buildInsights(headlineRows, byChannelByMonth, months) {
         candidates.push({
           good, magnitude: abs,
           title: `${row.label} ${arrow} ${abs.toFixed(1)}% ${cmp.label}`,
-          detail: `${row.label} landed at ${curVal} this month -- ${good ? 'a genuine improvement' : 'worth digging into'} ${cmp.label}.`,
+          detail: `${row.label} landed at ${curVal} for ${months.current.label} -- ${good ? 'a genuine improvement' : 'worth digging into'} ${cmp.label}.`,
         })
       }
     }
@@ -1425,7 +1506,7 @@ function buildInsights(headlineRows, byChannelByMonth, months) {
       wins.unshift({
         magnitude: Infinity,
         title: `${top.name} is the top QL driver`,
-        detail: `${top.name} produced ${fmtN(top.ql)} QLs this month -- ${share.toFixed(0)}% of the total, the single largest source.`,
+        detail: `${top.name} produced ${fmtN(top.ql)} QLs in ${months.current.label} -- ${share.toFixed(0)}% of the total, the single largest source.`,
       })
     }
     const zeroChannels = chRows.filter(r => r.name !== 'Other' && (r.ql || 0) === 0).map(r => r.name)
@@ -1433,7 +1514,7 @@ function buildInsights(headlineRows, byChannelByMonth, months) {
       risks.unshift({
         magnitude: Infinity,
         title: `${zeroChannels.join(' & ')} at zero QLs`,
-        detail: `${zeroChannels.join(' and ')} produced no measurable qualified leads this month -- confirm tracking is correct, or reconsider spend/effort there.`,
+        detail: `${zeroChannels.join(' and ')} produced no measurable qualified leads in ${months.current.label} -- confirm tracking is correct, or reconsider spend/effort there.`,
       })
     }
   }
@@ -1453,7 +1534,7 @@ function WinsSlide({ active, period }) {
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
         {wins && wins.length > 0
           ? wins.map((w, i) => <CalloutCard key={w.title} {...w} kind="win" active={active} delay={0.1 * i} />)
-          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No metric crossed the win threshold this month.</div>}
+          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No metric crossed the win threshold this half-year.</div>}
       </div>
     </LiveDataFrame>
   )
@@ -1471,14 +1552,14 @@ function RisksSlide({ active, period }) {
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
         {risks && risks.length > 0
           ? risks.map((r, i) => <CalloutCard key={r.title} {...r} kind="risk" active={active} delay={0.1 * i} />)
-          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>Nothing crossed the risk threshold this month.</div>}
+          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>Nothing crossed the risk threshold this half-year.</div>}
       </div>
     </LiveDataFrame>
   )
 }
 
 const PRIORITIES = [
-  'Double down on the channel/corridor that scaled cleanly this month',
+  'Double down on the channel/corridor that scaled cleanly this half-year',
   'Fix or pause whatever is over the CPQL benchmark',
   'Address the weakest stage-to-stage conversion rate in the funnel',
   'One experiment to run before the next review',
@@ -1487,7 +1568,7 @@ function NextStepsSlide({ active, period }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} />
-      <SectionKicker label="Next Month's Priorities" title="What we're doing next" />
+      <SectionKicker label="Next Half-Year's Priorities" title="What we're doing next" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
         {PRIORITIES.map((t, i) => (
           <div key={i} className={active ? styles.staggerItem : undefined}
@@ -1518,7 +1599,7 @@ function ClosingSlide({ active, period }) {
 }
 
 const SLIDES = [
-  { id: 'cover', section: 'Cover', title: 'Monthly Marketing Review', Body: CoverSlide, dark: true },
+  { id: 'cover', section: 'Cover', title: 'Half-Year Marketing Review', Body: CoverSlide, dark: true },
   { id: 'agenda', section: 'Agenda', title: "What we'll cover", Body: AgendaSlide },
   { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide },
   { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide },
@@ -1529,7 +1610,7 @@ const SLIDES = [
   { id: 'tof', section: 'Top-of-Funnel & Branding', title: 'Awareness & offline campaigns', Body: TofCampaignsSlide },
   { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide },
   { id: 'risks', section: 'Risks & Watch-outs', title: 'What needs attention', Body: RisksSlide },
-  { id: 'next', section: "Next Month's Priorities", title: "What we're doing next", Body: NextStepsSlide },
+  { id: 'next', section: "Next Half-Year's Priorities", title: "What we're doing next", Body: NextStepsSlide },
   { id: 'closing', section: 'Closing', title: 'Questions?', Body: ClosingSlide, dark: true },
 ]
 
@@ -1950,7 +2031,7 @@ export default function MarketingReviewDashboard() {
         }}>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', color: '#94A3B8', textTransform: 'uppercase' }}>Dashboards / Marketing Review</div>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#0F1B33', marginTop: 2 }}>Monthly Marketing Review</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#0F1B33', marginTop: 2 }}>Half-Year Marketing Review</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{
