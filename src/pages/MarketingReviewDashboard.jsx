@@ -2092,6 +2092,16 @@ function sanitizeOrder(order) {
   if (closeAt === -1) return out.concat(missing)
   return out.slice(0, closeAt).concat(missing, out.slice(closeAt))
 }
+// Moves dragId to where targetId is: dragging forward lands AFTER the target, backward lands BEFORE it.
+function moveInOrder(order, dragId, targetId) {
+  if (!dragId || dragId === targetId) return order
+  const from = order.indexOf(dragId), to = order.indexOf(targetId)
+  if (from < 0 || to < 0) return order
+  const out = order.filter(id => id !== dragId)
+  const t = out.indexOf(targetId)
+  out.splice(from < to ? t + 1 : t, 0, dragId)
+  return out
+}
 // Slides that make no sense for a period start hidden (the CAC sheet only covers one period).
 function defaultHiddenFor(spec) { return specKey(spec) === CAC_SHEET_SPEC_KEY ? [] : ['cac-sheet'] }
 
@@ -2120,7 +2130,7 @@ function DeckToolbarButton({ onClick, title, active, children }) {
   )
 }
 
-function DeckView({ slides, index, setIndex, period, onExit, onPrint }) {
+function DeckView({ slides, index, setIndex, period, onExit, onPrint, onReorder }) {
   // deckRootRef is the real Fullscreen target -- the WHOLE immersive overlay
   // (progress rail, labels, toolbar, thumbnail nav all included), not just
   // the stage area. Fullscreening only the stage div would make the browser
@@ -2151,6 +2161,8 @@ function DeckView({ slides, index, setIndex, period, onExit, onPrint }) {
   const inkIdRef = useRef(0)
   const digitBufferRef = useRef('')
   const digitTimerRef = useRef(null)
+  const [thumbDragId, setThumbDragId] = useState(null)
+  const [thumbOverId, setThumbOverId] = useState(null)
 
   const handleInkDown = useCallback((e) => {
     if (!writeMode) return
@@ -2425,12 +2437,18 @@ function DeckView({ slides, index, setIndex, period, onExit, onPrint }) {
             const isActive = i === index
             const thumbW = 92, thumbScale = thumbW / SLIDE_W, thumbH = SLIDE_H * thumbScale
             return (
-              <button key={s.id} type="button" data-thumb-active={isActive} onClick={() => goTo(i)} title={s.title}
+              <button key={s.id} type="button" data-thumb-active={isActive} onClick={() => goTo(i)} title={onReorder ? s.title + ' (drag to reorder)' : s.title}
+                draggable={!!onReorder}
+                onDragStart={onReorder ? (e => { setThumbDragId(s.id); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', s.id) } catch (err) { /* ignore */ } }) : undefined}
+                onDragOver={onReorder ? (e => { e.preventDefault(); if (thumbOverId !== s.id) setThumbOverId(s.id) }) : undefined}
+                onDrop={onReorder ? (e => { e.preventDefault(); if (thumbDragId && thumbDragId !== s.id) onReorder(thumbDragId, s.id); setThumbDragId(null); setThumbOverId(null) }) : undefined}
+                onDragEnd={onReorder ? (() => { setThumbDragId(null); setThumbOverId(null) }) : undefined}
                 className={styles.thumbBtn}
                 style={{
-                  width: thumbW, height: thumbH, borderRadius: 7, overflow: 'hidden', flexShrink: 0, cursor: 'pointer', padding: 0,
-                  border: isActive ? `2px solid ${CYAN}` : '2px solid rgba(255,255,255,0.12)',
+                  width: thumbW, height: thumbH, borderRadius: 7, overflow: 'hidden', flexShrink: 0, cursor: onReorder ? 'grab' : 'pointer', padding: 0,
+                  border: thumbOverId === s.id && thumbDragId && thumbDragId !== s.id ? `2px dashed ${CYAN}` : (isActive ? `2px solid ${CYAN}` : '2px solid rgba(255,255,255,0.12)'),
                   boxShadow: isActive ? `0 0 0 3px ${CYAN}33` : 'none', position: 'relative', background: 'transparent',
+                  opacity: thumbDragId === s.id ? 0.4 : 1,
                 }}>
                 <div style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${thumbScale})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
                   <s.Body active={false} period={period} />
@@ -2590,25 +2608,43 @@ function PastReviews({ reviews, activeId, onOpen, onTemplate, onDelete, isOwner 
                 const span = buildSpan(r.spec)
                 const active = r.id === activeId
                 const canDelete = r.status !== 'frozen' || isOwner
+                const frozenR = r.status === 'frozen'
+                const when = frozenR ? 'Frozen ' + fmtWhen(r.frozenAt) + (r.frozenBy ? ' by ' + nameOfEmail(r.frozenBy) : '') : 'Updated ' + fmtWhen(r.updatedAt) + (r.updatedBy ? ' by ' + nameOfEmail(r.updatedBy) : '')
+                const nSlides = sanitizeOrder(r.order).filter(id => !(r.hidden || []).includes(id)).length
+                const iconBtn = { width: 34, height: 34, borderRadius: 10, border: '1px solid #E2E8F0', background: '#fff', color: '#475569', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, flexShrink: 0, fontFamily: FONT }
                 return (
-                  <div key={r.id} style={{
-                    background: '#fff', borderRadius: 14, padding: '14px 16px', border: active ? `1.5px solid ${BLUE}` : '0.5px solid #E2E8F0',
-                    boxShadow: active ? `0 0 0 3px ${BLUE}22` : '0 1px 3px rgba(15,23,42,0.05)', display: 'flex', flexDirection: 'column', gap: 8,
+                  <div key={r.id} className={styles.mrGalleryCard} style={{
+                    position: 'relative', background: '#fff', borderRadius: 16, padding: '16px 18px 16px 22px', overflow: 'hidden',
+                    border: active ? `1.5px solid ${BLUE}` : '0.5px solid #E2E8F0',
+                    boxShadow: active ? `0 0 0 3px ${BLUE}22` : '0 1px 3px rgba(15,23,42,0.05)', display: 'flex', flexDirection: 'column', gap: 12,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: frozenR ? NAVY : `linear-gradient(180deg, ${GREEN}, ${CYAN})` }} />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                        <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>{span.label} · {span.range}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: NAVY, background: C.navyBg, borderRadius: 999, padding: '3px 10px' }}>{span.label}</span>
+                          <span style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>{span.range}</span>
+                        </div>
                       </div>
                       <StatusChip status={r.status} />
                     </div>
-                    <div style={{ fontSize: 11, color: '#94A3B8' }}>
-                      {r.status === 'frozen' ? 'Frozen ' + fmtWhen(r.frozenAt) + (r.frozenBy ? ' by ' + nameOfEmail(r.frozenBy) : '') : 'Updated ' + fmtWhen(r.updatedAt) + (r.updatedBy ? ' by ' + nameOfEmail(r.updatedBy) : '')}
+                    <div style={{ fontSize: 11.5, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>{nSlides} slides</span><span style={{ opacity: 0.5 }}>&middot;</span><span>{when}</span>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                      <Button size="sm" onClick={() => onOpen(r)}>{active ? 'Open again' : 'Open'}</Button>
-                      <Button size="sm" variant="secondary" onClick={() => onTemplate(r)}>Use its slide order</Button>
-                      {canDelete && <Button size="sm" variant="secondary" onClick={() => onDelete(r)}>Delete</Button>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button type="button" onClick={() => onOpen(r)} style={{
+                        flex: 1, minWidth: 0, height: 34, borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13, fontWeight: 800, color: '#fff',
+                        background: active ? `linear-gradient(135deg, ${GREEN}, ${CYAN})` : `linear-gradient(135deg, ${NAVY}, ${BLUE})`,
+                      }}>{active ? 'Currently open' : 'Open review'}</button>
+                      <button type="button" title="Start a new review with this slide order" onClick={() => onTemplate(r)} style={iconBtn}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                      </button>
+                      {canDelete && (
+                        <button type="button" title="Delete this review" onClick={() => onDelete(r)} style={iconBtn}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
@@ -2661,12 +2697,16 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
   }
   const dropOn = (targetId) => {
     if (!dragId || dragId === targetId) return
-    const order = work.order.filter(id => id !== dragId)
-    const t = order.indexOf(targetId)
-    const from = work.order.indexOf(dragId), to = work.order.indexOf(targetId)
-    // dragging forward drops AFTER the target, backward drops BEFORE it
-    order.splice(from < to ? t + 1 : t, 0, dragId)
+    patchWork({ order: moveInOrder(work.order, dragId, targetId) })
+  }
+  // Reordering from the deck's thumbnail strip: the slide being shown stays on screen (the index follows it).
+  const reorderFromDeck = (dragSlideId, targetId) => {
+    const currentId = slides[index] && slides[index].id
+    const order = moveInOrder(work.order, dragSlideId, targetId)
+    const visible = order.filter(id => !hiddenSet.has(id))
     patchWork({ order })
+    const ni = visible.indexOf(currentId)
+    if (ni >= 0) setIndex(ni)
   }
   const toggleHidden = (id) => patchWork({ hidden: hiddenSet.has(id) ? work.hidden.filter(x => x !== id) : work.hidden.concat(id) })
 
@@ -2867,6 +2907,7 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
             period={period}
             onExit={exitDeck}
             onPrint={doPrint}
+            onReorder={frozen ? undefined : reorderFromDeck}
           />
         )}
       </div>
