@@ -473,6 +473,33 @@ function MarketingReviewDataProvider({ children }) {
   const [cacError, setCacError] = useState(null)
   const [cacToken, setCacToken] = useState(0)
   const retryCac = useCallback(() => setCacToken(t => t + 1), [])
+  // GA4 website traffic for the review half, whole half plus each month (one read per range --
+  // the existing source=ga4 endpoint returns users per default channel group for a range).
+  const [gaTraffic, setGaTraffic] = useState(null)
+  const [gaError, setGaError] = useState(null)
+  const [gaToken, setGaToken] = useState(0)
+  const retryGa = useCallback(() => setGaToken(t => t + 1), [])
+  useEffect(() => {
+    let dead = false
+    setGaTraffic(null); setGaError(null)
+    const ranges = [{ key: 'half', since: isoDate(months.current.start), until: isoDate(months.current.end) }]
+    months.current.monthDates.forEach((d, i) => ranges.push({
+      key: 'm' + i,
+      since: isoDate(new Date(d.getFullYear(), d.getMonth(), 1)),
+      until: isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
+    }))
+    Promise.all(ranges.map(async rg => {
+      const r = await fetch('/api/crm-leads?source=ga4&mode=range&since=' + rg.since + '&until=' + rg.until, { credentials: 'include' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || d.error || ('HTTP ' + r.status))
+      if (d.configured === false) throw new Error('GA4 is not configured')
+      return [rg.key, d.range]
+    }))
+      .then(pairs => { if (!dead) setGaTraffic(Object.fromEntries(pairs)) })
+      .catch(e => { if (!dead) setGaError(String((e && e.message) || e)) })
+    return () => { dead = true }
+  }, [months, gaToken])
+
   useEffect(() => {
     let dead = false
     setCacSheet(null); setCacError(null)
@@ -694,9 +721,9 @@ function MarketingReviewDataProvider({ children }) {
     months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
     aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
-    organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac,
+    organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac])
+  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa])
 
   return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
@@ -737,6 +764,7 @@ const AGENDA_ITEMS = [
   'Channel performance — where the leads came from',
   'Funnel & conversion — how leads moved through the pipeline',
   'Acquisition cost & return — CAC and ROAS by channel',
+  'Website traffic — where visitors came from, and organic’s share',
   'Wins & highlights',
   'Risks & watch-outs',
   'Next half-year’s priorities',
@@ -1494,6 +1522,132 @@ function CacSheetSlide({ active, period }) {
   )
 }
 
+// "Where the traffic came from" -- GA4 users by default channel group for the review half.
+// Grouping: Organic = Organic Search + Organic Social + Organic Video; Paid = Paid Search / Social /
+// Video / Other + Cross-network (GA4's label for Google's automated campaign types); Direct;
+// Other = everything else. Users are summed per channel, so a person who arrived through two
+// channels counts in both -- shares are right for contribution, the total is not unique visitors.
+const GA_GROUP_OF = (channel) => {
+  if (/^organic/i.test(channel)) return 'Organic'
+  if (/^paid/i.test(channel) || channel === 'Cross-network') return 'Paid'
+  if (channel === 'Direct') return 'Direct'
+  return 'Other'
+}
+const GA_GROUPS = [
+  { key: 'Organic', color: GREEN },
+  { key: 'Paid', color: NAVY },
+  { key: 'Direct', color: BLUE },
+  { key: 'Other', color: '#94A3B8' },
+]
+function TrafficSourcesSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const ga = ctx && ctx.gaTraffic
+  const error = ctx && ctx.gaError
+  const view = useMemo(() => {
+    if (!ga || !ga.half) return null
+    const half = ga.half
+    const total = half.totalUsers || 0
+    const groups = GA_GROUPS.map(g => ({ ...g, users: 0 }))
+    for (const c of half.byChannel || []) groups.find(g => g.key === GA_GROUP_OF(c.channel)).users += c.users
+    const channels = (half.byChannel || []).slice(0, 7)
+    const months = ctx.months.current.monthDates.map((d, i) => {
+      const r = ga['m' + i]
+      const org = r && r.byChannel ? (r.byChannel.find(c => c.channel === 'Organic Search') || { users: 0 }).users : 0
+      return { label: REVIEW_MONTH_NAMES[d.getMonth()].slice(0, 3), organic: org, total: r ? r.totalUsers : 0 }
+    })
+    return { total, groups, channels, months }
+  }, [ga, ctx])
+  const col = { flex: 1, minWidth: 0 }
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '60px 56px 36px', boxSizing: 'border-box' }}>
+      <PeriodBadge period={period} live />
+      <SectionKicker label="Website traffic" title="Where the traffic came from" />
+      {!ctx || (!view && !error) ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
+          <span className={styles.mrSpinner} />Loading website traffic from Google Analytics…
+        </div>
+      ) : error ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, padding: '14px 18px', marginTop: 10 }}>
+          <span style={{ fontSize: 13.5, color: '#7A5C00', fontWeight: 600, flex: 1 }}>Couldn't load website traffic: {error}</span>
+          {active && (
+            <button type="button" onClick={ctx.retryGa} className={styles.noPrint}
+              style={{ border: 'none', background: NAVY, color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}>Retry</button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 40, marginTop: 6 }}>
+          <div style={col}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+              Total website users · <AnimatedNumber value={view.total} active={active} duration={900} />
+            </div>
+            <div style={{ display: 'flex', height: 22, borderRadius: 11, overflow: 'hidden', background: '#F1F5F9', marginBottom: 14 }}>
+              {view.groups.map((g, i) => (
+                <div key={g.key} title={g.key} style={{
+                  width: active ? (view.total ? (g.users / view.total) * 100 : 0) + '%' : '0%', background: g.color,
+                  transition: `width .9s cubic-bezier(.22,1,.36,1) ${0.08 * i}s`,
+                }} />
+              ))}
+            </div>
+            {view.groups.map((g, i) => (
+              <div key={g.key} className={active ? styles.staggerItem : undefined}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '0.5px solid #EEF2F7', animationDelay: active ? (0.06 * i) + 's' : undefined }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: g.color, flexShrink: 0 }} />
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#334155' }}>{g.key}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
+                  <AnimatedNumber value={g.users} active={active} delay={0.06 * i} duration={800} />
+                </span>
+                <span style={{ width: 56, textAlign: 'right', fontSize: 14, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                  {view.total ? ((g.users / view.total) * 100).toFixed(1) : '0.0'}%
+                </span>
+              </div>
+            ))}
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '18px 0 8px' }}>By channel</div>
+            {view.channels.map((c, i) => {
+              const grp = GA_GROUPS.find(g => g.key === GA_GROUP_OF(c.channel))
+              const max = view.channels[0].users || 1
+              return (
+                <div key={c.channel} className={active ? styles.staggerItem : undefined}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7, animationDelay: active ? (0.2 + 0.04 * i) + 's' : undefined }}>
+                  <span style={{ width: 120, fontSize: 12.5, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.channel}</span>
+                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: '#F1F5F9', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: active ? Math.max(2, (c.users / max) * 100) + '%' : '0%', background: grp.color, borderRadius: 4, transition: `width .8s cubic-bezier(.22,1,.36,1) ${0.2 + 0.04 * i}s` }} />
+                  </div>
+                  <span style={{ width: 84, textAlign: 'right', fontSize: 12.5, fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{fmtN(c.users)}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div style={col}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+              Organic Search users by month
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 260, borderBottom: '1px solid #E2E8F0', paddingBottom: 0 }}>
+              {view.months.map((m, i) => {
+                const max = Math.max(1, ...view.months.map(x => x.organic))
+                const h = active ? Math.max(3, (m.organic / max) * 200) : 0
+                const share = m.total ? (m.organic / m.total) * 100 : 0
+                return (
+                  <div key={m.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums', marginBottom: 2 }}>{fmtN(m.organic)}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: GREEN, marginBottom: 6 }}>{share.toFixed(0)}% of site</div>
+                    <div style={{ width: '100%', height: h, background: `linear-gradient(180deg, ${GREEN}, ${GREEN}CC)`, borderRadius: '6px 6px 0 0', transition: `height .9s cubic-bezier(.22,1,.36,1) ${0.08 * i}s` }} />
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
+              {view.months.map(m => <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#64748B' }}>{m.label}</div>)}
+            </div>
+            <div style={{ fontSize: 11.5, color: '#94A3B8', lineHeight: 1.55, marginTop: 22 }}>
+              Source: Google Analytics. Users are counted per channel, so a visitor who arrives through two channels appears in both; shares show contribution, the total is not unique visitors. Cross-network is Google's automated campaign traffic and is counted as paid.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TofCampaignsSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const tof = useMemo(() => {
@@ -1735,6 +1889,7 @@ const SLIDES = [
   { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide },
   { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide },
   { id: 'cac-sheet', section: 'Acquisition Cost & Return', title: 'H1 CAC and ROAS by channel', Body: CacSheetSlide },
+  { id: 'traffic', section: 'Website Traffic', title: 'Where the traffic came from', Body: TrafficSourcesSlide },
   { id: 'channel-google', section: 'Channel Spotlight', title: 'Google Ads', Body: GoogleAdsChannelSlide },
   { id: 'channel-meta', section: 'Channel Spotlight', title: 'Meta Ads', Body: MetaAdsChannelSlide },
   { id: 'channel-organic', section: 'Channel Spotlight', title: 'Organic', Body: OrganicChannelSlide },
