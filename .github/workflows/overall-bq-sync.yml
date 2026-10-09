@@ -505,11 +505,19 @@ jobs:
           upsert_url = SB_URL + '/rest/v1/' + TABLE + '?on_conflict=row_key'
           for i in range(0, len(records), BATCH):
               body = json.dumps(records[i:i + BATCH]).encode('utf-8')
-              for attempt in range(3):
+              # 2026-10-09: the first full_resync after the Source fix died at batch
+              # ~308,500 of 433,271 -- 3 attempts with 2s/4s waits ran out on a
+              # Postgres 57014 statement timeout, and because the prune below never
+              # ran, moved rows sat under BOTH their old and new Source (double
+              # counted on the live page). A full run inserts hundreds of thousands
+              # of brand-new row_keys, which is heavier than the usual in-place
+              # UPDATE, so a batch can time out for a while. 8 attempts, a longer
+              # per-attempt timeout and a backoff capped at 60s give it real room.
+              for attempt in range(8):
                   try:
                       req = sb(upsert_url, 'POST', body,
                                {'Prefer': 'resolution=merge-duplicates,return=minimal'})
-                      with urllib.request.urlopen(req, timeout=60) as r:
+                      with urllib.request.urlopen(req, timeout=120) as r:
                           r.read()
                       break
                   except Exception as e:
@@ -520,9 +528,9 @@ jobs:
                       except Exception:
                           pass
                       print('batch', i, 'attempt', attempt, 'failed:', repr(e) + detail)
-                      if attempt == 2:
+                      if attempt == 7:
                           raise
-                      time.sleep(2 * (attempt + 1))
+                      time.sleep(min(5 * (2 ** attempt), 60))
               done = min(i + BATCH, len(records))
               if (i // BATCH) % 25 == 0 or done == len(records):
                   print('  upserted', done, '/', len(records))
