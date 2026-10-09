@@ -359,20 +359,20 @@ function buildB2CFullTable(ctx) {
 //   * column order is Last Day, MTD, H2, YTD, H1 (H2 is the live half, so it
 //     sits next to MTD; H1 closes the row after YTD)
 //   * the H2 / H1 headers carry their month range (Oct-Mar / Apr-Sep)
-//   * SR Offline and AC Offline are one consolidated Offline line;
-//     Leverage One Offline stays its own line
+//   * revenue is one row per business, Online + Offline together:
+//     SR, AC, Leverage One, then Upskilling and Ancillary
 // The scheduled Daily Report (api/send-report.mjs) builds from this version.
 const FULL_LINES_V2 = [
-  ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'],
-  ['__offline', 'Offline (SR + AC)'], ['vasOffline', 'Leverage One Offline'],
+  ['__sr', 'SR'], ['__ac', 'AC'], ['__vas', 'Leverage One'],
   ['upskilling', 'Upskilling'], ['ancillary', 'Ancillary'],
 ]
-// Null only when every part is null, so a blank sheet never shows a confident zero.
-function offlineTotal(o) {
+const V2_COMBINED = { __sr: ['srOnline', 'srOffline'], __ac: ['ac', 'acOffline'], __vas: ['vas', 'vasOffline'] }
+// Online + Offline. Null only when every part is null, so a blank sheet never shows a confident zero.
+function combined(o, parts) {
   if (!o) return null
-  const parts = [o.srOffline, o.acOffline]
-  if (parts.every(function (v) { return v == null })) return null
-  return parts.reduce(function (a, v) { return a + (v == null ? 0 : v) }, 0)
+  const vals = parts.map(function (k) { return o[k] })
+  if (vals.every(function (v) { return v == null })) return null
+  return vals.reduce(function (a, v) { return a + (v == null ? 0 : v) }, 0)
 }
 function buildB2CFullTableV2(ctx) {
   const c = ctx || {}
@@ -382,7 +382,7 @@ function buildB2CFullTableV2(ctx) {
   const fy = raw.fy || {}
   const h1 = raw.h1 || {}
   const h2 = raw.h2 || {}
-  const val = function (o, key) { return key === '__offline' ? offlineTotal(o) : o[key] }
+  const val = function (o, key) { return V2_COMBINED[key] ? combined(o, V2_COMBINED[key]) : o[key] }
   const row = function (key, label, bold) {
     const f = bold ? cellBold : cellText
     return [f(label), f(money(val(day, key))), f(money(val(mtd, key))), f(money(val(h2, key))), f(money(val(fy, key))), f(money(val(h1, key)))]
@@ -425,12 +425,12 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   code: 'B2C-FULL-2',
   msgKeys: ['b2c_full_v2'],
   name: 'B2C — full particulars V2 (native table)',
-  tagline: 'Last Day / MTD / H2 / YTD / H1, Offline revenue consolidated into one line.',
+  tagline: 'Last Day / MTD / H2 / YTD / H1, one revenue row each for SR, AC and Leverage One (Online + Offline).',
   what: [
     'Five columns in this order: Last Day, MTD, H2 (Oct-Mar), year to date, H1 (Apr-Sep)',
     'The month range sits in the H2 and H1 headers',
-    'SR Offline and AC Offline are one consolidated Offline line; Leverage One Offline stays separate',
-    'Everything else as the Daily P&L page shows it: Online lines, Upskilling, Ancillary, Total Revenue, each cost head, Total Cost, Contribution Profit, EBITDA After Corp. Overheads',
+    'Revenue rows: SR, AC and Leverage One (each Online + Offline together), then Upskilling and Ancillary',
+    'Everything else as the Daily P&L page shows it: Total Revenue, each cost head, Total Cost, Contribution Profit, EBITDA After Corp. Overheads',
     'This is the version the scheduled Daily Report posts',
   ],
   build: buildB2CFullTableV2,
