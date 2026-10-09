@@ -740,3 +740,37 @@ export const B2C_REPORT_VERSIONS = [{
   ],
   build: buildB2C
 }]
+
+// Daily Report library -- one entry per Daily Report version, each bundling
+// the P&L layout and the Cash Flow layout it sends together. Same rule as the
+// Send to Slack library: add a new entry for a new layout, never edit or
+// remove an old one. `scheduled: true` marks the version the 3 PM IST run
+// posts (exactly one entry carries it).
+export const B2C_DAILY_REPORT_VERSIONS = [{
+  id: 'b2c_daily_v2',
+  code: 'DR-2',
+  name: 'Daily Report V2',
+  tagline: 'P&L by business (SR / AC / Leverage One) with H1 and H2; Cash Flow with MTD / H2 / YTD / H1.',
+  pnlId: 'b2c_full_v2',
+  cashflowId: 'b2c_cashflow_v2',
+  scheduled: true,
+  what: [
+    'Daily P&L: SR, AC and Leverage One as one row each (Online + Offline together), then Upskilling and Ancillary',
+    'P&L columns: Last Day, MTD, H2 (Oct-Mar), FY YTD, H1 (Apr-Sep)',
+    'Cash Flow: the CF tab with four columns, MTD / H2 / YTD / H1, plus the sheet image',
+    'This is the version the scheduled 3 PM Daily Report posts'
+  ]
+}, {
+  id: 'b2c_daily_v1',
+  code: 'DR-1',
+  name: 'Daily Report (original)',
+  tagline: 'The first Daily Report: P&L with Last Day / MTD / H1 / H2 / YTD; Cash Flow with MTD / YTD.',
+  pnlId: 'b2c_full',
+  cashflowId: 'b2c_cashflow_full',
+  scheduled: false,
+  what: [
+    'Daily P&L: revenue lines as the sheet has them (SR Online, SR Offline, AC and so on)',
+    'P&L columns: Last Day, MTD, H1, H2, FY YTD',
+    'Cash Flow: the CF tab with MTD and YTD, plus the sheet image'
+  ]
+}]

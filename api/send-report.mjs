@@ -5,7 +5,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // Plain ESM, no React/DOM -- safe as a static import from this .mjs handler
 // (unlike api/crm-leads.js below, which is bundled CommonJS and must only
 // ever be reached via a dynamic import()).
-import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS } from '../src/lib/b2cReport.js'
+import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
 import crypto from 'node:crypto'
 
@@ -2159,13 +2159,13 @@ async function slackSendDM(token, userId, text) {
 // and the preview-only endpoint (handleB2CDailyPreview) build from ONE place
 // and can never show the approver something different from what actually
 // ships.
-async function buildB2CDailyMessages(data, cfg, throughDate, pick) {
-  // pick = { pnl, cashflow } version ids chosen in the Daily Report popover.
-  // Only known ids are honoured; anything else (and the scheduled cron, which
-  // sends nothing) falls back to V2.
-  const pickId = (key, allowed, dflt) => (pick && allowed.includes(pick[key]) ? pick[key] : dflt)
-  const pnlId = pickId('pnl', ['b2c_full_v2', 'b2c_full'], 'b2c_full_v2')
-  const cfId = pickId('cashflow', ['b2c_cashflow_v2', 'b2c_cashflow_full'], 'b2c_cashflow_v2')
+async function buildB2CDailyMessages(data, cfg, throughDate, dailyVersionId) {
+  // dailyVersionId = an id from B2C_DAILY_REPORT_VERSIONS chosen in the Daily
+  // Report popover. Unknown or missing (the scheduled run sends none) falls
+  // back to the version marked scheduled.
+  const dv = B2C_DAILY_REPORT_VERSIONS.find(v => v.id === dailyVersionId) || B2C_DAILY_REPORT_VERSIONS.find(v => v.scheduled) || B2C_DAILY_REPORT_VERSIONS[0]
+  const pnlId = dv.pnlId
+  const cfId = dv.cashflowId
   const jobs = [
     { statement: 'pnl', version: B2C_FULL_TABLE_VERSIONS.find(v => v.id === pnlId) || B2C_FULL_TABLE_VERSIONS[0], buildCtx: () => buildB2CServerContext(data.pnl && data.pnl.days || [], 'pnl', throughDate) },
     { statement: 'cashflow', version: B2C_CASHFLOW_TABLE_VERSIONS.find(v => v.id === cfId) || B2C_CASHFLOW_TABLE_VERSIONS[0], buildCtx: () => ({ cfStatement: data.cashflowStatement, cfStatementV2: data.cashflowStatementV2 }) },
@@ -2235,7 +2235,7 @@ async function handleB2CDailyPreview(req, res) {
       return res.status(500).json({ error: 'B2C sheet is not configured -- set it in Settings > Data.' })
     }
     const cfg = await getReportConfig()
-    const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.versions)
+    const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.dailyVersion)
     return res.status(200).json({ ok: true, jobs: built })
   } catch (e) {
     return res.status(500).json({ error: e.message })
@@ -2315,7 +2315,7 @@ async function handleB2CDailyReport(req, res) {
     // nothing to act on here -- there is no daily grain to cut off at D-1).
     // buildB2CDailyMessages is the SAME builder handleB2CDailyPreview calls,
     // so a preview shown before sending can never disagree with this.
-    const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.versions)
+    const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.dailyVersion)
     const posted = []
     for (const job of built) {
       const { statement, messages, image } = job // pristine -- this exact array is what gets stored AND what the real channel receives on approval

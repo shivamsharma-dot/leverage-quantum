@@ -7,7 +7,7 @@ import KPICard from '../components/KPICard'
 import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
-import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
+import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, DEFAULT_REV_VS_CASHFLOW_NOTE, B2C_DAILY_REPORT_VERSIONS} from '../lib/b2cReport'
 import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
@@ -742,20 +742,21 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // Daily Report always sends both, never lets you pick one instead of the
   // other.
   const [dailySelected, setDailySelected] = useState('pnl')
-  // Which version of each statement the Daily Report sends. V2 is the default
-  // (and what the scheduled 3 PM run always sends); 'orig' is the earlier
-  // version kept so it can still be sent on request.
-  const [dailyVer, setDailyVer] = useState({ pnl: 'v2', cashflow: 'v2' })
-  const dailyVersionIds = useMemo(function () {
-    return {
-      pnl: dailyVer.pnl === 'v2' ? 'b2c_full_v2' : 'b2c_full',
-      cashflow: dailyVer.cashflow === 'v2' ? 'b2c_cashflow_v2' : 'b2c_cashflow_full',
-    }
-  }, [dailyVer])
+  // Which Daily Report version (an entry of B2C_DAILY_REPORT_VERSIONS) is
+  // picked. Defaults to the one the 3 PM run posts. dailyVersionId is what the
+  // preview and the send both pass to the server.
+  const defaultDailyVersion = (B2C_DAILY_REPORT_VERSIONS.find(function (v) { return v.scheduled }) || B2C_DAILY_REPORT_VERSIONS[0]).id
+  const [dailyVersionId, setDailyVersionId] = useState(defaultDailyVersion)
+  const DAILY_LAST_KEY = 'lq_b2c_daily_last_sent'
+  const readDailyLast = function () { try { return JSON.parse(localStorage.getItem(DAILY_LAST_KEY) || '{}') } catch (_) { return {} } }
+  const [dailyLast, setDailyLast] = useState({})
+  const dailyVersion = B2C_DAILY_REPORT_VERSIONS.filter(function (v) { return v.id === dailyVersionId })[0] || B2C_DAILY_REPORT_VERSIONS[0]
 
   const openDaily = useCallback(function () {
     setDailyOpen(true)
     setDailySelected('pnl')
+    setDailyVersionId(defaultDailyVersion)
+    setDailyLast(readDailyLast())
     setDailyThroughDate(d1)
     if (dailyLoaded) return
     fetch('/api/preferences', { credentials: 'include' })
@@ -767,7 +768,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         setDailyLoaded(true)
       })
       .catch(function () { setDailyLoaded(true) })
-  }, [dailyLoaded, d1])
+  }, [dailyLoaded, d1, defaultDailyVersion])
 
   useEffect(function () {
     if (!dailyOpen) return
@@ -776,7 +777,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     fetch('/api/send-report?type=b2c_daily_preview', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'b2c_daily_preview', throughDate: dailyThroughDate, versions: dailyVersionIds }),
+      body: JSON.stringify({ type: 'b2c_daily_preview', throughDate: dailyThroughDate, dailyVersion: dailyVersionId }),
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d } }) })
       .then(function (res) {
@@ -787,7 +788,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       .catch(function (e) { if (alive) { setDailyPreviewErr(e.message); setDailyPreview(null) } })
       .finally(function () { if (alive) setDailyPreviewLoading(false) })
     return function () { alive = false }
-  }, [dailyOpen, dailyThroughDate, dailyVersionIds])
+  }, [dailyOpen, dailyThroughDate, dailyVersionId])
 
   useEffect(function () {
     function onKey(e) { if (e.key === 'Escape' && dailyOpen && !dailySending) setDailyOpen(false) }
@@ -810,10 +811,11 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       const r = await fetch('/api/send-report?type=b2c_daily_report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: (user && user.email) || 'manual', throughDate: dailyThroughDate, versions: dailyVersionIds }),
+        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: (user && user.email) || 'manual', throughDate: dailyThroughDate, dailyVersion: dailyVersionId }),
       })
       const dd = await r.json()
       if (!r.ok) throw new Error(dd.error || 'Failed')
+      try { const m = readDailyLast(); m[dailyVersionId] = { at: new Date().toISOString() }; localStorage.setItem(DAILY_LAST_KEY, JSON.stringify(m)); setDailyLast(m) } catch (_) { /* private mode */ }
       setDailyMsg('Posted to #dashboard-testing (through ' + dailyThroughDate + ') — check Slack to Approve/Disapprove')
     } catch (e) { setDailyMsg('✕ ' + e.message) }
     finally { setDailySending(false); setTimeout(function () { setDailyMsg('') }, 12000) }
@@ -1118,45 +1120,51 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       sends both items together and goes through Slack approval,
                       which SlackReportPanel's sends never do. */}
                   <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-                    <div style={{ width: 220, flexShrink: 0, background: 'var(--bg2)', padding: 12, overflowY: 'auto', borderRight: '1px solid var(--card-border)' }}>
-                      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 9 }}>Both are sent &middot; pick a version</div>
-                      {[
-                        { id: 'pnl', name: 'Daily P&L', tagline: 'Revenue, cost, EBITDA -- native Slack table.', v2: 'V2: Last Day / MTD / H2 / YTD / H1; SR, AC, Leverage One rows.', orig: 'Original: Last Day / MTD / H1 / H2 / YTD.' },
-                        { id: 'cashflow', name: 'Cash Flow', tagline: 'The CF tab\'s own statement -- native table + sheet image, both attached.', v2: 'V2: MTD / H2 / YTD / H1.', orig: 'Original: MTD / YTD.' },
-                      ].map(function (item) {
-                        const sel = item.id === dailySelected
-                        const ver = dailyVer[item.id]
+                    <div style={{ width: 260, flexShrink: 0, background: 'var(--bg2)', padding: 12, overflowY: 'auto', borderRight: '1px solid var(--card-border)' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 9 }}>Version</div>
+                      {B2C_DAILY_REPORT_VERSIONS.map(function (v) {
+                        const sel = v.id === dailyVersionId
+                        const last = dailyLast[v.id] && dailyLast[v.id].at
                         return (
-                          <div key={item.id} onClick={function () { setDailySelected(item.id) }} style={{
-                            cursor: 'pointer', fontFamily: 'inherit',
+                          <button key={v.id} type="button" disabled={dailySending} onClick={function () { setDailyVersionId(v.id) }} style={{
+                            display: 'block', width: '100%', textAlign: 'left', cursor: dailySending ? 'default' : 'pointer', fontFamily: 'inherit',
                             background: sel ? 'rgba(31,60,132,0.05)' : 'var(--card)', borderRadius: 11, padding: '11px 12px', marginBottom: 8,
                             border: sel ? '1.5px solid #1F3C84' : '1px solid var(--card-border)',
                           }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 800, color: sel ? '#1F3C84' : 'var(--text)', marginBottom: 3 }}>{item.name}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>{item.tagline}</div>
-                            <div style={{ display: 'flex', gap: 4, marginTop: 9 }}>
-                              {[['v2', 'V2'], ['orig', 'Original']].map(function (o) {
-                                const on = ver === o[0]
-                                return (
-                                  <button key={o[0]} type="button" disabled={dailySending} onClick={function (e) {
-                                    e.stopPropagation()
-                                    setDailySelected(item.id)
-                                    setDailyVer(function (v) { return { ...v, [item.id]: o[0] } })
-                                  }} style={{
-                                    flex: 1, padding: '5px 0', borderRadius: 7, fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-                                    cursor: dailySending ? 'default' : 'pointer',
-                                    border: '1px solid ' + (on ? '#1F3C84' : 'var(--card-border)'),
-                                    background: on ? '#1F3C84' : 'var(--card)', color: on ? '#fff' : 'var(--text2, var(--text))',
-                                  }}>{o[1]}</button>
-                                )
-                              })}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 5, background: 'rgba(31,60,132,0.08)', color: '#1F3C84' }}>{v.code}</span>
+                              <span style={{ fontSize: 12.5, fontWeight: 800, color: sel ? '#1F3C84' : 'var(--text)' }}>{v.name}</span>
                             </div>
-                            <div style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.45, marginTop: 6 }}>{ver === 'v2' ? item.v2 : item.orig}</div>
-                          </div>
+                            <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>{v.tagline}</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 6 }}>
+                              {v.scheduled ? <span style={{ fontWeight: 700, color: '#2E7D4F' }}>Posted by the 3 PM schedule &middot; </span> : null}
+                              {last ? 'Last sent ' + new Date(last).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Never sent from this browser'}
+                            </div>
+                          </button>
                         )
                       })}
+                      <div style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.5, marginTop: 4 }}>Versions are never removed from this list, so an older layout can always be sent again.</div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: 18 }}>
+                      <div style={{ border: '1px solid var(--card-border)', borderRadius: 11, padding: '12px 14px', marginBottom: 14 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6 }}>What this version sends</div>
+                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11.5, color: 'var(--text2, var(--text))', lineHeight: 1.6 }}>
+                          {dailyVersion.what.map(function (w, i) { return <li key={i}>{w}</li> })}
+                        </ul>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                        {[['pnl', 'Daily P&L'], ['cashflow', 'Cash Flow']].map(function (t) {
+                          const on = dailySelected === t[0]
+                          return (
+                            <button key={t[0]} type="button" onClick={function () { setDailySelected(t[0]) }} style={{
+                              padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+                              border: '1px solid ' + (on ? '#1F3C84' : 'var(--card-border)'),
+                              background: on ? '#1F3C84' : 'var(--card)', color: on ? '#fff' : 'var(--text)',
+                            }}>{t[1]}</button>
+                          )
+                        })}
+                        <span style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>Both are sent together.</span>
+                      </div>
                       {dailyPreviewLoading ? (
                         <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Building preview…</div>
                       ) : dailyPreviewErr ? (
