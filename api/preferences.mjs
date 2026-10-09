@@ -1,5 +1,6 @@
 import { getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
 import { SHEET_PREF_KEYS } from '../src/lib/dataSources.js'
+import { isMarketingReviewOwner } from '../shared/access.mjs'
 
 const ALLOWED_SHEET_KEYS = new Set(Object.values(SHEET_PREF_KEYS))
 
@@ -50,6 +51,18 @@ export default async function handler(req, res) {
     return res.status(200).json({ html: rows[0]?.value || null, updatedAt: rows[0]?.updated_at || null })
   }
 
+  // GET (authenticated, admin only) ?mrSnapshot=<review id> -- a FROZEN Marketing Review's saved figures.
+  // Kept out of the bulk GET below (a snapshot is a few hundred KB) and fetched only when that review is
+  // opened. Only keys of the form mr_snap_<id> can be read through here.
+  if (req.method === 'GET' && typeof req.query.mrSnapshot === 'string') {
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const id = req.query.mrSnapshot
+    if (!/^[a-z0-9_-]{3,40}$/i.test(id)) return res.status(400).json({ error: 'Bad review id' })
+    const r = await supabaseAdmin('app_preferences?select=value&key=eq.mr_snap_' + id)
+    const rows = r.ok ? await r.json() : []
+    return res.status(200).json({ snapshot: rows[0]?.value || null })
+  }
+
   // GET (authenticated) ?resolveSheetKey=<sheet_url_...> — any signed-in user
   // can resolve a specific sheet-source override by key (see SHEET_PREF_KEYS in
   // src/lib/dataSources.js). Returns ONLY that one resolved URL string, never the
@@ -84,7 +97,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
-      'app_preferences?select=key,value,updated_at&limit=200',
+      'app_preferences?select=key,value,updated_at&key=not.like.mr_snap_*&limit=200',
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
     const rows = ((await r.json()) || []).filter(row => !SECRET_KEYS.has(row.key) && !LARGE_KEYS.has(row.key))
@@ -142,6 +155,33 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Admin only' })
   }
   if (SECRET_KEYS.has(key)) return res.status(403).json({ error: 'That key is only settable through its own endpoint' })
+
+  // Marketing Review freeze rules. A frozen review's saved numbers (mr_snap_<id>) can only be written
+  // by an owner. The review list (mr_reviews) can be edited by any admin, EXCEPT that a frozen entry
+  // must come back exactly as it is stored -- so nobody but an owner can unfreeze, edit or delete it.
+  if (key.startsWith('mr_snap_')) {
+    if (!isMarketingReviewOwner(me.email)) return res.status(403).json({ error: 'Only the review owner can freeze or unfreeze' })
+  }
+  if (key === 'mr_reviews' && !isMarketingReviewOwner(me.email)) {
+    if (value != null && !Array.isArray(value)) return res.status(400).json({ error: 'mr_reviews must be a list' })
+    const cur = await supabaseAdmin('app_preferences?select=value&key=eq.mr_reviews')
+    const curRows = cur.ok ? await cur.json() : []
+    const stored = Array.isArray(curRows[0]?.value) ? curRows[0].value : []
+    const incoming = new Map((value || []).map(e => [e && e.id, e]))
+    for (const e of stored) {
+      if (e && e.status === 'frozen') {
+        const now = incoming.get(e.id)
+        if (!now || JSON.stringify(now) !== JSON.stringify(e)) {
+          return res.status(403).json({ error: 'A frozen review can only be changed by its owner' })
+        }
+      }
+    }
+    for (const e of (value || [])) {
+      if (e && e.status === 'frozen' && !stored.some(x => x && x.id === e.id && x.status === 'frozen')) {
+        return res.status(403).json({ error: 'Only the review owner can freeze a review' })
+      }
+    }
+  }
 
   // Upsert into app_preferences
   const r = await supabaseAdmin('app_preferences', {

@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
+import Dropdown from '../components/Dropdown'
+import { useAuth } from '../hooks/useAuth'
+import { isMarketingReviewOwner } from '../../shared/access.mjs'
 import { C, FONT, BRAND_RAMP } from '../ui/dashboardKit'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_RX } from '../../shared/brandLogo.mjs'
 import { fetchOverallBqAggRows, fetchOverallBqSyncedAt, fetchOverallBqRows } from '../lib/overallBqCache.js'
@@ -79,43 +82,128 @@ const SLIDE_W = 1280
 const SLIDE_H = 720
 const NAVY = C.navy, BLUE = C.blue, CYAN = C.cyan, GREEN = C.green
 
-// The review period is a HALF-YEAR of the Indian financial year (April to
-// March): H1 = Apr-Sep, H2 = Oct-Mar. Every number in the deck covers one
-// whole half-year, never a single month. The deck always reviews the most
-// recently COMPLETED half (H1 FY26-27 from 1 Oct 2026, H2 FY26-27 from 1 Apr
-// 2027, ...), so it rolls forward by itself. Shared by the display string below
-// AND all the data math (computeReviewMonths), so the two can never disagree.
+// A review covers ONE period, chosen on the page: a month, a half-year of the Indian
+// financial year (H1 = Apr-Sep, H2 = Oct-Mar), a whole financial year (Apr-Mar) or a
+// calendar year. Every number in the deck covers exactly that period, never a mix.
+// A period is described by a small JSON-safe "spec" so it can be saved with a review:
+//   {type:'month', year:2026, month:8}   (month is 0-based)
+//   {type:'half',  fy:2026, half:1}
+//   {type:'fy',    fy:2026}
+//   {type:'cy',    year:2026}
+// buildSpan(spec) turns a spec into the span object every slide reads (label, range,
+// start/end, the months inside it and their keys). Shared by the display strings AND all
+// the data math (computeReviewMonths), so the two can never disagree.
 function fyLabel(startYear) { return 'FY' + String(startYear).slice(-2) + '-' + String(startYear + 1).slice(-2) }
-// half 1 = Apr-Sep of fyStartYear, half 2 = Oct fyStartYear to Mar fyStartYear+1
-function makeHalf(fyStartYear, half) {
-  const startMonth = half === 1 ? 3 : 9
-  const monthDates = []
-  for (let i = 0; i < 6; i++) monthDates.push(new Date(fyStartYear, startMonth + i, 1))
-  const first = monthDates[0], last = monthDates[5]
-  const mon = d => d.toLocaleDateString('en-US', { month: 'short' })
+const SHORT_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function monthRun(startYear, startMonth, count) {
+  const out = []
+  for (let i = 0; i < count; i++) out.push(new Date(startYear, startMonth + i, 1))
+  return out
+}
+const PERIOD_TYPES = [
+  { value: 'month', label: 'Month', unit: 'month', title: 'Monthly' },
+  { value: 'half', label: 'Half-year', unit: 'half-year', title: 'Half-Year' },
+  { value: 'fy', label: 'Financial year', unit: 'financial year', title: 'Financial-Year' },
+  { value: 'cy', label: 'Calendar year', unit: 'calendar year', title: 'Calendar-Year' },
+]
+function periodTypeInfo(type) { return PERIOD_TYPES.find(t => t.value === type) || PERIOD_TYPES[1] }
+function buildSpan(spec) {
+  let monthDates, label, range
+  if (spec.type === 'month') {
+    monthDates = monthRun(spec.year, spec.month, 1)
+    const d = monthDates[0]
+    label = SHORT_MON[d.getMonth()] + "'" + String(d.getFullYear()).slice(-2)
+    range = '1–' + new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ' ' + SHORT_MON[d.getMonth()] + ' ' + d.getFullYear()
+  } else if (spec.type === 'fy') {
+    monthDates = monthRun(spec.fy, 3, 12)
+    label = fyLabel(spec.fy)
+    range = 'Apr ' + spec.fy + ' – Mar ' + (spec.fy + 1)
+  } else if (spec.type === 'cy') {
+    monthDates = monthRun(spec.year, 0, 12)
+    label = 'CY' + spec.year
+    range = 'Jan – Dec ' + spec.year
+  } else {
+    monthDates = monthRun(spec.fy, spec.half === 1 ? 3 : 9, 6)
+    const first = monthDates[0], last = monthDates[5]
+    label = 'H' + spec.half + ' ' + fyLabel(spec.fy)
+    range = first.getFullYear() === last.getFullYear()
+      ? SHORT_MON[first.getMonth()] + '–' + SHORT_MON[last.getMonth()] + ' ' + last.getFullYear()
+      : SHORT_MON[first.getMonth()] + ' ' + first.getFullYear() + ' – ' + SHORT_MON[last.getMonth()] + ' ' + last.getFullYear()
+  }
+  const first = monthDates[0], last = monthDates[monthDates.length - 1]
+  const info = periodTypeInfo(spec.type)
+  const end = new Date(last.getFullYear(), last.getMonth() + 1, 0)
   return {
-    half, fyStartYear,
-    label: 'H' + half + ' ' + fyLabel(fyStartYear),
-    range: first.getFullYear() === last.getFullYear()
-      ? mon(first) + '–' + mon(last) + ' ' + last.getFullYear()
-      : mon(first) + ' ' + first.getFullYear() + ' – ' + mon(last) + ' ' + last.getFullYear(),
-    start: first,
-    end: new Date(last.getFullYear(), last.getMonth() + 1, 0),
+    spec, type: spec.type, unit: info.unit, typeTitle: info.title,
+    label, range,
+    start: first, end,
+    inProgress: end.getTime() >= new Date().setHours(0, 0, 0, 0),
     monthDates,
     monthKeys: monthDates.map(d => REVIEW_MONTH_NAMES[d.getMonth()] + "'" + d.getFullYear()),
     ymKeys: monthDates.map(d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')),
   }
 }
-function mostRecentCompletedHalf(now = new Date()) {
+// The period just before, and the same period a year earlier (for a year-sized review the
+// "year earlier" column is simply the year before that, so the three columns stay distinct).
+function prevSpec(spec) {
+  if (spec.type === 'month') { const d = new Date(spec.year, spec.month - 1, 1); return { type: 'month', year: d.getFullYear(), month: d.getMonth() } }
+  if (spec.type === 'half') return spec.half === 1 ? { type: 'half', fy: spec.fy - 1, half: 2 } : { type: 'half', fy: spec.fy, half: 1 }
+  if (spec.type === 'fy') return { type: 'fy', fy: spec.fy - 1 }
+  return { type: 'cy', year: spec.year - 1 }
+}
+function yearAgoSpec(spec) {
+  if (spec.type === 'month') return { type: 'month', year: spec.year - 1, month: spec.month }
+  if (spec.type === 'half') return { type: 'half', fy: spec.fy - 1, half: spec.half }
+  return prevSpec(prevSpec(spec))
+}
+function specKey(spec) {
+  if (spec.type === 'month') return 'month:' + spec.year + '-' + spec.month
+  if (spec.type === 'half') return 'half:' + spec.fy + '-' + spec.half
+  if (spec.type === 'fy') return 'fy:' + spec.fy
+  return 'cy:' + spec.year
+}
+function parseSpecKey(key) {
+  const [t, v] = String(key).split(':')
+  if (t === 'month') { const [y, m] = v.split('-').map(Number); return { type: 'month', year: y, month: m } }
+  if (t === 'half') { const [fy, h] = v.split('-').map(Number); return { type: 'half', fy, half: h } }
+  if (t === 'fy') return { type: 'fy', fy: Number(v) }
+  return { type: 'cy', year: Number(v) }
+}
+// The latest period of this type that has fully finished (a fresh review opens on it).
+function mostRecentCompletedSpec(type, now = new Date()) {
   const m = now.getMonth(), y = now.getFullYear()
-  if (m >= 9) return makeHalf(y, 1)       // Oct-Dec: H1 of this FY just finished
-  if (m >= 3) return makeHalf(y - 1, 2)   // Apr-Sep: last FY's H2 is the latest complete half
-  return makeHalf(y - 1, 1)               // Jan-Mar: H1 of the running FY
+  const curFy = m >= 3 ? y : y - 1
+  if (type === 'month') { const d = new Date(y, m - 1, 1); return { type, year: d.getFullYear(), month: d.getMonth() } }
+  if (type === 'fy') return { type, fy: curFy - 1 }
+  if (type === 'cy') return { type, year: y - 1 }
+  // half: H1 = Apr-Sep, H2 = Oct-Mar
+  if (m >= 9) return { type, fy: y, half: 1 }
+  if (m >= 3) return { type, fy: y - 1, half: 2 }
+  return { type, fy: y - 1, half: 1 }
 }
-function defaultReviewPeriod() {
-  const h = mostRecentCompletedHalf()
-  return h.label + ' · ' + h.range
+// Pickable periods for the Period dropdown, newest first, including the one still running.
+function listPeriodSpecs(type, now = new Date()) {
+  const m = now.getMonth(), y = now.getFullYear()
+  const curFy = m >= 3 ? y : y - 1
+  const out = []
+  if (type === 'month') for (let i = 0; i < 24; i++) { const d = new Date(y, m - i, 1); out.push({ type, year: d.getFullYear(), month: d.getMonth() }) }
+  else if (type === 'half') {
+    let fy = curFy, half = m >= 3 && m <= 8 ? 1 : 2
+    for (let i = 0; i < 8; i++) { out.push({ type, fy, half }); if (half === 1) { fy -= 1; half = 2 } else half = 1 }
+  }
+  else if (type === 'fy') for (let i = 0; i < 5; i++) out.push({ type, fy: curFy - i })
+  else for (let i = 0; i < 4; i++) out.push({ type, year: y - i })
+  return out
 }
+function periodOptionLabel(spec) {
+  const s = buildSpan(spec)
+  if (spec.type === 'month') return REVIEW_MONTH_NAMES[spec.month] + ' ' + spec.year + (s.inProgress ? ' (running)' : '')
+  return s.label + ' · ' + s.range + (s.inProgress ? ' (running)' : '')
+}
+function reviewPeriodString(span) {
+  return span.label + ' · ' + span.range + (span.inProgress ? ' (running)' : '')
+}
+function defaultReviewSpec() { return mostRecentCompletedSpec('half') }
 
 // Same shared, admin-configurable assumptions OverallDashboard.jsx's own Est.
 // SR Revenue KPI reads (Settings > Data > SR Revenue Assumptions) -- same
@@ -162,14 +250,15 @@ const REVIEW_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'Jun
 function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') }
 function monthLong(d) { return d.toLocaleDateString('en-US', { month: 'short' }) + "'" + String(d.getFullYear()).slice(-2) }
 
-// The three half-years shown as table columns: the same half last year, the
-// half just before the review half, and the review half itself. Both deltas
-// (vs the previous half, vs the same half last year) compare against these.
-function computeReviewMonths() {
-  const current = mostRecentCompletedHalf()
-  const prior = current.half === 1 ? makeHalf(current.fyStartYear - 1, 2) : makeHalf(current.fyStartYear, 1)
-  const lastYear = makeHalf(current.fyStartYear - 1, current.half)
-  return { current, prior, lastYear }
+// The three periods shown as table columns: the same period a year earlier, the period just
+// before the review period, and the review period itself. Both deltas (vs the previous
+// period, vs the same period last year) compare against these.
+function computeReviewMonths(spec) {
+  return {
+    current: buildSpan(spec),
+    prior: buildSpan(prevSpec(spec)),
+    lastYear: buildSpan(yearAgoSpec(spec)),
+  }
 }
 
 function reviewNum(v) { return Number(v) || 0 }
@@ -454,8 +543,17 @@ function SectionKicker({ label, title }) {
 const MarketingReviewDataContext = React.createContext(null)
 function useMarketingReviewData() { return React.useContext(MarketingReviewDataContext) }
 
-function MarketingReviewDataProvider({ children }) {
-  const months = useMemo(computeReviewMonths, [])
+// The Finance sheet behind the "CAC and ROAS by channel" slide only covers one period (H1 FY26-27).
+const CAC_SHEET_SPEC_KEY = 'half:2026-1'
+
+// `spec` is the period being reviewed. `snapshot` (optional) is a FROZEN review's saved numbers:
+// when present nothing is fetched and every slide reads the snapshot, so a finalized review never
+// changes after it was presented.
+function MarketingReviewDataProvider({ spec, snapshot, children }) {
+  const sKey = specKey(spec)
+  const months = useMemo(() => computeReviewMonths(spec), [sKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const frozen = !!snapshot
+  const cacApplies = sKey === CAC_SHEET_SPEC_KEY
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
   const [retryToken, setRetryToken] = useState(0)
@@ -480,6 +578,7 @@ function MarketingReviewDataProvider({ children }) {
   const [gaToken, setGaToken] = useState(0)
   const retryGa = useCallback(() => setGaToken(t => t + 1), [])
   useEffect(() => {
+    if (frozen) return undefined
     let dead = false
     setGaTraffic(null); setGaError(null)
     const ranges = [{ key: 'half', since: isoDate(months.current.start), until: isoDate(months.current.end) }]
@@ -498,9 +597,10 @@ function MarketingReviewDataProvider({ children }) {
       .then(pairs => { if (!dead) setGaTraffic(Object.fromEntries(pairs)) })
       .catch(e => { if (!dead) setGaError(String((e && e.message) || e)) })
     return () => { dead = true }
-  }, [months, gaToken])
+  }, [months, gaToken, frozen])
 
   useEffect(() => {
+    if (frozen || !cacApplies) return undefined
     let dead = false
     setCacSheet(null); setCacError(null)
     fetch('/api/crm-leads?source=bigquery&mode=marketing_review_cac', { credentials: 'include' })
@@ -512,9 +612,10 @@ function MarketingReviewDataProvider({ children }) {
       .then(d => { if (!dead) setCacSheet(d) })
       .catch(e => { if (!dead) setCacError(String((e && e.message) || e)) })
     return () => { dead = true }
-  }, [cacToken])
+  }, [cacToken, frozen, cacApplies])
 
   useEffect(() => {
+    if (frozen) return undefined
     let dead = false
     setRows(null); setError(null)
     // One continuous read from the start of the same half last year to the end
@@ -526,7 +627,7 @@ function MarketingReviewDataProvider({ children }) {
       .then(a => { if (!dead) setRows(a) })
       .catch(e => { if (!dead) setError(e.message || 'Failed to load figures') })
     return () => { dead = true }
-  }, [months, retryToken])
+  }, [months, retryToken, frozen])
 
   // Organic's own slide needs a Sub_Source breakdown (Web/Inbound phone
   // call/Blog/App/...) that the small pre-aggregated table above can't
@@ -538,13 +639,14 @@ function MarketingReviewDataProvider({ children }) {
   // rows A MONTH (see CLAUDE.md's Overall-BigQuery Month-tab entry) and is too
   // slow to prefetch unconditionally on every page load.
   useEffect(() => {
+    if (frozen) return undefined
     let dead = false
     const since = isoDate(months.current.start), until = isoDate(months.current.end)
     fetchOverallBqRows({ since, until, sources: ['Organic'] })
       .then(r => { if (!dead) setOrganicSubRows(r) })
       .catch(() => { if (!dead) setOrganicSubRows([]) })
     return () => { dead = true }
-  }, [months])
+  }, [months, frozen])
 
   // On-demand only, never prefetched -- the top-5-campaigns drill-down on
   // the Channel Performance slide. Same reasoning as organicSubRows above:
@@ -602,12 +704,14 @@ function MarketingReviewDataProvider({ children }) {
   }, [months, otherSources])
 
   useEffect(() => {
+    if (frozen) return undefined
     let dead = false
     fetchOverallBqSyncedAt().then(d => { if (!dead) setSyncedAt(d) }).catch(() => {})
     return () => { dead = true }
-  }, [])
+  }, [frozen])
 
   useEffect(() => {
+    if (frozen) return undefined
     let dead = false
     fetch('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { prefs: {} })
@@ -620,7 +724,7 @@ function MarketingReviewDataProvider({ children }) {
       })
       .catch(() => { if (!dead) setAcSalesLoaded(true) })
     return () => { dead = true }
-  }, [])
+  }, [frozen])
 
   // Optimistic write, revert-on-failure -- same pattern as Settings' own
   // saveAffiliateSpend, otherwise a failed save looks saved until reload.
@@ -717,13 +821,73 @@ function MarketingReviewDataProvider({ children }) {
       .slice(0, 8)
   }, [organicSubRows])
 
-  const value = useMemo(() => ({
-    months, loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
+  // Freezing: takes every figure the slides read (already computed, JSON-safe) plus the top-5
+  // campaigns for each channel (normally fetched on click) and returns one object to store. Refuses
+  // to freeze anything still loading or failed, so a frozen review is never incomplete.
+  const buildSnapshot = useCallback(async (onProgress) => {
+    if (!headlineRows || !aggByMonth || !byChannelByMonth || !channelRowsByChannel) throw new Error('The figures are still loading. Wait for them to finish, then freeze.')
+    if (error) throw new Error('The figures failed to load: ' + error)
+    if (organicSubRows == null) throw new Error('Organic sub-source figures are still loading.')
+    if (cacApplies && (cacError || !cacSheet)) throw new Error(cacError ? 'The CAC sheet failed to load: ' + cacError : 'The CAC sheet is still loading.')
+    if (gaError || !gaTraffic) throw new Error(gaError ? 'Website traffic failed to load: ' + gaError : 'Website traffic is still loading.')
+    const campaigns = {}
+    for (const ch of REVIEW_CHANNELS) {
+      if (onProgress) onProgress('Saving ' + ch + ' campaigns…')
+      try { campaigns[ch] = await fetchChannelCampaigns(ch) }
+      catch (e) { throw new Error('Could not load ' + ch + ' campaigns (' + ((e && e.message) || 'error') + '). Try again.') }
+    }
+    const pickManual = map => {
+      const keep = {}
+      for (const sp of [months.current, months.prior, months.lastYear]) for (const ym of sp.ymKeys) if (map && map[ym] != null) keep[ym] = map[ym]
+      return keep
+    }
+    const collapsedOrganic = new Map()
+    for (const r of organicSubRows) {
+      const k = r.Sub_Source || ''
+      const e = collapsedOrganic.get(k) || { Sub_Source: k, 'Total Leads Generated': 0, 'Futwork Human QL': 0, 'Futwork AI QL': 0, 'Superbot AI QL': 0 }
+      for (const f of ['Total Leads Generated', 'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL']) e[f] += reviewNum(r[f])
+      collapsedOrganic.set(k, e)
+    }
+    const chanObj = o => Object.fromEntries(Object.entries(o).map(([k, m]) => [k, Object.fromEntries(m)]))
+    return JSON.parse(JSON.stringify({
+      v: 1, takenAt: new Date().toISOString(), specKey: sKey,
+      headlineRows, aggByMonth, byChannelByMonth: chanObj(byChannelByMonth), channelRowsByChannel,
+      organicSubRows: [...collapsedOrganic.values()], organicSubSourceBreakdown,
+      acSales: pickManual(acSales), acRevenue: pickManual(acRevenue),
+      cacSheet: cacApplies ? cacSheet : null, gaTraffic, syncedAt: syncedAt ? new Date(syncedAt).toISOString() : null, campaigns,
+    }))
+  }, [headlineRows, aggByMonth, byChannelByMonth, channelRowsByChannel, error, organicSubRows, organicSubSourceBreakdown, cacApplies, cacError, cacSheet, gaError, gaTraffic, fetchChannelCampaigns, months, acSales, acRevenue, syncedAt, sKey])
+
+  const liveValue = useMemo(() => ({
+    months, frozen: false, cacApplies, buildSnapshot,
+    loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
     aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
     organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa])
+  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa])
+
+  // A frozen review: the same shape, read from the saved snapshot. Nothing here fetches.
+  const frozenValue = useMemo(() => {
+    if (!snapshot) return null
+    const mapOf = o => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k, new Map(Object.entries(v || {}))]))
+    const noopSave = async () => false
+    return {
+      months, frozen: true, cacApplies: !!snapshot.cacSheet, buildSnapshot: null,
+      loading: false, error: null, headlineRows: snapshot.headlineRows,
+      acSales: snapshot.acSales || {}, acSaving: false, saveAcSales: noopSave,
+      acRevenue: snapshot.acRevenue || {}, acRevenueSaving: false, saveAcRevenue: noopSave,
+      syncedAt: snapshot.syncedAt ? new Date(snapshot.syncedAt) : null,
+      aggByMonth: snapshot.aggByMonth, byChannelByMonth: mapOf(snapshot.byChannelByMonth),
+      channelRowsByChannel: snapshot.channelRowsByChannel, organicSubRows: snapshot.organicSubRows || [],
+      organicSubSourceBreakdown: snapshot.organicSubSourceBreakdown,
+      fetchChannelCampaigns: async ch => (snapshot.campaigns && snapshot.campaigns[ch]) || [],
+      cacSheet: snapshot.cacSheet, cacError: null, retryCac: () => {}, gaTraffic: snapshot.gaTraffic, gaError: null, retryGa: () => {},
+      retry: () => {},
+    }
+  }, [snapshot, months])
+
+  const value = frozen ? frozenValue : liveValue
 
   return <MarketingReviewDataContext.Provider value={value}>{children}</MarketingReviewDataContext.Provider>
 }
@@ -731,6 +895,8 @@ function MarketingReviewDataProvider({ children }) {
 /* ---------- slide bodies ---------- */
 
 function CoverSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const coverTitle = (ctx ? ctx.months.current.typeTitle : 'Half-Year') + ' Marketing Review'
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: 'linear-gradient(160deg,#0B1330 0%,#111E45 55%,#0B1330 100%)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <AmbientBackground variant="cover" />
@@ -741,7 +907,7 @@ function CoverSlide({ active, period }) {
         <div style={{
           fontSize: 13, fontWeight: 800, letterSpacing: '0.28em', color: 'rgba(255,255,255,0.62)', textTransform: 'uppercase',
           marginBottom: 18, animation: active ? 'mrFadeUp .5s cubic-bezier(.22,1,.36,1) .1s both' : undefined,
-        }}>Half-Year Marketing Review</div>
+        }}>{coverTitle}</div>
         <div style={{
           fontSize: 58, fontWeight: 800, color: '#fff', letterSpacing: '-1.5px', lineHeight: 1.05, marginBottom: 18,
           animation: active ? 'mrCoverTitleIn .6s cubic-bezier(.22,1,.36,1) .25s both' : undefined,
@@ -754,34 +920,37 @@ function CoverSlide({ active, period }) {
       <div style={{
         position: 'absolute', bottom: 26, left: 0, right: 0, textAlign: 'center', fontSize: 11.5, fontWeight: 600,
         color: 'rgba(255,255,255,0.4)', zIndex: 2,
-      }}>Prepared by Leverage Quantum &middot; placeholder deck, real figures pending</div>
+      }}>Prepared by Leverage Quantum</div>
     </div>
   )
 }
 
-const AGENDA_ITEMS = [
-  'Executive summary — the headline numbers',
-  'Channel performance — where the leads came from',
-  'Funnel & conversion — how leads moved through the pipeline',
-  'Acquisition cost & return — CAC and ROAS by channel',
-  'Website traffic — where visitors came from, and organic’s share',
-  'Wins & highlights',
-  'Risks & watch-outs',
-  'Next half-year’s priorities',
-]
+// The agenda is built from the deck itself: every visible slide that has an `agenda` line is listed,
+// in the deck's current order, with its slide number -- so reordering or hiding a slide updates the
+// agenda and its numbers by itself.
+const DeckSlidesContext = React.createContext([])
 function AgendaSlide({ active }) {
+  const deckSlides = React.useContext(DeckSlidesContext)
+  const ctx = useMarketingReviewData()
+  const unit = ctx ? ctx.months.current.unit : 'period'
+  const items = []
+  deckSlides.forEach((sl, idx) => {
+    if (!sl.agenda) return
+    items.push({ text: typeof sl.agenda === 'function' ? sl.agenda(unit) : sl.agenda, slideNo: idx + 1 })
+  })
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
       <SectionKicker label="Agenda" title="What we'll cover" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
-        {AGENDA_ITEMS.map((t, i) => (
+        {items.map((it, i) => (
           <div key={i} className={active ? styles.staggerItem : undefined}
             style={{ display: 'flex', alignItems: 'center', gap: 18, animationDelay: active ? (0.08 * i) + 's' : undefined }}>
             <div style={{
               width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 14, fontWeight: 800, color: '#fff', background: `linear-gradient(135deg, ${BRAND_RAMP[i % 4]}, ${BRAND_RAMP[(i + 1) % 4]})`,
             }}>{i + 1}</div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: '#1E2A44' }}>{t}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: '#1E2A44', flex: 1 }}>{it.text}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Slide {it.slideNo}</div>
           </div>
         ))}
       </div>
@@ -943,7 +1112,7 @@ function HeadlineSlide({ active, period }) {
             }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {row.label}
-                {row.key === 'acSales' && active && (
+                {row.key === 'acSales' && active && !ctx.frozen && (
                   <button type="button" onClick={openEdit} className={styles.noPrint} title="Enter AC Sales"
                     style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BLUE, padding: 2, display: 'inline-flex' }}>
                     <EditIcon />
@@ -951,10 +1120,11 @@ function HeadlineSlide({ active, period }) {
                 )}
               </div>
               {row.values.map((v, ci) => {
-                const entered = row.acEntered ? row.acEntered[ci] : 6
-                const partial = row.acEntered && entered > 0 && entered < 6
+                const nMonths = months.current.monthDates.length
+                const entered = row.acEntered ? row.acEntered[ci] : nMonths
+                const partial = row.acEntered && entered > 0 && entered < nMonths
                 return (
-                  <div key={ci} title={partial ? 'AC Sales entered for ' + entered + ' of 6 months only, so this is a partial total' : exactHeadlineTitle(v, row.money)}
+                  <div key={ci} title={partial ? 'AC Sales entered for ' + entered + ' of ' + nMonths + ' months only, so this is a partial total' : exactHeadlineTitle(v, row.money)}
                     style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />
                     {partial && <span style={{ color: '#94A3B8', fontWeight: 700 }}> *</span>}
@@ -972,7 +1142,7 @@ function HeadlineSlide({ active, period }) {
         <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 640, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Sales</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the sales count for each month. A half-year figure is the sum of its six months; leave a month blank if it is not known. CPS (Spend ÷ AC Sales) is computed automatically.</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the sales count for each month. The figure for a period is the sum of its months; leave a month blank if it is not known. CPS (Spend ÷ AC Sales) is computed automatically.</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
               {displayPeriods.map(h => (
                 <div key={h.label}>
@@ -1057,7 +1227,7 @@ function LiveDataFrame({ ctx, label, title, period, active, children }) {
 // controls whether CPQL is shown (Organic has no spend, so no cost column).
 function ChannelCampaignsList({ campaigns, isPaid, active }) {
   if (campaigns && campaigns.error) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>Could not load campaigns just now. Close and reopen this channel to retry.</div>
-  if (!campaigns.length) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>No named campaigns with QLs this half-year.</div>
+  if (!campaigns.length) return <div style={{ color: '#94A3B8', fontSize: 12.5, padding: '4px 0 4px 22px' }}>No named campaigns with QLs in this period.</div>
   return (
     <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
       {campaigns.map((c, i) => (
@@ -1115,7 +1285,7 @@ function ChannelPerformanceSlide({ active, period }) {
   return (
     <LiveDataFrame ctx={ctx} label="Channel Performance" title="Where the QLs came from" period={period} active={active}>
       {channelRows.length === 0 ? (
-        <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No QLs recorded for {months ? months.current.label : 'this half-year'} yet.</div>
+        <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No QLs recorded for {months ? months.current.label : 'this period'} yet.</div>
       ) : (
         <div style={{ marginTop: 12 }}>
           {channelRows.map((c, i) => {
@@ -1317,7 +1487,7 @@ function FunnelSlide({ active, period }) {
                   style={{ transform: expanded === 'revenue' ? 'rotate(180deg)' : 'none', transition: 'transform .2s ease' }}>
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
-                {active && (
+                {active && !ctx.frozen && (
                   <button type="button" onClick={e => { e.stopPropagation(); openRevenueEdit() }} className={styles.noPrint} title="Enter AC Actual Revenue"
                     style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BLUE, padding: 2, display: 'inline-flex' }}>
                     <EditIcon />
@@ -1332,7 +1502,7 @@ function FunnelSlide({ active, period }) {
               <div className={styles.staggerItem} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, paddingTop: 4 }}>
                 <FunnelSubRow label="Estimated SR Revenue" value={revenue.estSrRevenue}
                   max={Math.max(1, revenue.estSrRevenue, revenue.acActual)} hue={NAVY} active={active} delay={0} money />
-                <FunnelSubRow label={!revenue.hasAcActual ? 'AC Actual Revenue (not entered yet)' : revenue.acEntered < 6 ? 'AC Actual Revenue (' + revenue.acEntered + ' of 6 months entered)' : 'AC Actual Revenue'} value={revenue.acActual}
+                <FunnelSubRow label={!revenue.hasAcActual ? 'AC Actual Revenue (not entered yet)' : revenue.acEntered < months.current.monthDates.length ? 'AC Actual Revenue (' + revenue.acEntered + ' of ' + months.current.monthDates.length + ' months entered)' : 'AC Actual Revenue'} value={revenue.acActual}
                   max={Math.max(1, revenue.estSrRevenue, revenue.acActual)} hue={BLUE} active={active} delay={0.08} money />
               </div>
             )}
@@ -1343,7 +1513,7 @@ function FunnelSlide({ active, period }) {
         <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 380, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Actual Revenue</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the rupee revenue for each month of {months ? months.current.label : 'the half-year'}. The deck adds them up; leave a month blank if it is not known.</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the rupee revenue for each month of {months ? months.current.label : 'the period'}. The deck adds them up; leave a month blank if it is not known.</div>
             {months && months.current.monthDates.map((m, mi) => {
               const ym = months.current.ymKeys[mi]
               return (
@@ -1408,14 +1578,14 @@ function ChannelSpotlightBody({ active, period, channel }) {
       {channel === 'Organic' && (
         <div style={{ marginTop: 26 }}>
           <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-            QL by sub-source, {months ? months.current.label : 'this half-year'}
+            QL by sub-source, {months ? months.current.label : 'this period'}
           </div>
           {ctx.organicSubSourceBreakdown == null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94A3B8', fontSize: 13 }}>
               <span className={styles.mrSpinner} />Loading sub-source breakdown…
             </div>
           ) : ctx.organicSubSourceBreakdown.length === 0 ? (
-            <div style={{ color: '#94A3B8', fontSize: 13 }}>No sub-source activity recorded this half-year.</div>
+            <div style={{ color: '#94A3B8', fontSize: 13 }}>No sub-source activity recorded in this period.</div>
           ) : (
             (() => {
               const subMax = Math.max(1, ...ctx.organicSubSourceBreakdown.map(s => s.ql))
@@ -1467,8 +1637,12 @@ function CacSheetSlide({ active, period }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '60px 56px 40px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} live />
-      <SectionKicker label="Acquisition cost & return" title="H1 CAC and ROAS by channel" />
-      {!ctx || (!rows && !error) ? (
+      <SectionKicker label="Acquisition cost & return" title="CAC and ROAS by channel" />
+      {ctx && !ctx.cacApplies ? (
+        <div style={{ color: '#64748B', fontSize: 15, lineHeight: 1.6, maxWidth: 640, padding: '30px 0' }}>
+          Not available for this period. This table comes from Finance's hand-maintained "B2C H1 CAC" sheet, which only covers H1 FY26-27 (Apr–Sep 2026). Hide this slide for other periods.
+        </div>
+      ) : !ctx || (!rows && !error) ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
           <span className={styles.mrSpinner} />Loading the CAC sheet…
         </div>
@@ -1676,7 +1850,7 @@ function TofCampaignsSlide({ active, period }) {
           <span className={styles.mrSpinner} />Loading campaign activity…
         </div>
       ) : tof.length === 0 ? (
-        <div style={{ color: '#94A3B8', fontSize: 14 }}>No branding/offline campaign activity recorded for {months ? months.current.label : 'this half-year'}.</div>
+        <div style={{ color: '#94A3B8', fontSize: 14 }}>No branding/offline campaign activity recorded for {months ? months.current.label : 'this period'}.</div>
       ) : (
         <div>
           {tof.map((t, i) => {
@@ -1818,7 +1992,7 @@ function WinsSlide({ active, period }) {
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
         {wins && wins.length > 0
           ? wins.map((w, i) => <CalloutCard key={w.title} {...w} kind="win" active={active} delay={0.1 * i} />)
-          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No metric crossed the win threshold this half-year.</div>}
+          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No metric crossed the win threshold this period.</div>}
       </div>
     </LiveDataFrame>
   )
@@ -1836,23 +2010,25 @@ function RisksSlide({ active, period }) {
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
         {risks && risks.length > 0
           ? risks.map((r, i) => <CalloutCard key={r.title} {...r} kind="risk" active={active} delay={0.1 * i} />)
-          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>Nothing crossed the risk threshold this half-year.</div>}
+          : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>Nothing crossed the risk threshold in this period.</div>}
       </div>
     </LiveDataFrame>
   )
 }
 
 const PRIORITIES = [
-  'Double down on the channel/corridor that scaled cleanly this half-year',
+  'Double down on the channel/corridor that scaled cleanly this period',
   'Fix or pause whatever is over the CPQL benchmark',
   'Address the weakest stage-to-stage conversion rate in the funnel',
   'One experiment to run before the next review',
 ]
 function NextStepsSlide({ active, period }) {
+  const ctx = useMarketingReviewData()
+  const unit = ctx ? ctx.months.current.unit : 'period'
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} />
-      <SectionKicker label="Next Half-Year's Priorities" title="What we're doing next" />
+      <SectionKicker label={"Next " + unit + "'s priorities"} title="What we're doing next" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
         {PRIORITIES.map((t, i) => (
           <div key={i} className={active ? styles.staggerItem : undefined}
@@ -1882,23 +2058,42 @@ function ClosingSlide({ active, period }) {
   )
 }
 
+// The slide registry (id -> definition). The ORDER of the deck is not fixed here any more: each review
+// keeps its own order and hidden list (see DEFAULT_SLIDE_ORDER and sanitizeOrder). `agenda` is the line
+// the Agenda slide shows for that slide (a slide without one is not listed there).
 const SLIDES = [
-  { id: 'cover', section: 'Cover', title: 'Half-Year Marketing Review', Body: CoverSlide, dark: true },
+  { id: 'cover', section: 'Cover', title: 'Marketing Review', Body: CoverSlide, dark: true },
   { id: 'agenda', section: 'Agenda', title: "What we'll cover", Body: AgendaSlide },
-  { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide },
-  { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide },
-  { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide },
-  { id: 'cac-sheet', section: 'Acquisition Cost & Return', title: 'H1 CAC and ROAS by channel', Body: CacSheetSlide },
-  { id: 'traffic', section: 'Website Traffic', title: 'Where the traffic came from', Body: TrafficSourcesSlide },
+  { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide, agenda: 'Executive summary — the headline numbers' },
+  { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide, agenda: 'Channel performance — where the leads came from' },
+  { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide, agenda: 'Funnel & conversion — how leads moved through the pipeline' },
+  { id: 'cac-sheet', section: 'Acquisition Cost & Return', title: 'CAC and ROAS by channel', Body: CacSheetSlide, agenda: 'Acquisition cost & return — CAC and ROAS by channel' },
+  { id: 'traffic', section: 'Website Traffic', title: 'Where the traffic came from', Body: TrafficSourcesSlide, agenda: 'Website traffic — where visitors came from, and organic’s share' },
   { id: 'channel-google', section: 'Channel Spotlight', title: 'Google Ads', Body: GoogleAdsChannelSlide },
   { id: 'channel-meta', section: 'Channel Spotlight', title: 'Meta Ads', Body: MetaAdsChannelSlide },
   { id: 'channel-organic', section: 'Channel Spotlight', title: 'Organic', Body: OrganicChannelSlide },
   { id: 'tof', section: 'Top-of-Funnel & Branding', title: 'Awareness & offline campaigns', Body: TofCampaignsSlide },
-  { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide },
-  { id: 'risks', section: 'Risks & Watch-outs', title: 'What needs attention', Body: RisksSlide },
-  { id: 'next', section: "Next Half-Year's Priorities", title: "What we're doing next", Body: NextStepsSlide },
+  { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide, agenda: 'Wins & highlights' },
+  { id: 'risks', section: 'Risks & Watch-outs', title: 'What needs attention', Body: RisksSlide, agenda: 'Risks & watch-outs' },
+  { id: 'next', section: 'Next Priorities', title: "What we're doing next", Body: NextStepsSlide, agenda: unit => 'Next ' + unit + '’s priorities' },
   { id: 'closing', section: 'Closing', title: 'Questions?', Body: ClosingSlide, dark: true },
 ]
+const SLIDES_BY_ID = Object.fromEntries(SLIDES.map(sl => [sl.id, sl]))
+const DEFAULT_SLIDE_ORDER = SLIDES.map(sl => sl.id)
+// A saved order can be missing slides added later or list ones that no longer exist: keep the saved
+// order, drop unknown ids, and put any new slide just before the closing slide.
+function sanitizeOrder(order) {
+  const seen = new Set()
+  const out = []
+  for (const id of Array.isArray(order) ? order : []) if (SLIDES_BY_ID[id] && !seen.has(id)) { seen.add(id); out.push(id) }
+  const missing = DEFAULT_SLIDE_ORDER.filter(id => !seen.has(id))
+  if (!missing.length) return out
+  const closeAt = out.indexOf('closing')
+  if (closeAt === -1) return out.concat(missing)
+  return out.slice(0, closeAt).concat(missing, out.slice(closeAt))
+}
+// Slides that make no sense for a period start hidden (the CAC sheet only covers one period).
+function defaultHiddenFor(spec) { return specKey(spec) === CAC_SHEET_SPEC_KEY ? [] : ['cac-sheet'] }
 
 /* ---------- the fixed-aspect canvas every render mode shares ---------- */
 
@@ -1925,7 +2120,7 @@ function DeckToolbarButton({ onClick, title, active, children }) {
   )
 }
 
-function DeckView({ index, setIndex, period, onExit, onPrint }) {
+function DeckView({ slides, index, setIndex, period, onExit, onPrint }) {
   // deckRootRef is the real Fullscreen target -- the WHOLE immersive overlay
   // (progress rail, labels, toolbar, thumbnail nav all included), not just
   // the stage area. Fullscreening only the stage div would make the browser
@@ -1985,22 +2180,22 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
   const handleExportImage = useCallback(() => {
     const node = currentCanvasRef.current
     if (!node) return
-    const slideName = SLIDES[index].title
+    const slideName = slides[index].title
     toPng(node, { pixelRatio: 2, cacheBust: true }).then(dataUrl => {
       const a = document.createElement('a')
       a.href = dataUrl
       a.download = `Marketing-Review-${period.replace(/\s+/g, '-')}-Slide-${index + 1}-${slideName.replace(/[^a-z0-9]+/gi, '-')}.png`
       a.click()
     }).catch(() => {})
-  }, [index, period])
+  }, [index, period, slides])
 
   const scale = size.w && size.h ? Math.min(size.w / SLIDE_W, size.h / SLIDE_H) * 0.94 : 0.5
 
   const goTo = useCallback((i) => {
-    const clamped = Math.max(0, Math.min(SLIDES.length - 1, i))
+    const clamped = Math.max(0, Math.min(slides.length - 1, i))
     dirRef.current = clamped >= index ? 'next' : 'prev'
     setIndex(clamped)
-  }, [setIndex, index])
+  }, [setIndex, index, slides.length])
   const next = useCallback(() => goTo(index + 1), [goTo, index])
   const prev = useCallback(() => goTo(index - 1), [goTo, index])
 
@@ -2008,8 +2203,8 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
     const n = Number(digitBufferRef.current)
     digitBufferRef.current = ''
     if (digitTimerRef.current) { clearTimeout(digitTimerRef.current); digitTimerRef.current = null }
-    if (Number.isFinite(n) && n >= 1 && n <= SLIDES.length) goTo(n - 1)
-  }, [goTo])
+    if (Number.isFinite(n) && n >= 1 && n <= slides.length) goTo(n - 1)
+  }, [goTo, slides.length])
 
   useEffect(() => () => { if (digitTimerRef.current) clearTimeout(digitTimerRef.current) }, [])
 
@@ -2054,7 +2249,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
       } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next() }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev() }
       else if (e.key === 'Home') { e.preventDefault(); goTo(0) }
-      else if (e.key === 'End') { e.preventDefault(); goTo(SLIDES.length - 1) }
+      else if (e.key === 'End') { e.preventDefault(); goTo(slides.length - 1) }
       else if (e.key === 'f' || e.key === 'F') {
         if (document.fullscreenElement) document.exitFullscreen()
         else deckRootRef.current && deckRootRef.current.requestFullscreen && deckRootRef.current.requestFullscreen()
@@ -2094,8 +2289,8 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
     if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   }, [index])
 
-  const pct = ((index + 1) / SLIDES.length) * 100
-  const slide = SLIDES[index]
+  const pct = ((index + 1) / slides.length) * 100
+  const slide = slides[index]
 
   const hideCursor = laserOn || (fullscreen && !chromeVisible)
   const cursorClass = writeMode ? styles.mrCursorCrosshair : (hideCursor ? styles.mrCursorNone : undefined)
@@ -2137,7 +2332,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
       <div className={chromeClass} style={{ position: 'fixed', top: 20, left: 32, right: 32, zIndex: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{ maxWidth: '50vw' }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 3 }}>
-            {slide.section} &middot; slide {index + 1} of {SLIDES.length}
+            {slide.section} &middot; slide {index + 1} of {slides.length}
           </div>
           <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{slide.title}</div>
         </div>
@@ -2211,7 +2406,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
           </div>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Next up</div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>{index < SLIDES.length - 1 ? SLIDES[index + 1].title : 'End of deck'}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>{index < slides.length - 1 ? slides[index + 1].title : 'End of deck'}</div>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12 }}>
             <div style={{ fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Notes</div>
@@ -2226,7 +2421,7 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
           display: 'flex', gap: 8, maxWidth: '60vw', overflowX: 'auto', padding: '8px 4px',
           background: 'rgba(15,20,38,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14,
         }}>
-          {SLIDES.map((s, i) => {
+          {slides.map((s, i) => {
             const isActive = i === index
             const thumbW = 92, thumbScale = thumbW / SLIDE_W, thumbH = SLIDE_H * thumbScale
             return (
@@ -2253,14 +2448,14 @@ function DeckView({ index, setIndex, period, onExit, onPrint }) {
 
 /* ---------- read view (non-presenting, scrollable, also the print source) ---------- */
 
-function ReadView({ period }) {
+function ReadView({ slides, period }) {
   const wrapRef = useRef(null)
   const size = useElementSize(wrapRef)
   const scale = size.w ? Math.min(1, (size.w - 40) / SLIDE_W) : 0.5
   return (
     <div ref={wrapRef} className={styles.printRoot} style={{ flex: 1, overflowY: 'auto', padding: '28px 0 60px', background: '#EEF1F6' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28 }}>
-        {SLIDES.map((s, i) => (
+        {slides.map((s, i) => (
           <div key={s.id} className={styles.printSlideOuter} style={{ width: SLIDE_W * scale, boxShadow: '0 1px 3px rgba(15,23,42,0.08)', borderRadius: 18 }}>
             <div className={styles.printSlideInner} style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
               <SlideCanvas Body={s.Body} active period={period} />
@@ -2274,111 +2469,578 @@ function ReadView({ period }) {
 
 /* ---------- landing (default view when you open the page) ---------- */
 
-function GalleryCard({ slide, i, onOpen, period }) {
+function GalleryCard({ slide, number, onOpen, period, editMode, hidden, onMove, onToggleHidden, canUp, canDown, drag }) {
   const scale = 280 / SLIDE_W
+  const iconBtn = { width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, fontFamily: FONT }
+  const dis = on => on ? {} : { opacity: 0.35, cursor: 'default' }
   return (
-    <button type="button" onClick={onOpen} className={styles.mrGalleryCard} style={{
-      textAlign: 'left', cursor: 'pointer', border: '0.5px solid #E2E8F0', borderRadius: 14, overflow: 'hidden',
-      background: '#fff', padding: 0, boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
-    }}>
-      <div style={{ width: '100%', aspectRatio: '16/9', overflow: 'hidden', position: 'relative', background: '#F1F5F9' }}>
+    <div className={styles.mrGalleryCard}
+      draggable={editMode}
+      onDragStart={editMode ? drag.onDragStart : undefined}
+      onDragOver={editMode ? drag.onDragOver : undefined}
+      onDrop={editMode ? drag.onDrop : undefined}
+      onDragEnd={editMode ? drag.onDragEnd : undefined}
+      style={{
+        textAlign: 'left', border: drag && drag.isOver ? `1.5px dashed ${BLUE}` : '0.5px solid #E2E8F0', borderRadius: 14, overflow: 'hidden',
+        background: '#fff', padding: 0, boxShadow: '0 1px 3px rgba(15,23,42,0.05)', opacity: hidden ? 0.5 : 1,
+        cursor: editMode ? 'grab' : 'pointer',
+      }}>
+      <div onClick={editMode ? undefined : onOpen} style={{ width: '100%', aspectRatio: '16/9', overflow: 'hidden', position: 'relative', background: '#F1F5F9' }}>
         <div style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
           <slide.Body active={false} period={period} />
         </div>
+        {hidden && <div style={{ position: 'absolute', inset: 0, background: 'rgba(241,245,249,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Hidden</div>}
       </div>
-      <div style={{ padding: '12px 14px' }}>
-        <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Slide {i + 1}</div>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A', marginTop: 2 }}>{slide.title}</div>
+      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }} onClick={editMode ? undefined : onOpen}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{number ? 'Slide ' + number : 'Not in deck'}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{slide.title}</div>
+        </div>
+        {editMode && (
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button type="button" title="Move earlier" onClick={() => canUp && onMove(-1)} style={{ ...iconBtn, ...dis(canUp) }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+            <button type="button" title="Move later" onClick={() => canDown && onMove(1)} style={{ ...iconBtn, ...dis(canDown) }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
+            <button type="button" title={hidden ? 'Show this slide in the deck' : 'Hide this slide from the deck'} onClick={onToggleHidden} style={iconBtn}>
+              {hidden
+                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><line x1="1" y1="1" x2="23" y2="23" /></svg>}
+            </button>
+          </div>
+        )}
       </div>
-    </button>
+    </div>
   )
 }
 
-export default function MarketingReviewDashboard() {
+/* ---------- saved reviews: model, storage and the list on the landing page ---------- */
+
+// Reviews are stored in app_preferences: ONE small list under `mr_reviews` (name, period, slide order,
+// hidden slides, live/frozen), and each frozen review's numbers under its own `mr_snap_<id>` row.
+const REVIEWS_KEY = 'mr_reviews'
+function autoReviewName(spec) {
+  if (spec.type === 'month') return REVIEW_MONTH_NAMES[spec.month] + ' ' + spec.year + ' Review'
+  return buildSpan(spec).label + ' Review'
+}
+function newWork(spec) {
+  return { id: null, name: autoReviewName(spec), spec, order: DEFAULT_SLIDE_ORDER.slice(), hidden: defaultHiddenFor(spec), status: 'live' }
+}
+function fmtWhen(iso) {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return '' }
+}
+function nameOfEmail(e) { return e ? String(e).split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '' }
+async function readReviewsList() {
+  const r = await fetch('/api/preferences', { credentials: 'include' })
+  if (!r.ok) throw new Error('Could not read saved reviews')
+  const d = await r.json()
+  return Array.isArray(d.prefs && d.prefs[REVIEWS_KEY]) ? d.prefs[REVIEWS_KEY] : []
+}
+async function writePref(key, value) {
+  const r = await fetch('/api/preferences', {
+    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, value }),
+  })
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}))
+    throw new Error(d.error || ('Save failed (' + r.status + ')'))
+  }
+}
+
+function StatusChip({ status }) {
+  const frozen = status === 'frozen'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
+      borderRadius: 999, padding: '3px 9px', color: frozen ? NAVY : '#2F8A52', background: frozen ? C.navyBg : '#E8F5EE',
+    }}>
+      {frozen
+        ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+        : <span style={{ width: 6, height: 6, borderRadius: '50%', background: GREEN }} />}
+      {frozen ? 'Frozen' : 'Live'}
+    </span>
+  )
+}
+
+const REVIEW_GROUPS = [
+  { title: 'Full year', types: ['fy', 'cy'] },
+  { title: 'Half-year', types: ['half'] },
+  { title: 'Month', types: ['month'] },
+]
+function PastReviews({ reviews, activeId, onOpen, onTemplate, onDelete, isOwner }) {
+  if (!reviews) return <div style={{ color: '#94A3B8', fontSize: 13, padding: '8px 0' }}>Loading saved reviews…</div>
+  if (!reviews.length) {
+    return <div style={{ color: '#64748B', fontSize: 13.5, lineHeight: 1.6, background: '#fff', border: '0.5px dashed #CBD5E1', borderRadius: 14, padding: '18px 20px' }}>
+      No saved reviews yet. Pick a period above and press <b>Save review</b> to keep it here. Month, half-year and year reviews all live in this list.
+    </div>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {REVIEW_GROUPS.map(g => {
+        const list = reviews.filter(r => g.types.includes(r.spec.type)).sort((a, b) => buildSpan(b.spec).start - buildSpan(a.spec).start)
+        if (!list.length) return null
+        return (
+          <div key={g.title}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>{g.title}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+              {list.map(r => {
+                const span = buildSpan(r.spec)
+                const active = r.id === activeId
+                const canDelete = r.status !== 'frozen' || isOwner
+                return (
+                  <div key={r.id} style={{
+                    background: '#fff', borderRadius: 14, padding: '14px 16px', border: active ? `1.5px solid ${BLUE}` : '0.5px solid #E2E8F0',
+                    boxShadow: active ? `0 0 0 3px ${BLUE}22` : '0 1px 3px rgba(15,23,42,0.05)', display: 'flex', flexDirection: 'column', gap: 8,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                        <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>{span.label} · {span.range}</div>
+                      </div>
+                      <StatusChip status={r.status} />
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                      {r.status === 'frozen' ? 'Frozen ' + fmtWhen(r.frozenAt) + (r.frozenBy ? ' by ' + nameOfEmail(r.frozenBy) : '') : 'Updated ' + fmtWhen(r.updatedAt) + (r.updatedBy ? ' by ' + nameOfEmail(r.updatedBy) : '')}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                      <Button size="sm" onClick={() => onOpen(r)}>{active ? 'Open again' : 'Open'}</Button>
+                      <Button size="sm" variant="secondary" onClick={() => onTemplate(r)}>Use its slide order</Button>
+                      {canDelete && <Button size="sm" variant="secondary" onClick={() => onDelete(r)}>Delete</Button>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ---------- the page body (needs the data provider above it for Freeze) ---------- */
+
+function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notice, setNotice, actions, slides, onPeriodChange }) {
+  const ctx = useMarketingReviewData()
   const [mode, setMode] = useState('landing') // 'landing' | 'deck' | 'read'
   const [index, setIndex] = useState(0)
-  const period = useMemo(() => defaultReviewPeriod(), [])
+  const [editOrder, setEditOrder] = useState(false)
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
+  const [freezeAsk, setFreezeAsk] = useState(false)
+  const [freezeBusy, setFreezeBusy] = useState('')
+  const [freezeError, setFreezeError] = useState('')
 
-  const startDeck = useCallback((i = 0) => { setIndex(i); setMode('deck') }, [])
+  const span = ctx.months.current
+  const period = reviewPeriodString(span)
+  const frozen = work.status === 'frozen'
+  const saved = !!work.id && !!reviews && reviews.some(r => r.id === work.id)
+  const hiddenSet = useMemo(() => new Set(work.hidden), [work.hidden])
+  const numberOf = useMemo(() => {
+    const m = {}
+    slides.forEach((sl, i) => { m[sl.id] = i + 1 })
+    return m
+  }, [slides])
+
+  const startDeck = useCallback((i = 0) => { if (!slides.length) return; setIndex(Math.min(i, slides.length - 1)); setMode('deck') }, [slides.length])
   const exitDeck = useCallback(() => { if (document.fullscreenElement) document.exitFullscreen(); setMode('landing') }, [])
   const doPrint = useCallback(() => {
     setMode('read')
     setTimeout(() => window.print(), 250)
   }, [])
 
+  const moveBy = (id, dir) => {
+    const order = work.order.slice()
+    const i = order.indexOf(id), j = i + dir
+    if (i < 0 || j < 0 || j >= order.length) return
+    ;[order[i], order[j]] = [order[j], order[i]]
+    patchWork({ order })
+  }
+  const dropOn = (targetId) => {
+    if (!dragId || dragId === targetId) return
+    const order = work.order.filter(id => id !== dragId)
+    const t = order.indexOf(targetId)
+    const from = work.order.indexOf(dragId), to = work.order.indexOf(targetId)
+    // dragging forward drops AFTER the target, backward drops BEFORE it
+    order.splice(from < to ? t + 1 : t, 0, dragId)
+    patchWork({ order })
+  }
+  const toggleHidden = (id) => patchWork({ hidden: hiddenSet.has(id) ? work.hidden.filter(x => x !== id) : work.hidden.concat(id) })
+
+  const doFreeze = async () => {
+    setFreezeError(''); setFreezeBusy('Preparing…')
+    try {
+      let id = work.id
+      if (!saved || dirty) {
+        setFreezeBusy('Saving the review…')
+        id = await actions.save()
+        if (!id) throw new Error('Could not save the review first.')
+      }
+      const snap = await ctx.buildSnapshot(setFreezeBusy)
+      setFreezeBusy('Locking the numbers…')
+      await actions.freeze(snap, id)
+      setFreezeAsk(false)
+    } catch (e) {
+      setFreezeError((e && e.message) || 'Could not freeze the review.')
+    } finally {
+      setFreezeBusy('')
+    }
+  }
+
+  const typeOptions = PERIOD_TYPES.map(t => ({ value: t.value, label: t.label }))
+  const periodOptions = useMemo(() => {
+    const opts = listPeriodSpecs(work.spec.type).map(sp => ({ value: specKey(sp), label: periodOptionLabel(sp) }))
+    if (!opts.some(o => o.value === specKey(work.spec))) opts.push({ value: specKey(work.spec), label: periodOptionLabel(work.spec) })
+    return opts
+  }, [work.spec])
+
+  const panelCard = { background: '#fff', border: '0.5px solid #E2E8F0', borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }
+  const fieldLabel = { fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: '#64748B', textTransform: 'uppercase', marginBottom: 5 }
+
   return (
-    <MarketingReviewDataProvider>
-    <div className={`lq-page-shell ${styles.shellRoot}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#EEF1F6' }}>
-      <div className={styles.noPrint}><Sidebar /></div>
-      <div className={styles.contentCol} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div className={styles.noPrint} style={{
-          padding: '16px 28px', background: '#fff', borderBottom: '0.5px solid #E5E7EB',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
-        }}>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', color: '#94A3B8', textTransform: 'uppercase' }}>Dashboards / Marketing Review</div>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#0F1B33', marginTop: 2 }}>Half-Year Marketing Review</div>
+    <>
+      <div className={`lq-page-shell ${styles.shellRoot}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#EEF1F6' }}>
+        <div className={styles.noPrint}><Sidebar /></div>
+        <div className={styles.contentCol} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div className={styles.noPrint} style={{
+            padding: '16px 28px', background: '#fff', borderBottom: '0.5px solid #E5E7EB',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+          }}>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', color: '#94A3B8', textTransform: 'uppercase' }}>Dashboards / Marketing Review</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: '#0F1B33', marginTop: 2 }}>{span.typeTitle} Marketing Review</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <StatusChip status={work.status} />
+              <span style={{
+                fontSize: 11, fontWeight: 800, color: NAVY, background: C.navyBg, borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}>{period}</span>
+              <Button size="sm" variant="secondary" onClick={() => setMode(mode === 'read' ? 'landing' : 'read')}>
+                {mode === 'read' ? 'Back to overview' : 'Read view'}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={doPrint}>Print / Export PDF</Button>
+              <Button size="sm" onClick={() => startDeck(0)} disabled={!slides.length}>Start presentation</Button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{
-              fontSize: 11, fontWeight: 800, color: NAVY, background: C.navyBg, borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase', letterSpacing: '0.04em',
-            }}>{period}</span>
-            <Button size="sm" variant="secondary" onClick={() => setMode(mode === 'read' ? 'landing' : 'read')}>
-              {mode === 'read' ? 'Back to overview' : 'Read view'}
-            </Button>
-            <Button size="sm" variant="secondary" onClick={doPrint}>Print / Export PDF</Button>
-            <Button size="sm" onClick={() => startDeck(0)}>Start presentation</Button>
-          </div>
+
+          {mode === 'landing' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 60px' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 22,
+                background: 'linear-gradient(135deg,#0B1330,#1B2A57)', borderRadius: 18, padding: '30px 34px', color: '#fff', overflow: 'hidden', position: 'relative',
+              }}>
+                <div style={{ position: 'absolute', inset: 0, opacity: 0.5 }}><AmbientBackground variant="landing" /></div>
+                <div style={{ position: 'relative', zIndex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', marginBottom: 8 }}>{slides.length} slides &middot; {period}</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{work.name || 'Untitled review'}</div>
+                </div>
+                <button type="button" onClick={() => startDeck(0)} className={styles.mrLaunchBtn} disabled={!slides.length} style={{
+                  position: 'relative', zIndex: 1, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '13px 24px',
+                  borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${NAVY}, ${BLUE})`, color: '#fff', fontSize: 14, fontWeight: 800,
+                  fontFamily: FONT, cursor: 'pointer', boxShadow: `0 10px 30px -8px ${BLUE}99`,
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="13" rx="2.5" /><path d="M10.5 8.2v4.6l3.6-2.3z" fill="currentColor" stroke="none" /><path d="M8 21h8" /><path d="M12 17v4" /></svg>
+                  Start presentation
+                </button>
+              </div>
+
+              {notice && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, padding: '10px 16px', background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, fontSize: 12.5, color: '#7A5C00', fontWeight: 600 }}>
+                  <span>{notice}</span>
+                  <button type="button" onClick={() => setNotice('')} style={{ border: 'none', background: 'transparent', color: '#7A5C00', cursor: 'pointer', fontWeight: 800, fontFamily: FONT }}>Dismiss</button>
+                </div>
+              )}
+
+              {/* review settings: period, name, save / freeze */}
+              <div style={{ ...panelCard, marginBottom: 18 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
+                  <div>
+                    <div style={fieldLabel}>Review type</div>
+                    <Dropdown value={work.spec.type} options={typeOptions} minWidth={150} disabled={frozen}
+                      onChange={v => onPeriodChange(mostRecentCompletedSpec(v))} />
+                  </div>
+                  <div>
+                    <div style={fieldLabel}>Period</div>
+                    <Dropdown value={specKey(work.spec)} options={periodOptions} minWidth={250} disabled={frozen}
+                      onChange={v => onPeriodChange(parseSpecKey(v))} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={fieldLabel}>Review name</div>
+                    <input type="text" value={work.name} disabled={frozen} onChange={e => patchWork({ name: e.target.value })} placeholder="e.g. H1 FY26-27 Review"
+                      style={{ width: '100%', boxSizing: 'border-box', minHeight: 32, padding: '7px 12px', borderRadius: 11, border: '0.5px solid #CBD5E1', fontSize: 13.5, fontWeight: 700, color: '#0F172A', fontFamily: FONT, background: frozen ? '#F8FAFC' : '#fff' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 14 }}>
+                  <Button size="sm" onClick={() => actions.save()} disabled={frozen || busy || !work.name.trim() || (saved && !dirty)}>
+                    {busy ? 'Saving…' : (saved ? 'Save changes' : 'Save review')}
+                  </Button>
+                  {saved && !frozen && <Button size="sm" variant="secondary" onClick={() => actions.saveAsNew()} disabled={busy}>Save as new review</Button>}
+                  <Button size="sm" variant="secondary" onClick={() => actions.newReview()} disabled={busy}>New review</Button>
+                  {isOwner && saved && !frozen && !freezeAsk && <Button size="sm" variant="secondary" onClick={() => { setFreezeError(''); setFreezeAsk(true) }}>Freeze this review…</Button>}
+                  {isOwner && frozen && <Button size="sm" variant="secondary" onClick={() => actions.unfreeze()} disabled={busy}>Unfreeze (go live again)</Button>}
+                  <span style={{ fontSize: 12, fontWeight: 700, color: frozen ? NAVY : (dirty ? '#8A6A00' : '#94A3B8') }}>
+                    {frozen ? 'Frozen — read only' : (!saved ? 'Not saved yet' : (dirty ? 'Unsaved changes' : 'All changes saved'))}
+                  </span>
+                </div>
+
+                {freezeAsk && (
+                  <div style={{ marginTop: 14, background: C.navyBg, border: `1px solid ${NAVY}22`, borderRadius: 12, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: NAVY, marginBottom: 4 }}>Freeze “{work.name}”?</div>
+                    <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
+                      Every number is saved exactly as it is now — figures, campaign lists, the AC entries and the slide order. After that the review never changes when data refreshes, and nobody else can edit it. Only you can unfreeze it.
+                    </div>
+                    {ctx.loading && <div style={{ fontSize: 12.5, color: '#7A5C00', fontWeight: 700, marginTop: 8 }}>The figures are still loading — wait a moment, then freeze.</div>}
+                    {freezeError && <div style={{ fontSize: 12.5, color: '#B42318', fontWeight: 700, marginTop: 8 }}>{freezeError}</div>}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>
+                      <Button size="sm" onClick={doFreeze} disabled={!!freezeBusy || ctx.loading}>{freezeBusy || 'Freeze now'}</Button>
+                      <Button size="sm" variant="secondary" onClick={() => { setFreezeAsk(false); setFreezeError('') }} disabled={!!freezeBusy}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+                {!isOwner && <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 12 }}>Freezing a review is limited to its owner.</div>}
+              </div>
+
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22, padding: '11px 16px',
+                background: frozen ? C.navyBg : '#E8F5EE', border: `1px solid ${frozen ? NAVY + '22' : '#BFE3CE'}`, borderRadius: 12, fontSize: 12.5, color: frozen ? NAVY : '#2F6B47', fontWeight: 600,
+              }}>
+                {frozen
+                  ? `Frozen on ${fmtWhen(work.frozenAt)}${work.frozenBy ? ' by ' + nameOfEmail(work.frozenBy) : ''} — these numbers are exactly as they were saved and will not change.`
+                  : 'Live — figures are read fresh from the data each time you open this review. Freeze it once it has been presented to lock the numbers.'}
+              </div>
+
+              <div style={{ marginBottom: 26 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0F1B33', marginBottom: 12 }}>Saved reviews</div>
+                <PastReviews reviews={reviews} activeId={work.id} isOwner={isOwner}
+                  onOpen={actions.open} onTemplate={actions.template} onDelete={actions.remove} />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0F1B33' }}>Slides</div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    {editOrder ? 'Drag a slide, or use the arrows, to change the order. Slide numbers, the agenda and the thumbnails follow automatically.' : 'Click a slide to present from it.'}
+                  </div>
+                </div>
+                {!frozen && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {editOrder && <Button size="sm" variant="secondary" onClick={() => patchWork({ order: DEFAULT_SLIDE_ORDER.slice(), hidden: defaultHiddenFor(work.spec) })}>Reset order</Button>}
+                    <Button size="sm" variant={editOrder ? 'primary' : 'secondary'} onClick={() => setEditOrder(v => !v)}>{editOrder ? 'Done' : 'Edit slide order'}</Button>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                {(editOrder && !frozen ? work.order.map(id => SLIDES_BY_ID[id]) : slides).map((sl) => {
+                  const idx = work.order.indexOf(sl.id)
+                  return (
+                    <GalleryCard key={sl.id} slide={sl} number={numberOf[sl.id]} period={period}
+                      editMode={editOrder && !frozen} hidden={hiddenSet.has(sl.id)}
+                      onOpen={() => startDeck(slides.findIndex(x => x.id === sl.id))}
+                      onMove={dir => moveBy(sl.id, dir)} canUp={idx > 0} canDown={idx < work.order.length - 1}
+                      onToggleHidden={() => toggleHidden(sl.id)}
+                      drag={{
+                        isOver: overId === sl.id && dragId && dragId !== sl.id,
+                        onDragStart: e => { setDragId(sl.id); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', sl.id) } catch (err) { /* ignore */ } },
+                        onDragOver: e => { e.preventDefault(); if (overId !== sl.id) setOverId(sl.id) },
+                        onDrop: e => { e.preventDefault(); dropOn(sl.id); setDragId(null); setOverId(null) },
+                        onDragEnd: () => { setDragId(null); setOverId(null) },
+                      }} />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {mode === 'read' && <ReadView slides={slides} period={period} />}
         </div>
 
-        {mode === 'landing' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 60px' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 26,
-              background: 'linear-gradient(135deg,#0B1330,#1B2A57)', borderRadius: 18, padding: '30px 34px', color: '#fff', overflow: 'hidden', position: 'relative',
-            }}>
-              <div style={{ position: 'absolute', inset: 0, opacity: 0.5 }}><AmbientBackground variant="landing" /></div>
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', marginBottom: 8 }}>{SLIDES.length} slides &middot; {period}</div>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.4px' }}>Ready to present</div>
-              </div>
-              <button type="button" onClick={() => startDeck(0)} className={styles.mrLaunchBtn} style={{
-                position: 'relative', zIndex: 1, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '13px 24px',
-                borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${NAVY}, ${BLUE})`, color: '#fff', fontSize: 14, fontWeight: 800,
-                fontFamily: FONT, cursor: 'pointer', boxShadow: `0 10px 30px -8px ${BLUE}99`,
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="13" rx="2.5" /><path d="M10.5 8.2v4.6l3.6-2.3z" fill="currentColor" stroke="none" /><path d="M8 21h8" /><path d="M12 17v4" /></svg>
-                Start presentation
-              </button>
-            </div>
-
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, padding: '11px 16px',
-              background: '#FFF6DA', border: '1px solid #F2E2A8', borderRadius: 12, fontSize: 12.5, color: '#7A5C00', fontWeight: 600,
-            }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8A6A00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M12 9v4" /><path d="M12 17h.01" /><circle cx="12" cy="12" r="9" /></svg>
-              Placeholder deck — every figure is sample data, clearly labeled on each slide. Swap in the real numbers once the slide content/data source is confirmed.
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-              {SLIDES.map((s, i) => <GalleryCard key={s.id} slide={s} i={i} period={period} onOpen={() => startDeck(i)} />)}
-            </div>
-          </div>
+        {mode === 'deck' && (
+          <DeckView
+            slides={slides}
+            index={index}
+            setIndex={setIndex}
+            period={period}
+            onExit={exitDeck}
+            onPrint={doPrint}
+          />
         )}
-
-        {mode === 'read' && <ReadView period={period} />}
       </div>
+    </>
+  )
+}
 
-      {mode === 'deck' && (
-        <DeckView
-          index={index}
-          setIndex={setIndex}
-          period={period}
-          onExit={exitDeck}
-          onPrint={doPrint}
-        />
-      )}
-    </div>
+/* ---------- the page: owns the working review, the saved list and the freeze flow ---------- */
+
+export default function MarketingReviewDashboard() {
+  const { user } = useAuth()
+  const isOwner = isMarketingReviewOwner(user && user.email)
+  const meEmail = (user && user.email) || ''
+  const [reviews, setReviews] = useState(null)
+  const [work, setWork] = useState(() => newWork(defaultReviewSpec()))
+  const [snapshot, setSnapshot] = useState(null)
+  const [snapState, setSnapState] = useState('idle') // idle | loading | error
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    let dead = false
+    readReviewsList().then(l => { if (!dead) setReviews(l) }).catch(e => { if (!dead) { setReviews([]); setNotice(e.message) } })
+    return () => { dead = true }
+  }, [])
+
+  const patchWork = useCallback(p => setWork(w => ({ ...w, ...p })), [])
+  const savedEntry = work.id && reviews ? reviews.find(r => r.id === work.id) : null
+  const dirty = !savedEntry || savedEntry.name !== work.name
+    || JSON.stringify([savedEntry.spec, savedEntry.order, savedEntry.hidden]) !== JSON.stringify([work.spec, work.order, work.hidden])
+
+  // Read-modify-write on the shared list: re-read the latest first so two people saving different
+  // reviews never overwrite each other.
+  const mutateReviews = useCallback(async (fn) => {
+    const fresh = await readReviewsList()
+    const next = fn(fresh)
+    await writePref(REVIEWS_KEY, next)
+    setReviews(next)
+    return next
+  }, [])
+
+  const sanitizedOrder = useMemo(() => sanitizeOrder(work.order), [work.order])
+  const slides = useMemo(() => {
+    const hide = new Set(work.hidden)
+    return sanitizedOrder.filter(id => !hide.has(id)).map(id => SLIDES_BY_ID[id])
+  }, [sanitizedOrder, work.hidden])
+
+  const entryFromWork = (w, id, extra) => ({
+    id, name: w.name.trim() || autoReviewName(w.spec), spec: w.spec, order: sanitizeOrder(w.order), hidden: w.hidden,
+    status: 'live', createdAt: (extra && extra.createdAt) || new Date().toISOString(), createdBy: (extra && extra.createdBy) || meEmail,
+    updatedAt: new Date().toISOString(), updatedBy: meEmail,
+  })
+
+  const actions = {
+    // returns the review id on success
+    save: async () => {
+      setBusy(true); setNotice('')
+      try {
+        const id = work.id || ('r' + Date.now().toString(36))
+        const prev = reviews && reviews.find(r => r.id === id)
+        const entry = entryFromWork(work, id, prev)
+        await mutateReviews(list => list.some(r => r.id === id) ? list.map(r => r.id === id ? entry : r) : list.concat(entry))
+        setWork(w => ({ ...w, ...entry }))
+        return id
+      } catch (e) { setNotice('Could not save: ' + ((e && e.message) || 'error')); return null }
+      finally { setBusy(false) }
+    },
+    saveAsNew: async () => {
+      setBusy(true); setNotice('')
+      try {
+        const id = 'r' + Date.now().toString(36)
+        const entry = entryFromWork({ ...work, name: work.name.trim() + ' (copy)' }, id)
+        await mutateReviews(list => list.concat(entry))
+        setWork({ ...entry }); setSnapshot(null)
+      } catch (e) { setNotice('Could not save: ' + ((e && e.message) || 'error')) }
+      finally { setBusy(false) }
+    },
+    newReview: () => { setSnapshot(null); setSnapState('idle'); setWork(newWork(defaultReviewSpec())); setNotice('') },
+    open: async (r) => {
+      setNotice('')
+      if (r.status === 'frozen') {
+        setSnapshot(null); setSnapState('loading'); setWork({ ...r, order: sanitizeOrder(r.order) })
+        try {
+          const resp = await fetch('/api/preferences?mrSnapshot=' + encodeURIComponent(r.id), { credentials: 'include' })
+          const d = await resp.json().catch(() => ({}))
+          if (!resp.ok || !d.snapshot) throw new Error(d.error || 'The frozen numbers could not be found')
+          setSnapshot(d.snapshot); setSnapState('idle')
+        } catch (e) { setSnapState('error'); setNotice('Could not open the frozen review: ' + ((e && e.message) || 'error')) }
+      } else {
+        setSnapshot(null); setSnapState('idle'); setWork({ ...r, order: sanitizeOrder(r.order) })
+      }
+    },
+    template: (r) => {
+      setSnapshot(null); setSnapState('idle')
+      const spec = mostRecentCompletedSpec(r.spec.type)
+      setWork({ ...newWork(spec), order: sanitizeOrder(r.order), hidden: defaultHiddenFor(spec).concat(r.hidden.filter(h => h !== 'cac-sheet')) })
+      setNotice('Started a new review using the slide order of "' + r.name + '". Pick the period and save it.')
+    },
+    remove: async (r) => {
+      if (!window.confirm('Delete "' + r.name + '"' + (r.status === 'frozen' ? ' and its frozen numbers' : '') + '? This cannot be undone.')) return
+      setBusy(true); setNotice('')
+      try {
+        await mutateReviews(list => list.filter(x => x.id !== r.id))
+        if (r.status === 'frozen') { try { await writePref('mr_snap_' + r.id, null) } catch (e) { /* the entry is gone; a stray snapshot row is harmless */ } }
+        if (work.id === r.id) { setSnapshot(null); setSnapState('idle'); setWork(newWork(defaultReviewSpec())) }
+      } catch (e) { setNotice('Could not delete: ' + ((e && e.message) || 'error')) }
+      finally { setBusy(false) }
+    },
+    freeze: async (snap, id) => {
+      await writePref('mr_snap_' + id, snap)
+      const frozenAt = new Date().toISOString()
+      let frozenEntry = null
+      await mutateReviews(list => list.map(r => {
+        if (r.id !== id) return r
+        frozenEntry = { ...r, status: 'frozen', frozenAt, frozenBy: meEmail, updatedAt: frozenAt, updatedBy: meEmail }
+        return frozenEntry
+      }))
+      setSnapshot(snap); setSnapState('idle')
+      setWork(w => ({ ...w, ...frozenEntry }))
+    },
+    unfreeze: async () => {
+      if (!window.confirm('Unfreeze "' + work.name + '"? It will go live again and pull today\'s numbers; the frozen copy is removed.')) return
+      setBusy(true); setNotice('')
+      try {
+        let liveEntry = null
+        await mutateReviews(list => list.map(r => {
+          if (r.id !== work.id) return r
+          const { frozenAt, frozenBy, ...rest } = r
+          liveEntry = { ...rest, status: 'live', updatedAt: new Date().toISOString(), updatedBy: meEmail }
+          return liveEntry
+        }))
+        try { await writePref('mr_snap_' + work.id, null) } catch (e) { /* harmless */ }
+        setSnapshot(null)
+        setWork(w => ({ ...w, ...liveEntry, frozenAt: undefined, frozenBy: undefined }))
+      } catch (e) { setNotice('Could not unfreeze: ' + ((e && e.message) || 'error')) }
+      finally { setBusy(false) }
+    },
+  }
+
+  // Changing the period of a review: keep the order, adjust only what the period decides (the CAC
+  // slide, and the auto-generated name if the user never typed their own).
+  const onPeriodChange = useCallback((spec) => {
+    setWork(w => {
+      const wasAuto = w.name === autoReviewName(w.spec)
+      const hidden = specKey(spec) === CAC_SHEET_SPEC_KEY ? w.hidden : (w.hidden.includes('cac-sheet') ? w.hidden : w.hidden.concat('cac-sheet'))
+      return { ...w, spec, hidden, name: wasAuto ? autoReviewName(spec) : w.name }
+    })
+  }, [])
+
+  const frozenLoading = work.status === 'frozen' && !snapshot
+  const providerKey = specKey(work.spec) + (work.status === 'frozen' ? ':frozen' : ':live')
+
+  if (frozenLoading) {
+    return (
+      <div className={`lq-page-shell ${styles.shellRoot}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#EEF1F6' }}>
+        <div className={styles.noPrint}><Sidebar /></div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 14, fontFamily: FONT }}>
+          {snapState === 'error'
+            ? <>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#7A5C00', maxWidth: 420, textAlign: 'center' }}>{notice || 'Could not open the frozen review.'}</div>
+                <Button size="sm" onClick={actions.newReview}>Back to a new review</Button>
+              </>
+            : <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600 }}><span className={styles.mrSpinner} />Opening the frozen review…</div>}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <MarketingReviewDataProvider key={providerKey} spec={work.spec} snapshot={work.status === 'frozen' ? snapshot : null}>
+      <DeckSlidesContext.Provider value={slides}>
+        <ReviewWorkspace work={work} patchWork={patchWork} isOwner={isOwner} reviews={reviews} dirty={dirty} busy={busy}
+          notice={notice} setNotice={setNotice} actions={actions} slides={slides} onPeriodChange={onPeriodChange} />
+      </DeckSlidesContext.Provider>
     </MarketingReviewDataProvider>
   )
 }

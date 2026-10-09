@@ -28,6 +28,13 @@
 // already have. The Settings checkbox now does exactly what it already
 // visually promises, with no separate list to remember to update.
 
+// Marketing Review: only these people may FREEZE (finalize) a review or unfreeze it. Everything else on
+// that page is open to any admin. Enforced on the server in api/preferences.mjs and mirrored in the UI.
+export const MARKETING_REVIEW_OWNERS = ['shivam.sharma@leverageedu.com']
+export function isMarketingReviewOwner(email) {
+  return !!email && MARKETING_REVIEW_OWNERS.includes(String(email).trim().toLowerCase())
+}
+
 // Dashboards a plain 'viewer' does NOT get implicitly -- they must be granted
 // explicitly through a "viewer:<ids>" role. Also the fail-safe denial list used
 // for unknown/malformed roles.
