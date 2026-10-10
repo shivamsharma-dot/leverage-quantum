@@ -1,4 +1,4 @@
-import { getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
+import { getSessionUser, supabaseAdmin, canAccessDashboard } from '../lib/auth.mjs'
 import { SHEET_PREF_KEYS } from '../src/lib/dataSources.js'
 import { isMarketingReviewOwner } from '../shared/access.mjs'
 
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   // Kept out of the bulk GET below (a snapshot is a few hundred KB) and fetched only when that review is
   // opened. Only keys of the form mr_snap_<id> can be read through here.
   if (req.method === 'GET' && typeof req.query.mrSnapshot === 'string') {
-    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    if (me.role !== 'admin' && !canAccessDashboard(me.role, 'marketing_review')) return res.status(403).json({ error: 'Forbidden' })
     const id = req.query.mrSnapshot
     if (!/^[a-z0-9_-]{3,40}$/i.test(id)) return res.status(400).json({ error: 'Bad review id' })
     const r = await supabaseAdmin('app_preferences?select=value&key=eq.mr_snap_' + id)
@@ -132,7 +132,10 @@ export default async function handler(req, res) {
     // (ac_sales_manual itself no longer needs to be here: only Marketing Review reads/
     // writes it now, and that page is admin-only already.)
     const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'careers_programs', 'team_ac_countries', 'team_sr_countries', 'overall_summary_table_views'])
-    const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
+    // Marketing Review's own saved figures (read only here; writing stays admin-only) for anyone granted that page.
+    const MR_READ_KEYS = new Set(['mr_reviews', 'ac_sales_manual', 'ac_sales_period_totals', 'ac_actual_revenue_manual', 'mr_review_tabs_copy'])
+    const mrReader = me.role !== 'admin' && canAccessDashboard(me.role, 'marketing_review')
+    const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key) || (mrReader && MR_READ_KEYS.has(row.key)))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))
     return res.status(200).json({ prefs, meta })

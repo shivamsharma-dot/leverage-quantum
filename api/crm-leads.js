@@ -4589,7 +4589,10 @@ async function handleBigQuery(req, res, me) {
     : (mode === 'marketing_review_cac' || mode === 'marketing_review_tabs') ? 'marketing_review'
     : OVERALL_BQ_READ_MODES.includes(mode) ? 'overall_bigquery'
     : 'settings'
-  if (!auth.canAccessDashboard(me.role, gateId)) {
+  // The Marketing Review deck reads the same Overall BigQuery cache rows, so anyone granted that page can
+  // read them too (2026-10-10: viewers granted Marketing Review got "Forbidden" on every slide's figures).
+  const mrReadOk = OVERALL_BQ_READ_MODES.includes(mode) && auth.canAccessDashboard(me.role, 'marketing_review')
+  if (!mrReadOk && !auth.canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
@@ -6061,7 +6064,9 @@ async function handleInstagram(req, res, me) {
 // (see lib/ga4.mjs's header comment).
 async function handleGA4(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
-  if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
+  // Marketing Review's website-traffic slide reads the same range endpoint, so its viewers may too.
+  const mrRange = (req.query && req.query.mode) === 'range' && canAccessDashboard(me.role, 'marketing_review');
+  if (!mrRange && !canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
   const { ga4Creds, ga4Configured, fetchGA4WebsiteUsers } = await import('../lib/ga4.mjs');
   const creds = ga4Creds();
   if (!ga4Configured(creds)) return res.status(200).json({ configured: false });
