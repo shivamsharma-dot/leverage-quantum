@@ -310,7 +310,7 @@ function aggregateReviewMonth(rows, key) {
   return {
     hasData: bySource.size > 0, leads, ql, humanQl, aiQl, superbotQl, apps, spend, queued, floorQueued, deposits,
     cpl: paidLeads > 0 ? spend / paidLeads : null,
-    cpql: paidQl > 0 ? spend / paidQl : null,
+    cpql: ql > 0 ? spend / ql : null, // blended: total spend / total QL (owner, 2026-10-10)
     cpa: paidApps > 0 ? spend / paidApps : null,
   }
 }
@@ -697,9 +697,35 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     const since = isoDate(months.current.start), until = isoDate(months.current.end)
     // 'Branding' is its own Source since 2026-10-09 (it used to be folded into Organic), and the
     // Awareness & offline slide below still needs those rows, so both are fetched here.
-    fetchOverallBqRows({ since, until, sources: ['Organic', 'Branding'] })
-      .then(r => { if (!dead) setOrganicSubRows(r) })
-      .catch(() => { if (!dead) setOrganicSubRows([]) })
+    // A whole half in one request can time out (Postgres 57014) and used to show a false "no activity",
+    // so ask month by month (two at a time, one retry each) and collapse each month straight away.
+    ;(async () => {
+      const slices = months.current.monthDates.map(d => ({
+        since: isoDate(new Date(d.getFullYear(), d.getMonth(), 1)),
+        until: isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
+      }))
+      const FIELDS = ['Total Leads Generated', 'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL']
+      const acc = new Map()
+      let ok = 0
+      const runSlice = async (sl) => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const rs = await fetchOverallBqRows({ since: sl.since, until: sl.until, sources: ['Organic', 'Branding'] })
+            for (const r of rs) {
+              const k = (r.Sub_Source || '') + '|' + (r.Source || '') + '|' + (r.month || '')
+              const e = acc.get(k) || { Sub_Source: r.Sub_Source || '', Source: r.Source || '', month: r.month || '', 'Total Leads Generated': 0, 'Futwork Human QL': 0, 'Futwork AI QL': 0, 'Superbot AI QL': 0 }
+              for (const f of FIELDS) e[f] += reviewNum(r[f])
+              acc.set(k, e)
+            }
+            ok++
+            return
+          } catch (e) { /* retry once, then skip this month */ }
+        }
+      }
+      const queue = slices.slice()
+      await Promise.all([0, 1].map(async () => { while (queue.length) await runSlice(queue.shift()) }))
+      if (!dead) setOrganicSubRows(ok ? [...acc.values()] : [])
+    })()
     return () => { dead = true }
   }, [months, frozen])
 
