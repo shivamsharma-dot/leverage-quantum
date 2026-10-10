@@ -420,12 +420,14 @@ function sumManualForPeriod(map, spec, periodTotals) {
   return { total: entered ? total : null, entered }
 }
 
-function buildHeadlineRows(months, aggByMonth, acSales, acTotals) {
+function buildHeadlineRows(months, aggByMonth, acSales, acTotals, roasCur) {
   const acCur = sumManualForPeriod(acSales, months.current, acTotals)
   const acPrior = sumManualForPeriod(acSales, months.prior, acTotals)
   const acLY = sumManualForPeriod(acSales, months.lastYear, acTotals)
   const ac1 = acPrior.total, ac0 = acCur.total, acLYv = acLY.total
   const cpsOf = (agg, ac) => (ac != null && ac > 0 && agg.hasData) ? agg.spend / ac : null
+  // Cost per (App + AC sale): spend divided by the two kinds of conversion added together.
+  const cpacOf = (agg, ac) => (ac != null && agg.hasData && (agg.apps + ac) > 0) ? agg.spend / (agg.apps + ac) : null
 
   const metric = (label, key, invert, money, getter) => {
     const v1 = getter(aggByMonth.prior, ac1)
@@ -450,6 +452,11 @@ function buildHeadlineRows(months, aggByMonth, acSales, acTotals) {
     metric('CPQL', 'cpql', true, true, a => a.cpql),
     metric('CPA', 'cpa', true, true, a => a.cpa),
     metric('CPS', 'cps', true, true, (a, ac) => cpsOf(a, ac)),
+    metric('Cost per (App + AC sale)', 'cpac', true, true, (a, ac) => cpacOf(a, ac)),
+    // ROAS comes from the Finance "B2C H1 CAC" sheet (Rev Total / Spend), which only covers H1 FY26-27,
+    // so only the review column has a value; the older two columns stay empty.
+    { key: 'roas', label: 'ROAS', invert: false, money: false, values: [null, null, roasCur != null ? roasCur : null],
+      deltaVsPrior: null, priorForDeltaVsPrior: null, deltaVsLastYear: null, priorForDeltaVsLastYear: null },
   ]
 }
 
@@ -594,7 +601,12 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     if (frozen) return undefined
     let dead = false
     setGaTraffic(null); setGaError(null)
-    const ranges = [{ key: 'half', since: isoDate(months.current.start), until: isoDate(months.current.end) }]
+    // the review half, plus the previous half and the same half last year (for the traffic comparison)
+    const ranges = [
+      { key: 'half', since: isoDate(months.current.start), until: isoDate(months.current.end) },
+      { key: 'prior', since: isoDate(months.prior.start), until: isoDate(months.prior.end) },
+      { key: 'lastYear', since: isoDate(months.lastYear.start), until: isoDate(months.lastYear.end) },
+    ]
     months.current.monthDates.forEach((d, i) => ranges.push({
       key: 'm' + i,
       since: isoDate(new Date(d.getFullYear(), d.getMonth(), 1)),
@@ -831,8 +843,10 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
 
   const headlineRows = useMemo(() => {
     if (!aggByMonth || !acSalesLoaded) return null
-    return buildHeadlineRows(months, aggByMonth, acSales, acTotals)
-  }, [aggByMonth, acSalesLoaded, acSales, acTotals, months])
+    const roasRow = cacSheet && cacSheet.rows ? cacSheet.rows.find(r => String(r[0] || '').trim().toLowerCase() === 'roas') : null
+    const roasCur = roasRow && Number.isFinite(parseFloat(roasRow[1])) ? parseFloat(roasRow[1]) : null
+    return buildHeadlineRows(months, aggByMonth, acSales, acTotals, cacApplies ? roasCur : null)
+  }, [aggByMonth, acSalesLoaded, acSales, acTotals, months, cacSheet, cacApplies])
 
   const channelRowsByChannel = useMemo(() => {
     if (!byChannelByMonth) return null
@@ -1082,6 +1096,30 @@ function PeriodDeltaHead({ spec }) {
   return <div style={{ fontSize: 10.5, fontWeight: 800, color: '#64748B', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.03em', alignSelf: 'end' }}>vs {spec.label}</div>
 }
 
+// Short written takeaways under the headline table. The first two are the team's own statements about
+// AC sales (entered as written, not computed here); the third is computed from the table itself.
+function HeadlineInsights({ rows, months, active }) {
+  const cpac = rows.find(r => r.key === 'cpac')
+  const lines = [
+    'AC sale TAT is longer than SR app TAT.',
+    '80% of AC sales come from leads of the last three months.',
+  ]
+  if (cpac && cpac.values[2] != null && cpac.deltaVsPrior != null && cpac.deltaVsPrior !== 'new') {
+    const d = cpac.deltaVsPrior
+    lines.push('Cost per (App + AC sale) is ' + fmtINRShort(cpac.values[2]) + ', ' + (d <= 0 ? 'down ' : 'up ') + Math.abs(d).toFixed(1) + '% vs ' + months.prior.label + '.')
+  }
+  return (
+    <div className={active ? styles.staggerItem : undefined} style={{ marginTop: 14, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '12px 16px', animationDelay: active ? '0.4s' : undefined }}>
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
+      {lines.map((t, i) => (
+        <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, fontWeight: 600, color: '#1E2A44', lineHeight: 1.45, marginBottom: i < lines.length - 1 ? 4 : 0 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, marginTop: 6, flexShrink: 0 }} />{t}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // The 9-metric monthly headline table -- Spend/Leads/QL/Apps/AC Sales/CPL/
 // CPQL/CPA/CPS across the trailing 3 months, each with a delta vs the prior
 // month and vs the same month last year. Reads live figures from Overall's
@@ -1116,9 +1154,9 @@ function HeadlineSlide({ active, period }) {
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '52px 72px 30px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} live />
-      <SectionKicker label="Executive Summary" title="The headline numbers" />
+      <div style={{ marginBottom: -12 }}><SectionKicker label="Executive Summary" title="The headline numbers" /></div>
 
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
@@ -1150,10 +1188,10 @@ function HeadlineSlide({ active, period }) {
           {headlineRows.map((row, i) => (
             <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
               display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, alignItems: 'center',
-              padding: '10px 0', borderBottom: '1px solid #F1F5F9',
+              padding: '5.5px 0', borderBottom: '1px solid #F1F5F9',
               animationDelay: active ? (0.035 * i) + 's' : undefined,
             }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {row.label}
                 {row.key === 'acSales' && active && !ctx.frozen && (
                   <button type="button" onClick={openEdit} className={styles.noPrint} title="Enter AC Sales"
@@ -1169,7 +1207,7 @@ function HeadlineSlide({ active, period }) {
                 return (
                   <div key={ci} title={partial ? 'AC Sales entered for ' + entered + ' of ' + nMonths + ' months only, so this is a partial total' : exactHeadlineTitle(v, row.money)}
                     style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />
+                    {row.key === 'roas' ? (v == null ? '-' : v.toFixed(2) + 'x') : <AnimatedNumber value={v} money={row.money} active={active} delay={0.035 * i} />}
                     {partial && <span style={{ color: '#94A3B8', fontWeight: 700 }}> *</span>}
                   </div>
                 )
@@ -1178,6 +1216,7 @@ function HeadlineSlide({ active, period }) {
               <div style={{ textAlign: 'right' }}><DeltaCell delta={row.deltaVsLastYear} prior={row.priorForDeltaVsLastYear} money={row.money} invert={row.invert} showPrior={false} /></div>
             </div>
           ))}
+          <HeadlineInsights rows={headlineRows} months={months} active={active} />
         </>
       )}
 
@@ -1325,6 +1364,30 @@ function ChannelPerformanceSlide({ active, period }) {
   if (!ctx) return null
   const { months } = ctx
   const max = Math.max(1, ...channelRows.map(c => c.ql))
+  // Written takeaways, built from the same QL figures the bars show.
+  const insights = (() => {
+    const total = channelRows.reduce((sum, c) => sum + c.ql, 0)
+    if (!total || !byChannelByMonth) return []
+    const out = []
+    const named = channelRows.filter(c => c.name !== 'Other')
+    const top = named[0], second = named[1]
+    if (top) {
+      const share = (top.ql / total * 100).toFixed(0)
+      out.push(top.name === 'Meta Ads'
+        ? 'Meta Ads continues to be our engine to drive QLs: ' + fmtN(top.ql) + ' QLs, ' + share + '% of the total.'
+        : top.name + ' is our biggest QL driver: ' + fmtN(top.ql) + ' QLs, ' + share + '% of the total.')
+    }
+    if (second && second.ql > 0) out.push(second.name + ' is the second largest source with ' + fmtN(second.ql) + ' QLs (' + (second.ql / total * 100).toFixed(0) + '% of the total).')
+    const prior = byChannelByMonth.prior
+    const grow = named.map(c => {
+      const p = prior && prior.get(c.name) ? prior.get(c.name).ql : 0
+      return { name: c.name, cur: c.ql, prev: p, pct: p >= 200 ? ((c.ql - p) / p) * 100 : null }
+    }).filter(g => g.pct != null && g.pct > 0).sort((a, b) => b.pct - a.pct)[0]
+    if (grow) out.push(grow.name + ' QLs grew ' + grow.pct.toFixed(0) + '% vs ' + months.prior.label + ' (' + fmtN(grow.prev) + ' to ' + fmtN(grow.cur) + ').')
+    const ql = ctx.headlineRows && ctx.headlineRows.find(r => r.key === 'ql')
+    if (ql && ql.deltaVsLastYear != null && ql.deltaVsLastYear !== 'new') out.push('Total QLs are ' + (ql.deltaVsLastYear >= 0 ? 'up ' : 'down ') + Math.abs(ql.deltaVsLastYear).toFixed(1) + '% vs ' + months.lastYear.label + '.')
+    return out
+  })()
   return (
     <LiveDataFrame ctx={ctx} label="Channel Performance" title="Where the QLs came from" period={period} active={active}>
       {channelRows.length === 0 ? (
@@ -1356,6 +1419,16 @@ function ChannelPerformanceSlide({ active, period }) {
               </div>
             )
           })}
+        </div>
+      )}
+      {insights.length > 0 && (
+        <div style={{ marginTop: 12, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '12px 16px' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
+          {insights.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, fontWeight: 600, color: '#1E2A44', lineHeight: 1.45, marginBottom: i < insights.length - 1 ? 4 : 0 }}>
+              <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, marginTop: 6, flexShrink: 0 }} />{t}
+            </div>
+          ))}
         </div>
       )}
     </LiveDataFrame>
@@ -1583,14 +1656,35 @@ function FunnelSlide({ active, period }) {
 // through SLIDES' fixed {active, period} Body signature. Same 3-half-years +
 // 2-deltas table shape as the headline slide, scoped to one channel; AC
 // Sales/CPS are dropped since neither has a real per-channel figure.
-function ChannelSpotlightBody({ active, period, channel }) {
+function ChannelSpotlightBody({ active, period, channel, title }) {
   const ctx = useMarketingReviewData()
   if (!ctx) return null
+  // Organic only: Apps, AC sales and their total for the channel, read from the Finance "B2C H1 CAC" sheet
+  // (H1 FY26-27 only). AC sales is blank in the sheet until Finance fills it, shown as a dash until then.
+  const sheetRows = channel === 'Organic' && ctx.cacApplies && ctx.cacSheet ? ctx.cacSheet.rows : null
+  const orgCol = sheetRows ? (sheetRows[0] || []).findIndex(h => String(h).trim().toLowerCase() === 'organic') : -1
+  const sheetNum = (label) => {
+    if (!sheetRows || orgCol < 0) return null
+    const r = sheetRows.find(x => String(x[0] || '').trim().toLowerCase() === label)
+    const n = r ? parseFloat(String(r[orgCol] || '').replace(/,/g, '')) : NaN
+    return Number.isFinite(n) ? n : null
+  }
+  const orgApps = sheetNum('total apps'), orgAc = sheetNum('total ac sales')
   const { months, channelRowsByChannel } = ctx
   const displayPeriods = months ? [months.lastYear, months.prior, months.current] : []
   const rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
   return (
-    <LiveDataFrame ctx={ctx} label="Channel Spotlight" title={channel} period={period} active={active}>
+    <LiveDataFrame ctx={ctx} label="Channel Spotlight" title={title || channel} period={period} active={active}>
+      {sheetRows && orgApps != null && (
+        <div style={{ display: 'flex', gap: 14, margin: '4px 0 6px' }}>
+          {[['Apps', orgApps], ['AC sales', orgAc], ['Apps + AC sales', orgApps + (orgAc || 0)]].map(([label, v], i) => (
+            <div key={label} style={{ flex: 1, background: i === 2 ? C.navyBg : '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '10px 16px' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{v == null ? '-' : fmtN(v)}</div>
+            </div>
+          ))}
+        </div>
+      )}
       {rows && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, borderBottom: '2px solid #0F1B33', paddingBottom: 9, marginBottom: 2 }}>
@@ -1619,7 +1713,7 @@ function ChannelSpotlightBody({ active, period, channel }) {
         </>
       )}
       {channel === 'Organic' && (
-        <div style={{ marginTop: 26 }}>
+        <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
             QL by sub-source, {months ? months.current.label : 'this period'}
           </div>
@@ -1645,7 +1739,7 @@ function ChannelSpotlightBody({ active, period, channel }) {
 }
 function GoogleAdsChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Google Ads" /> }
 function MetaAdsChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Meta Ads" /> }
-function OrganicChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Organic" /> }
+function OrganicChannelSlide({ active, period }) { return <ChannelSpotlightBody active={active} period={period} channel="Organic" title="Where the organic leads came from" /> }
 
 // TOF (top-of-funnel) / branding campaigns -- per explicit user confirmation
 // (2026-09-10, "use exactly what I found"), this is a real naming-pattern
@@ -1673,10 +1767,11 @@ function CacSheetSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const sheet = ctx && ctx.cacSheet
   const error = ctx && ctx.cacError
-  const rows = sheet && sheet.rows
+  // The sheet's last row ("ROAS AC") is left out of the slide on purpose.
+  const rows = sheet && sheet.rows ? sheet.rows.filter(r => !/^roas ac/i.test(String(r[0] || '').trim())) : null
   const header = rows && rows[0]
   const body = rows ? rows.slice(1) : []
-  const colW = 'minmax(210px, 1.7fr) repeat(8, minmax(0, 1fr))'
+  const colW = 'minmax(190px, 1.6fr) repeat(' + Math.max(1, (header ? header.length : 10) - 1) + ', minmax(0, 1fr))'
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '60px 56px 40px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} live />
@@ -1767,12 +1862,19 @@ function TrafficSourcesSlide({ active, period }) {
     const groups = GA_GROUPS.map(g => ({ ...g, users: 0 }))
     for (const c of half.byChannel || []) groups.find(g => g.key === GA_GROUP_OF(c.channel)).users += c.users
     const channels = (half.byChannel || []).slice(0, 7)
+    const groupUsers = (r) => {
+      if (!r) return null
+      const g = { Organic: 0, Paid: 0, Direct: 0, Other: 0 }
+      for (const c of r.byChannel || []) g[GA_GROUP_OF(c.channel)] += c.users
+      return { ...g, Total: r.totalUsers || 0 }
+    }
+    const compare = { cur: groupUsers(half), prior: groupUsers(ga.prior), lastYear: groupUsers(ga.lastYear) }
     const months = ctx.months.current.monthDates.map((d, i) => {
       const r = ga['m' + i]
       const org = r && r.byChannel ? (r.byChannel.find(c => c.channel === 'Organic Search') || { users: 0 }).users : 0
       return { label: REVIEW_MONTH_NAMES[d.getMonth()].slice(0, 3), organic: org, total: r ? r.totalUsers : 0 }
     })
-    return { total, groups, channels, months }
+    return { total, groups, channels, months, compare }
   }, [ga, ctx])
   const col = { flex: 1, minWidth: 0 }
   return (
@@ -1805,34 +1907,50 @@ function TrafficSourcesSlide({ active, period }) {
                 }} />
               ))}
             </div>
-            {view.groups.map((g, i) => (
-              <div key={g.key} className={active ? styles.staggerItem : undefined}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '0.5px solid #EEF2F7', animationDelay: active ? (0.06 * i) + 's' : undefined }}>
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: g.color, flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#334155' }}>{g.key}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#64748B', fontVariantNumeric: 'tabular-nums' }}>
-                  <AnimatedNumber value={g.users} active={active} delay={0.06 * i} duration={800} />
-                </span>
-                <span style={{ width: 56, textAlign: 'right', fontSize: 14, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                  {view.total ? ((g.users / view.total) * 100).toFixed(1) : '0.0'}%
-                </span>
-              </div>
-            ))}
-            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '18px 0 8px' }}>By channel</div>
-            {view.channels.map((c, i) => {
-              const grp = GA_GROUPS.find(g => g.key === GA_GROUP_OF(c.channel))
-              const max = view.channels[0].users || 1
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '4px 0 8px' }}>Compared with the previous half and last year</div>
+            {(() => {
+              const cmp = view.compare
+              const gridCols = '78px repeat(3, 1fr) 54px 64px 64px'
+              const keys = ['Organic', 'Paid', 'Direct', 'Other', 'Total']
+              const head = { fontSize: 10, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', textAlign: 'right', letterSpacing: '0.02em' }
               return (
-                <div key={c.channel} className={active ? styles.staggerItem : undefined}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7, animationDelay: active ? (0.2 + 0.04 * i) + 's' : undefined }}>
-                  <span style={{ width: 120, fontSize: 12.5, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.channel}</span>
-                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: '#F1F5F9', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: active ? Math.max(2, (c.users / max) * 100) + '%' : '0%', background: grp.color, borderRadius: 4, transition: `width .8s cubic-bezier(.22,1,.36,1) ${0.2 + 0.04 * i}s` }} />
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: gridCols, columnGap: 8, borderBottom: '2px solid #0F1B33', paddingBottom: 6 }}>
+                    <div />
+                    <div style={head}>{ctx.months.lastYear.label}</div>
+                    <div style={head}>{ctx.months.prior.label}</div>
+                    <div style={head}>{ctx.months.current.label}</div>
+                    <div style={head}>Share</div>
+                    <div style={head}>vs prev</div>
+                    <div style={head}>vs LY</div>
                   </div>
-                  <span style={{ width: 84, textAlign: 'right', fontSize: 12.5, fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{fmtN(c.users)}</span>
+                  {keys.map((k, i) => {
+                    const grp = GA_GROUPS.find(g => g.key === k)
+                    const cur = cmp.cur ? cmp.cur[k] : null
+                    const pr = cmp.prior ? cmp.prior[k] : null
+                    const ly = cmp.lastYear ? cmp.lastYear[k] : null
+                    const isTotal = k === 'Total'
+                    const num = { fontSize: 12.5, fontWeight: isTotal ? 800 : 700, color: '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+                    return (
+                      <div key={k} className={active ? styles.staggerItem : undefined} style={{
+                        display: 'grid', gridTemplateColumns: gridCols, columnGap: 8, alignItems: 'center', padding: '6px 0',
+                        borderBottom: '0.5px solid #EEF2F7', background: isTotal ? '#F8FAFC' : undefined, animationDelay: active ? (0.05 * i) + 's' : undefined,
+                      }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#334155', display: 'flex', alignItems: 'center', gap: 7 }}>
+                          {grp && <span style={{ width: 9, height: 9, borderRadius: 3, background: grp.color, flexShrink: 0 }} />}{k}
+                        </div>
+                        <div style={num}>{ly == null ? '-' : fmtN(ly)}</div>
+                        <div style={num}>{pr == null ? '-' : fmtN(pr)}</div>
+                        <div style={num}>{cur == null ? '-' : <AnimatedNumber value={cur} active={active} delay={0.05 * i} duration={800} />}</div>
+                        <div style={{ ...num, color: '#64748B' }}>{view.total && cur != null ? ((cur / view.total) * 100).toFixed(1) + '%' : '-'}</div>
+                        <div style={{ textAlign: 'right' }}><DeltaCell delta={reviewPctDelta(cur, pr)} prior={pr} money={false} invert={false} showPrior={false} /></div>
+                        <div style={{ textAlign: 'right' }}><DeltaCell delta={reviewPctDelta(cur, ly)} prior={ly} money={false} invert={false} showPrior={false} /></div>
+                      </div>
+                    )
+                  })}
                 </div>
               )
-            })}
+            })()}
           </div>
           <div style={col}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
@@ -2083,6 +2201,16 @@ function RisksSlide({ active, period }) {
   )
 }
 
+// Two pointers added in the deck itself (2026-10-10): a ChatGPT pilot right after the TikTok pilot, and
+// parallel calling as the last pointer. The other pointers come from the sheet tab.
+function withNextExtras(items) {
+  const list = items.slice()
+  const chat = { n: '', title: 'ChatGPT pilot', detail: 'We are also running a ChatGPT pilot alongside the TikTok pilot.' }
+  const calling = { n: '', title: 'Parallel calling enabled', detail: 'We have enabled parallel calling, which will help us reduce the number of calls getting missed by coaches.' }
+  list.splice(Math.min(1, list.length), 0, chat)
+  list.push(calling)
+  return list
+}
 const PRIORITIES = [
   'Double down on the channel/corridor that scaled cleanly this period',
   'Fix or pause whatever is over the CPQL benchmark',
@@ -2098,17 +2226,17 @@ function NextStepsSlide({ active, period }) {
       <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '56px 64px', boxSizing: 'border-box' }}>
         <PeriodBadge period={period} live />
         <SectionKicker label={"Next " + unit + "'s priorities"} title="What we're doing next" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
-          {sheetNext.map((p, i) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 2 }}>
+          {withNextExtras(sheetNext).map((p, i) => (
             <div key={p.n + p.title} className={active ? styles.staggerItem : undefined}
               style={{ display: 'flex', alignItems: 'flex-start', gap: 14, animationDelay: active ? (0.08 * i) + 's' : undefined }}>
               <div style={{
                 width: 30, height: 30, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 13, fontWeight: 800, color: NAVY, background: C.navyBg, border: `1.5px solid ${NAVY}33`,
-              }}>{p.n || i + 1}</div>
+              }}>{i + 1}</div>
               <div>
-                <div style={{ fontSize: 15.5, fontWeight: 800, color: '#1E2A44', marginBottom: 2 }}>{noDash(p.title)}</div>
-                <div style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.4 }}>{noDash(p.detail)}</div>
+                <div style={{ fontSize: 14.5, fontWeight: 800, color: '#1E2A44', marginBottom: 1 }}>{noDash(p.title)}</div>
+                <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.35 }}>{noDash(p.detail)}</div>
               </div>
             </div>
           ))}
@@ -2194,7 +2322,10 @@ function moveInOrder(order, dragId, targetId) {
   return out
 }
 // Slides that make no sense for a period start hidden (the CAC sheet only covers one period).
-function defaultHiddenFor(spec) { return specKey(spec) === CAC_SHEET_SPEC_KEY ? [] : ['cac-sheet'] }
+// Slides that start hidden in every new review (Google Ads, Meta Ads and the awareness slide); any of them can be
+// shown again from the "Hidden slides" strip under the gallery. The CAC slide only has data for H1 FY26-27.
+const ALWAYS_HIDDEN_BY_DEFAULT = ['channel-google', 'channel-meta', 'tof']
+function defaultHiddenFor(spec) { return specKey(spec) === CAC_SHEET_SPEC_KEY ? ALWAYS_HIDDEN_BY_DEFAULT.slice() : ['cac-sheet'].concat(ALWAYS_HIDDEN_BY_DEFAULT) }
 
 /* ---------- the fixed-aspect canvas every render mode shares ---------- */
 
@@ -2578,7 +2709,7 @@ function ReadView({ slides, period }) {
 
 /* ---------- landing (default view when you open the page) ---------- */
 
-function GalleryCard({ slide, number, onOpen, period, editMode, hidden, onMove, onToggleHidden, canUp, canDown, drag }) {
+function GalleryCard({ slide, number, onOpen, period, editMode, hidden, onMove, onToggleHidden, canUp, canDown, drag, quickHide }) {
   const scale = 280 / SLIDE_W
   const iconBtn = { width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', color: '#334155', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, fontFamily: FONT }
   const dis = on => on ? {} : { opacity: 0.35, cursor: 'default' }
@@ -2598,6 +2729,12 @@ function GalleryCard({ slide, number, onOpen, period, editMode, hidden, onMove, 
         <div style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
           <slide.Body active={false} period={period} />
         </div>
+        {quickHide && !editMode && !hidden && (
+          <button type="button" title="Hide this slide from the deck" onClick={e => { e.stopPropagation(); onToggleHidden() }}
+            style={{ position: 'absolute', top: 8, right: 8, ...iconBtn, background: 'rgba(255,255,255,0.92)', boxShadow: '0 1px 4px rgba(15,23,42,0.18)', zIndex: 3 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+          </button>
+        )}
         {hidden && <div style={{ position: 'absolute', inset: 0, background: 'rgba(241,245,249,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Hidden</div>}
       </div>
       <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }} onClick={editMode ? undefined : onOpen}>
@@ -2973,7 +3110,7 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
                       editMode={editOrder && !frozen} hidden={hiddenSet.has(sl.id)}
                       onOpen={() => startDeck(slides.findIndex(x => x.id === sl.id))}
                       onMove={dir => moveBy(sl.id, dir)} canUp={idx > 0} canDown={idx < work.order.length - 1}
-                      onToggleHidden={() => toggleHidden(sl.id)}
+                      onToggleHidden={() => toggleHidden(sl.id)} quickHide={!frozen}
                       drag={{
                         isOver: overId === sl.id && dragId && dragId !== sl.id,
                         onDragStart: e => { setDragId(sl.id); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', sl.id) } catch (err) { /* ignore */ } },
@@ -2984,6 +3121,22 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
                   )
                 })}
               </div>
+              {!frozen && !editOrder && work.hidden.filter(id => SLIDES_BY_ID[id]).length > 0 && (
+                <div style={{ marginTop: 18, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '12px 16px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                    Hidden slides ({work.hidden.filter(id => SLIDES_BY_ID[id]).length}), not in the deck
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {work.hidden.filter(id => SLIDES_BY_ID[id]).map(id => (
+                      <button key={id} type="button" onClick={() => toggleHidden(id)} title="Show this slide in the deck again"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: '1px solid #CBD5E1', background: '#fff', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, fontWeight: 700, color: '#334155', cursor: 'pointer', fontFamily: FONT }}>
+                        {SLIDES_BY_ID[id].title}
+                        <span style={{ color: GREEN, fontWeight: 800 }}>Show</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

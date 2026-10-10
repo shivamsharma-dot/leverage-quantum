@@ -2984,10 +2984,10 @@ async function fetchH1CacSheet() {
   if (!mr.ok) throw new Error('H1 CAC sheet read failed (' + mr.status + '): ' + (md.error?.message || 'unknown') + (mr.status === 403 || mr.status === 404 ? ' -- share the sheet with ' + clientEmail : ''))
   const tab = (md.sheets || []).map(x => x.properties).find(x => x && x.sheetId === H1_CAC_SHEET_GID)
   if (!tab) throw new Error('H1 CAC sheet tab (gid ' + H1_CAC_SHEET_GID + ') not found')
-  const vr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${H1_CAC_SHEET_ID}/values/${encodeURIComponent("'" + tab.title.replace(/'/g, "''") + "'!A1:I20")}?valueRenderOption=FORMATTED_VALUE`, { headers })
+  const vr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${H1_CAC_SHEET_ID}/values/${encodeURIComponent("'" + tab.title.replace(/'/g, "''") + "'!A1:J19")}?valueRenderOption=FORMATTED_VALUE`, { headers })
   const vd = await vr.json().catch(() => ({}))
   if (!vr.ok) throw new Error('H1 CAC sheet read failed (' + vr.status + '): ' + (vd.error?.message || 'unknown'))
-  const width = 9
+  const width = 10
   const rows = (vd.values || []).map(r => Array.from({ length: width }, (_, i) => (r[i] == null ? '' : String(r[i]))))
   return { tab: tab.title, rows }
 }
