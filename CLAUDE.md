@@ -2432,3 +2432,7 @@ Slides 12 and 14 now show text from two tabs of the H1_FY27_Marketing_Review she
 ## 2026-10-10 (later still) -- Marketing Review: inbound call timing slide (commit `f8b991b`)
 
 New slide `inbound-calls` ("When students call, and how many we miss", `InboundCallsSlide`), placed after Risks and before Next priorities, visible by default. It summarises the "Call Timing Split" artifact (BigQuery inbound call log, September 1 to 26 2026, Monday to Saturday, UTC shifted to IST, working hours 10:30 AM to 7:30 PM). **The numbers are fixed in the code** (`CALLS_HOURLY`, `CALL_TILES`, `CALL_POINTS`), not live: 42,021 calls, 57.6% outside working hours, 60.1% missed, busiest hour 5 to 6 PM (4,590); answer rate 40.6% inside vs 39.4% outside working hours; 14,668 missed outside and 10,573 inside; Sunday 29.1% answered vs Saturday 41.9% and weekdays 39.6%. Shows a 24-hour bar chart with the working window shaded and the answered / missed split. Update the constants when the analysis is refreshed. Brand colours only (navy, cyan, green).
+
+## 2026-10-10 (later) -- Marketing Review: story pass on traffic, wins and CAC slides
+
+Traffic slide gets a green "What stands out" box (computed: QLs per 1,000 site users vs last year / previous half, biggest channel-group increases, and a "fewer visitors, more QLs" line when that is true). "What worked" shows only the headline title of each pointer (the descriptive line is gone, also in the computed fallback). CAC slide's top-left header now reads "H1 FY26-27 (Apr to Sep 2026)" so the figures are clearly the half-year.

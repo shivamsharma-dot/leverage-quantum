@@ -1802,7 +1802,7 @@ function CacSheetSlide({ active, period }) {
                 padding: '8px 10px', fontSize: 11.5, fontWeight: 800, color: NAVY, letterSpacing: '0.04em',
                 textAlign: ci === 0 ? 'left' : 'right', textTransform: ci === 0 ? 'uppercase' : 'none',
                 background: ci === 1 ? 'rgba(31,60,132,0.10)' : undefined,
-              }}>{h}</div>
+              }}>{ci === 0 ? 'H1 FY26-27 (Apr to Sep 2026)' : h}</div>
             ))}
           </div>
           {body.map((r, ri) => {
@@ -1874,7 +1874,34 @@ function TrafficSourcesSlide({ active, period }) {
       const org = r && r.byChannel ? (r.byChannel.find(c => c.channel === 'Organic Search') || { users: 0 }).users : 0
       return { label: REVIEW_MONTH_NAMES[d.getMonth()].slice(0, 3), organic: org, total: r ? r.totalUsers : 0 }
     })
-    return { total, groups, channels, months, compare }
+    const notes = []
+    const pct = (d) => Math.abs(d).toFixed(1) + '%'
+    const qlRow = ctx.headlineRows ? ctx.headlineRows.find(r => r.key === 'ql') : null
+    if (qlRow && compare.cur && compare.cur.Total) {
+      const perK = (ql, u) => (ql != null && u) ? (ql / u) * 1000 : null
+      const cur = perK(qlRow.values[2], compare.cur.Total)
+      const ly = compare.lastYear ? perK(qlRow.values[0], compare.lastYear.Total) : null
+      const pr = compare.prior ? perK(qlRow.values[1], compare.prior.Total) : null
+      const dLy = reviewPctDelta(cur, ly), dPr = reviewPctDelta(cur, pr)
+      if (typeof dLy === 'number' && dLy > 0) notes.push('Every 1,000 site users now produce ' + cur.toFixed(1) + ' QLs, up ' + pct(dLy) + ' vs ' + ctx.months.lastYear.label)
+      else if (typeof dPr === 'number' && dPr > 0) notes.push('Every 1,000 site users now produce ' + cur.toFixed(1) + ' QLs, up ' + pct(dPr) + ' vs ' + ctx.months.prior.label)
+    }
+    const ups = []
+    for (const k of ['Paid', 'Organic', 'Direct', 'Total']) {
+      const cur = compare.cur ? compare.cur[k] : null
+      const dPr = compare.prior ? reviewPctDelta(cur, compare.prior[k]) : null
+      const dLy = compare.lastYear ? reviewPctDelta(cur, compare.lastYear[k]) : null
+      if (typeof dPr === 'number' && dPr > 0) ups.push({ d: dPr, t: k + ' users up ' + pct(dPr) + ' vs ' + ctx.months.prior.label })
+      if (typeof dLy === 'number' && dLy > 0) ups.push({ d: dLy, t: k + ' users up ' + pct(dLy) + ' vs ' + ctx.months.lastYear.label })
+    }
+    ups.sort((a, b) => b.d - a.d)
+    for (const u of ups) { if (notes.length >= 3) break; notes.push(u.t) }
+    const totLy = compare.lastYear ? reviewPctDelta(compare.cur && compare.cur.Total, compare.lastYear.Total) : null
+    const qlLy = qlRow ? qlRow.deltaVsLastYear : null
+    if (notes.length < 4 && typeof totLy === 'number' && totLy < 0 && typeof qlLy === 'number' && qlLy > 0) {
+      notes.push('Fewer visitors, more QLs: site users ' + pct(totLy) + ' lower vs ' + ctx.months.lastYear.label + ', QLs ' + pct(qlLy) + ' higher')
+    }
+    return { total, groups, channels, months, compare, notes }
   }, [ga, ctx])
   const col = { flex: 1, minWidth: 0 }
   return (
@@ -1973,7 +2000,17 @@ function TrafficSourcesSlide({ active, period }) {
             <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
               {view.months.map(m => <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#64748B' }}>{m.label}</div>)}
             </div>
-            <div style={{ fontSize: 11.5, color: '#94A3B8', lineHeight: 1.55, marginTop: 22 }}>
+            {view.notes.length > 0 && (
+              <div style={{ marginTop: 18, background: C.greenBg, border: '0.5px solid #CDE9D7', borderRadius: 12, padding: '12px 16px' }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: GREEN, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
+                {view.notes.map((n, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, fontWeight: 700, color: '#0F172A', lineHeight: 1.4, marginTop: i ? 5 : 0 }}>
+                    <span style={{ color: GREEN, fontWeight: 800 }}>{'✓'}</span><span>{n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 10.5, color: '#94A3B8', lineHeight: 1.5, marginTop: 12 }}>
               Source: Google Analytics. Users are counted per channel, so a visitor who arrives through two channels appears in both; shares show contribution, the total is not unique visitors. Cross-network is Google's automated campaign traffic and is counted as paid.
             </div>
           </div>
@@ -2063,7 +2100,7 @@ function CalloutCard({ title, detail, kind, active, delay }) {
         <CalloutIcon kind={kind} />
       </div>
       <div style={{ fontSize: 15.5, fontWeight: 800, color: '#0F172A', marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 13.5, color: '#64748B', lineHeight: 1.6 }}>{detail}</div>
+      {detail ? <div style={{ fontSize: 13.5, color: '#64748B', lineHeight: 1.6 }}>{detail}</div> : null}
     </div>
   )
 }
@@ -2163,8 +2200,7 @@ function WinsSlide({ active, period }) {
             }}>
               <div style={{ width: 26, height: 26, borderRadius: 8, background: GREEN, color: '#fff', fontSize: 12, fontWeight: 800, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{w.n || i + 1}</div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', marginBottom: 3 }}>{noDash(w.title)}</div>
-                <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>{noDash(w.detail)}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', lineHeight: 1.35 }}>{noDash(w.title)}</div>
               </div>
             </div>
           ))}
@@ -2176,7 +2212,7 @@ function WinsSlide({ active, period }) {
     <LiveDataFrame ctx={ctx} label="Wins & Highlights" title="What worked" period={period} active={active}>
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
         {wins && wins.length > 0
-          ? wins.map((w, i) => <CalloutCard key={w.title} {...w} kind="win" active={active} delay={0.1 * i} />)
+          ? wins.map((w, i) => <CalloutCard key={w.title} {...w} detail={null} kind="win" active={active} delay={0.1 * i} />)
           : <div style={{ color: '#94A3B8', fontSize: 14, padding: '40px 0' }}>No metric crossed the win threshold this period.</div>}
       </div>
     </LiveDataFrame>
