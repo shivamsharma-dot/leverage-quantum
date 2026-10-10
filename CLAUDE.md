@@ -2401,3 +2401,11 @@ Source fix verified end to end. The new CASE was dry-run through Quantum's BigQu
 **Lesson that matters:** a failed or timed-out PRUNE leaves moved rows under BOTH their old and new Source (Source is part of `row_key`), so the live page double counts until the old rows go. In run #352 the raw-table prune timed out again (it is caught and logged, so the run still shows green) and 11,964 stale rows had to be deleted by hand in the Supabase SQL editor: `delete from overall_bq_daily where sync_id is null or synced_at < '<start of the good run>'` (keyed on timestamp, never on a run id, so a later sync cannot be hit). After any `full_resync` that changes Source labels, check for stale rows. Supabase Free plan is over its grace period (banner on the dashboard); heavy writes are what keep timing out.
 
 Still open: `study-abroad-consultant*` Google leads (about 2,230 in September, Rs 0 spend) were left under Google pending a decision.
+
+## 2026-10-10 -- Marketing Review: AC sales half-year totals taken once from the YoY Exec Summary sheet (commit `e54363f`)
+
+The headline table's AC Sales row (and therefore CPS) now uses fixed full-sale counts per half-year, copied one time from tab "3. YoY Exec Summary" of the H1_FY27_Marketing_Review sheet: H1 FY26 = 378, H2 FY26 = 718, H1 FY27 = 1,027. Stored in `app_preferences.ac_sales_period_totals` (`{'half:2025-1':378,'half:2025-2':718,'half:2026-1':1027}`, admin-only write). `sumManualForPeriod` in `MarketingReviewDashboard.jsx` prefers a period total over the monthly `ac_sales_manual` entries for that exact period; other periods (months, years, other halves) still sum the monthly entries. It is a one-time copy, not a live read of that sheet, so a later correction there needs the pref updated by hand. The AC Sales edit modal (monthly grid) is unchanged and does not show that a period total overrides it.
+
+Live-checked on the deck: AC Sales 378 / 718 / 1,027 (up 43.0% vs previous half, up 171.7% vs same half last year); CPS H1 FY27 is ₹1.8L = ₹18.93 Cr / 1,027, matching the sheet's own CPS of 1,84,323.
+
+Still open on the Finance CAC sheet (tab "Sep '26 ITD till Jul"): the deposits row B8:H8 is not updated (Apr-Jul values against Apr-Sep spend) pending the owner's choice of deposits basis; A1 still says "Apr - Jul"; AC rows and LinkedIn spend untouched by instruction.
