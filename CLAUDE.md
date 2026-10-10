@@ -2444,3 +2444,7 @@ Replaced the single-month bar list with a table (sub-source rows x the six month
 ## 2026-10-10 -- B2C Daily P&L page was empty: Finance renamed the sheet tab (commit `0b422e5`)
 
 The page said "no day up to 2026-10-09 has been filled in yet". Cause: Finance renamed the tab `Daily P&L - Yash` to `Daily P&L - till 9 Oct` (a frozen copy) and made a new live tab `Daily P&L`. A missing tab name makes Google's gviz export silently return the FIRST tab (the "Process" notes), which parsed to zero days. `B2C_PNL_SHEET_TAB` in `api/crm-leads.js` now reads `Daily P&L` (365 days, Oct 1-9 filled, all columns parse). Cash Flow (`Daily Cash Flow - Ramesh`) was unaffected. In the new tab September has no daily rows: the whole month sits as one lump on 30 Sep (like the 31 Aug lump), so any comparison window inside September (the "Sep 1-9" column) reads zero; YTD / H1 still add up. Live-verified: API returns 365 days and the page shows October MTD numbers.
+
+## 2026-10-10 (later still) -- Marketing Review: traffic slide has no QL lines, Organic gets an "AC sale" row
+
+Traffic slide "What stands out" now only lists channel-group user changes (no QL lines) and sits under the comparison table in the left column so the bottom left is no longer empty. Organic slide table gets an "AC sale" row right under Apps (review-period value from the Finance sheet, dash until Finance fills it; older halves dash).

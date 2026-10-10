@@ -1684,7 +1684,13 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
   const orgApps = sheetNum('total apps'), orgAc = sheetNum('total ac sales')
   const { months, channelRowsByChannel } = ctx
   const displayPeriods = months ? [months.lastYear, months.prior, months.current] : []
-  const rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
+  let rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
+  if (rows && channel === 'Organic') {
+    // AC sale sits right under Apps; only the review period has a figure (Finance sheet), older halves show a dash.
+    const acRow = { key: 'acSale', label: 'AC sale', invert: false, money: false, values: [null, null, orgAc], deltaVsPrior: null, priorForDeltaVsPrior: null, deltaVsLastYear: null, priorForDeltaVsLastYear: null }
+    const at = rows.findIndex(r => r.key === 'apps')
+    rows = at >= 0 ? [...rows.slice(0, at + 1), acRow, ...rows.slice(at + 1)] : [...rows, acRow]
+  }
   return (
     <LiveDataFrame ctx={ctx} label="Channel Spotlight" title={title || channel} period={period} active={active}>
       {sheetRows && orgApps != null && (
@@ -1918,16 +1924,6 @@ function TrafficSourcesSlide({ active, period }) {
     })
     const notes = []
     const pct = (d) => Math.abs(d).toFixed(1) + '%'
-    const qlRow = ctx.headlineRows ? ctx.headlineRows.find(r => r.key === 'ql') : null
-    if (qlRow && compare.cur && compare.cur.Total) {
-      const perK = (ql, u) => (ql != null && u) ? (ql / u) * 1000 : null
-      const cur = perK(qlRow.values[2], compare.cur.Total)
-      const ly = compare.lastYear ? perK(qlRow.values[0], compare.lastYear.Total) : null
-      const pr = compare.prior ? perK(qlRow.values[1], compare.prior.Total) : null
-      const dLy = reviewPctDelta(cur, ly), dPr = reviewPctDelta(cur, pr)
-      if (typeof dLy === 'number' && dLy > 0) notes.push('Every 1,000 site users now produce ' + cur.toFixed(1) + ' QLs, up ' + pct(dLy) + ' vs ' + ctx.months.lastYear.label)
-      else if (typeof dPr === 'number' && dPr > 0) notes.push('Every 1,000 site users now produce ' + cur.toFixed(1) + ' QLs, up ' + pct(dPr) + ' vs ' + ctx.months.prior.label)
-    }
     const ups = []
     for (const k of ['Paid', 'Organic', 'Direct', 'Total']) {
       const cur = compare.cur ? compare.cur[k] : null
@@ -1937,12 +1933,7 @@ function TrafficSourcesSlide({ active, period }) {
       if (typeof dLy === 'number' && dLy > 0) ups.push({ d: dLy, t: k + ' users up ' + pct(dLy) + ' vs ' + ctx.months.lastYear.label })
     }
     ups.sort((a, b) => b.d - a.d)
-    for (const u of ups) { if (notes.length >= 3) break; notes.push(u.t) }
-    const totLy = compare.lastYear ? reviewPctDelta(compare.cur && compare.cur.Total, compare.lastYear.Total) : null
-    const qlLy = qlRow ? qlRow.deltaVsLastYear : null
-    if (notes.length < 4 && typeof totLy === 'number' && totLy < 0 && typeof qlLy === 'number' && qlLy > 0) {
-      notes.push('Fewer visitors, more QLs: site users ' + pct(totLy) + ' lower vs ' + ctx.months.lastYear.label + ', QLs ' + pct(qlLy) + ' higher')
-    }
+    for (const u of ups) { if (notes.length >= 4) break; notes.push(u.t) }
     return { total, groups, channels, months, compare, notes }
   }, [ga, ctx])
   const col = { flex: 1, minWidth: 0 }
@@ -2020,6 +2011,16 @@ function TrafficSourcesSlide({ active, period }) {
                 </div>
               )
             })()}
+            {view.notes.length > 0 && (
+              <div style={{ marginTop: 20, background: C.greenBg, border: '0.5px solid #CDE9D7', borderRadius: 12, padding: '12px 16px' }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: GREEN, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
+                {view.notes.map((n, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, fontWeight: 700, color: '#0F172A', lineHeight: 1.4, marginTop: i ? 5 : 0 }}>
+                    <span style={{ color: GREEN, fontWeight: 800 }}>{'✓'}</span><span>{n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={col}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
@@ -2042,16 +2043,6 @@ function TrafficSourcesSlide({ active, period }) {
             <div style={{ display: 'flex', gap: 14, marginTop: 6 }}>
               {view.months.map(m => <div key={m.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#64748B' }}>{m.label}</div>)}
             </div>
-            {view.notes.length > 0 && (
-              <div style={{ marginTop: 18, background: C.greenBg, border: '0.5px solid #CDE9D7', borderRadius: 12, padding: '12px 16px' }}>
-                <div style={{ fontSize: 11.5, fontWeight: 800, color: GREEN, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
-                {view.notes.map((n, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, fontWeight: 700, color: '#0F172A', lineHeight: 1.4, marginTop: i ? 5 : 0 }}>
-                    <span style={{ color: GREEN, fontWeight: 800 }}>{'✓'}</span><span>{n}</span>
-                  </div>
-                ))}
-              </div>
-            )}
             <div style={{ fontSize: 10.5, color: '#94A3B8', lineHeight: 1.5, marginTop: 12 }}>
               Source: Google Analytics. Users are counted per channel, so a visitor who arrives through two channels appears in both; shares show contribution, the total is not unique visitors. Cross-network is Google's automated campaign traffic and is counted as paid.
             </div>
