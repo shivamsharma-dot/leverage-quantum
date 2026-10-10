@@ -4330,6 +4330,7 @@ SELECT
       WHEN 'study-abroad-consultant-mbbs' THEN 'PMX_Search_Study_MBBS_call'
       WHEN 'study-abroad-consultant-dubai' THEN 'PMX_Search_Study_Dubai_call'
       WHEN 'study-abroad-consultant-delhi' THEN 'PMX_Search_Study_Abroad_All_call'
+      WHEN 'study-abroad-consultant-v2' THEN 'PMX_Search_Study_Abroad_All_call'
       ELSE campaign_name
     END AS campaign_name,
     count_opps AS \`Total Leads Generated\`,

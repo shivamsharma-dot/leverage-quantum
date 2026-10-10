@@ -9,7 +9,7 @@
 --   * PMX_FB_* campaigns tagged offline / others / lead source na       ->  Facebook
 --   Rows already in a paid Source are never moved, and Affiliate rows are untouched.
 --
--- Campaign rename: study-abroad-consultant, -mbbs, -dubai, -delhi (Google leads that did not
+-- Campaign rename: study-abroad-consultant, -mbbs, -dubai, -delhi, -v2 (Google leads that did not
 -- follow the PMX naming) are output as PMX_Search_Study_Abroad_All_call / _MBBS_call /
 -- _Dubai_call / _Abroad_All_call, so they read like any other Google campaign.
 --
@@ -47,6 +47,7 @@ SELECT
       WHEN 'study-abroad-consultant-mbbs' THEN 'PMX_Search_Study_MBBS_call'
       WHEN 'study-abroad-consultant-dubai' THEN 'PMX_Search_Study_Dubai_call'
       WHEN 'study-abroad-consultant-delhi' THEN 'PMX_Search_Study_Abroad_All_call'
+      WHEN 'study-abroad-consultant-v2' THEN 'PMX_Search_Study_Abroad_All_call'
       ELSE campaign_name
     END AS campaign_name,
     count_opps AS `Total Leads Generated`,
