@@ -5518,7 +5518,7 @@ function b2cRows(csv, cols) {
 // Real Google Sheet tab names -- Finance's own naming for these two tabs, not
 // something we control. Referenced ONLY here (the fetch URL needs the literal
 // tab name); nowhere else in the app should these names appear.
-const B2C_PNL_SHEET_TAB = 'Daily P&L - Yash';
+const B2C_PNL_SHEET_TAB = 'Daily P&L';
 const B2C_CASHFLOW_SHEET_TAB = 'Daily Cash Flow - Ramesh';
 
 // Both tabs carry the same 6 revenue/cost line items plus a grand total and a
