@@ -4274,13 +4274,32 @@ SELECT
  FORMAT_DATE('%d-%b-%y', DATE(dma.first_app_submitted_at)) AS First_App_Date,
  v2.prospect_id,
  v3.opportunity_id,
- v3.source,
+ -- Source and campaign use the SAME rules as the Overall query (OVERALL_BQ_SQL), applied to
+ -- v3.source (same labels as Overall's source_1) and v3.opp_first_campaign_name. 2026-10-10.
+ CASE
+ WHEN LOWER(v3.source) = 'branding'
+ OR STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'tof_youtube')
+ OR STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'branding_')
+ OR STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'organic_branding') THEN 'Branding'
+ WHEN STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'remarketing_')
+ AND LOWER(v3.source) IN ('lead source na', 'others', 'offline') THEN 'Remarketing'
+ WHEN STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'pmx_fb')
+ AND LOWER(v3.source) IN ('lead source na', 'others', 'offline') THEN 'Facebook'
+ WHEN LOWER(v3.source) IN ('affiliate partner') THEN 'Affiliate'
+ WHEN LOWER(v3.source) IN ('content+brand') THEN 'Organic'
+ WHEN LOWER(v3.source) IN ('lead source na', 'others', 'offline') THEN 'Others'
+ ELSE v3.source
+ END AS source,
  case when v3.Country2 in ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') then 'SR' else 'AC' END AS Vertical,
  v3.country2,
  case when v3.last_disposition_from_futwork is not null then 'Human_QL' else 'Floor' END as Futwork_Human,
  case when v3.last_disposition_ai_futwork is not null then 'AI_QL' else 'Floor' END as Futwork_AI,
  v3.sub_source,
- v3.opp_first_campaign_name,
+ CASE LOWER(TRIM(v3.opp_first_campaign_name))
+ WHEN 'study-abroad-consultant-mbbs' THEN 'PMX_Search_Study_MBBS_call'
+ WHEN 'study-abroad-consultant-dubai' THEN 'PMX_Search_Study_Dubai_call'
+ ELSE CASE WHEN STARTS_WITH(LOWER(TRIM(v3.opp_first_campaign_name)), 'study-abroad-consultant') THEN 'PMX_Search_Study_Abroad_All_call' ELSE v3.opp_first_campaign_name END
+ END AS opp_first_campaign_name,
 FROM
  \`leverage_direct.direct_monthly_apps\` dma
 LEFT JOIN
@@ -5052,17 +5071,15 @@ async function handleBigQuery(req, res, me) {
           synced_at: syncedAt,
         }
       })
-      for (let i = 0; i < payload.length; i += 500) {
-        const batch = payload.slice(i, i + 500)
-        const r = await supabaseAdmin('apps_feed', {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-          body: JSON.stringify(batch),
-        })
-        if (!r.ok) {
-          const detail = await r.text()
-          return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + detail, batchIndex: i / 500, rowCount: rows.length })
-        }
+      // ~60k rows since the 2023 backfill (2026-10-10): 120+ sequential batches
+      // plus the BigQuery read ran past this function's 60s limit, so a run could
+      // die before pruning and a second run then left both runs' rows in the
+      // table (row_key includes the row index, so two runs never share keys).
+      // Same bounded-concurrency, retry-with-backoff upsert careers_sync uses.
+      try {
+        await upsertBatchesConcurrent(supabaseAdmin, 'apps_feed', payload, 500, 6)
+      } catch (e) {
+        return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e), rowCount: rows.length })
       }
       // A 0-row BigQuery result is almost always a transient upstream hiccup
       // (confirmed 2026-09-23: the source tables were briefly empty for one

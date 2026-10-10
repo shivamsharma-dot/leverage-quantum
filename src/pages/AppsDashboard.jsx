@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar'
 import Dropdown from '../components/Dropdown'
 import DateRangePicker from '../components/DateRangePicker'
 import ExportButton from '../components/ExportButton'
+import AppsDistributionCard from '../components/AppsDistributionCard'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, GRID_STROKE, RankedBars } from '../ui/dashboardKit'
 import { fetchAppsCacheRows, fetchAppsCacheSyncedAt } from '../lib/appsCache'
@@ -562,6 +563,8 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
                   </ResponsiveContainer>
                 </Card>
               </div>
+
+              <AppsDistributionCard rows={filtered} />
 
               <Card title={`${fmtN(filtered.length)} applications`} noPad>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--card-border)' }}>
