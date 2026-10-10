@@ -578,6 +578,10 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
   const [cacError, setCacError] = useState(null)
   const [cacToken, setCacToken] = useState(0)
   const retryCac = useCallback(() => setCacToken(t => t + 1), [])
+  // "What worked" + "What we're doing next" text, read live from two tabs of the H1_FY27_Marketing_Review sheet
+  // (same period gate as the CAC sheet: the sheet only describes H1 FY26-27).
+  const [reviewTabs, setReviewTabs] = useState(null)
+  const [reviewTabsError, setReviewTabsError] = useState(null)
   // GA4 website traffic for the review half, whole half plus each month (one read per range --
   // the existing source=ga4 endpoint returns users per default channel group for a range).
   const [gaTraffic, setGaTraffic] = useState(null)
@@ -618,6 +622,21 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       })
       .then(d => { if (!dead) setCacSheet(d) })
       .catch(e => { if (!dead) setCacError(String((e && e.message) || e)) })
+    return () => { dead = true }
+  }, [cacToken, frozen, cacApplies])
+
+  useEffect(() => {
+    if (frozen || !cacApplies) return undefined
+    let dead = false
+    setReviewTabs(null); setReviewTabsError(null)
+    fetch('/api/crm-leads?source=bigquery&mode=marketing_review_tabs', { credentials: 'include' })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status))
+        return d
+      })
+      .then(d => { if (!dead) setReviewTabs(d) })
+      .catch(e => { if (!dead) setReviewTabsError(String((e && e.message) || e)) })
     return () => { dead = true }
   }, [cacToken, frozen, cacApplies])
 
@@ -840,6 +859,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     if (error) throw new Error('The figures failed to load: ' + error)
     if (organicSubRows == null) throw new Error('Organic sub-source figures are still loading.')
     if (cacApplies && (cacError || !cacSheet)) throw new Error(cacError ? 'The CAC sheet failed to load: ' + cacError : 'The CAC sheet is still loading.')
+    if (cacApplies && (reviewTabsError || !reviewTabs)) throw new Error(reviewTabsError ? 'The review sheet tabs failed to load: ' + reviewTabsError : 'The review sheet tabs are still loading.')
     if (gaError || !gaTraffic) throw new Error(gaError ? 'Website traffic failed to load: ' + gaError : 'Website traffic is still loading.')
     const campaigns = {}
     for (const ch of REVIEW_CHANNELS) {
@@ -865,18 +885,18 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       headlineRows, aggByMonth, byChannelByMonth: chanObj(byChannelByMonth), channelRowsByChannel,
       organicSubRows: [...collapsedOrganic.values()], organicSubSourceBreakdown,
       acSales: pickManual(acSales), acRevenue: pickManual(acRevenue),
-      cacSheet: cacApplies ? cacSheet : null, gaTraffic, syncedAt: syncedAt ? new Date(syncedAt).toISOString() : null, campaigns,
+      cacSheet: cacApplies ? cacSheet : null, reviewTabs: cacApplies ? reviewTabs : null, gaTraffic, syncedAt: syncedAt ? new Date(syncedAt).toISOString() : null, campaigns,
     }))
-  }, [headlineRows, aggByMonth, byChannelByMonth, channelRowsByChannel, error, organicSubRows, organicSubSourceBreakdown, cacApplies, cacError, cacSheet, gaError, gaTraffic, fetchChannelCampaigns, months, acSales, acRevenue, syncedAt, sKey])
+  }, [headlineRows, aggByMonth, byChannelByMonth, channelRowsByChannel, error, organicSubRows, organicSubSourceBreakdown, cacApplies, cacError, cacSheet, reviewTabs, reviewTabsError, gaError, gaTraffic, fetchChannelCampaigns, months, acSales, acRevenue, syncedAt, sKey])
 
   const liveValue = useMemo(() => ({
     months, frozen: false, cacApplies, buildSnapshot,
     loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
     acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
     aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
-    organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa,
+    organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, reviewTabs, reviewTabsError, gaTraffic, gaError, retryGa,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, gaTraffic, gaError, retryGa])
+  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, reviewTabs, reviewTabsError, gaTraffic, gaError, retryGa])
 
   // A frozen review: the same shape, read from the saved snapshot. Nothing here fetches.
   const frozenValue = useMemo(() => {
@@ -893,7 +913,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       channelRowsByChannel: snapshot.channelRowsByChannel, organicSubRows: snapshot.organicSubRows || [],
       organicSubSourceBreakdown: snapshot.organicSubSourceBreakdown,
       fetchChannelCampaigns: async ch => (snapshot.campaigns && snapshot.campaigns[ch]) || [],
-      cacSheet: snapshot.cacSheet, cacError: null, retryCac: () => {}, gaTraffic: snapshot.gaTraffic, gaError: null, retryGa: () => {},
+      cacSheet: snapshot.cacSheet, cacError: null, retryCac: () => {}, reviewTabs: snapshot.reviewTabs || null, reviewTabsError: null, gaTraffic: snapshot.gaTraffic, gaError: null, retryGa: () => {},
       retry: () => {},
     }
   }, [snapshot, months])
@@ -2001,6 +2021,27 @@ function WinsSlide({ active, period }) {
     return buildInsights(ctx.headlineRows, ctx.byChannelByMonth, ctx.months).wins
   }, [ctx])
   if (!ctx) return null
+  const sheetWins = ctx.reviewTabs && ctx.reviewTabs.whatWorked && ctx.reviewTabs.whatWorked.items
+  if (sheetWins && sheetWins.length) {
+    return (
+      <LiveDataFrame ctx={ctx} label="Wins & Highlights" title="What worked" period={period} active={active}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+          {sheetWins.map((w, i) => (
+            <div key={w.n + w.title} className={active ? styles.staggerItem : undefined} style={{
+              display: 'flex', gap: 12, background: '#fff', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '12px 14px',
+              boxShadow: '0 1px 3px rgba(15,23,42,0.04)', animationDelay: active ? (0.06 * i) + 's' : undefined,
+            }}>
+              <div style={{ width: 26, height: 26, borderRadius: 8, background: GREEN, color: '#fff', fontSize: 12, fontWeight: 800, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{w.n || i + 1}</div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', marginBottom: 3 }}>{w.title}</div>
+                <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>{w.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </LiveDataFrame>
+    )
+  }
   return (
     <LiveDataFrame ctx={ctx} label="Wins & Highlights" title="What worked" period={period} active={active}>
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
@@ -2039,6 +2080,30 @@ const PRIORITIES = [
 function NextStepsSlide({ active, period }) {
   const ctx = useMarketingReviewData()
   const unit = ctx ? ctx.months.current.unit : 'period'
+  const sheetNext = ctx && ctx.reviewTabs && ctx.reviewTabs.nextPriorities && ctx.reviewTabs.nextPriorities.items
+  if (sheetNext && sheetNext.length) {
+    return (
+      <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '56px 64px', boxSizing: 'border-box' }}>
+        <PeriodBadge period={period} />
+        <SectionKicker label={"Next " + unit + "'s priorities"} title="What we're doing next" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
+          {sheetNext.map((p, i) => (
+            <div key={p.n + p.title} className={active ? styles.staggerItem : undefined}
+              style={{ display: 'flex', alignItems: 'flex-start', gap: 14, animationDelay: active ? (0.08 * i) + 's' : undefined }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 800, color: NAVY, background: C.navyBg, border: `1.5px solid ${NAVY}33`,
+              }}>{p.n || i + 1}</div>
+              <div>
+                <div style={{ fontSize: 15.5, fontWeight: 800, color: '#1E2A44', marginBottom: 2 }}>{p.title}</div>
+                <div style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.4 }}>{p.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '68px 72px', boxSizing: 'border-box' }}>
       <PeriodBadge period={period} />

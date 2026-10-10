@@ -2992,6 +2992,38 @@ async function fetchH1CacSheet() {
   return { tab: tab.title, rows }
 }
 
+// Marketing Review deck, "What worked" and "What we're doing next" slides (2026-10-10, direct ask:
+// "fetch the data from [the sheet tab]"). Two tabs of the H1_FY27_Marketing_Review sheet, read by
+// gid (renaming a tab is safe) with the same service account; the sheet must be shared with
+// GOOGLE_SHEETS_CLIENT_EMAIL. Rows are returned as plain text from the "#" header row down.
+const MR_REVIEW_SHEET_ID = '1O31WSyw4n-n17L86BbUqkUT41uUb2Zn4i-hFZoWpwQI'
+const MR_REVIEW_TABS = { whatWorked: 515309905, nextPriorities: 1904006102 }
+async function fetchMarketingReviewTabs() {
+  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+  const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  if (!clientEmail || !privateKey) throw new Error('GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY are not set')
+  const { JWT } = await import('google-auth-library')
+  const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] })
+  const { access_token } = await auth.authorize()
+  const headers = { Authorization: `Bearer ${access_token}` }
+  const mr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${MR_REVIEW_SHEET_ID}?fields=sheets.properties(sheetId,title)`, { headers })
+  const md = await mr.json().catch(() => ({}))
+  if (!mr.ok) throw new Error('Marketing Review sheet read failed (' + mr.status + '): ' + (md.error?.message || 'unknown') + (mr.status === 403 || mr.status === 404 ? ' -- share the sheet with ' + clientEmail : ''))
+  const tabs = (md.sheets || []).map(x => x.properties)
+  const out = {}
+  for (const [key, gid] of Object.entries(MR_REVIEW_TABS)) {
+    const tab = tabs.find(x => x && x.sheetId === gid)
+    if (!tab) throw new Error('Marketing Review sheet tab (gid ' + gid + ') not found')
+    const vr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${MR_REVIEW_SHEET_ID}/values/${encodeURIComponent("'" + tab.title.replace(/'/g, "''") + "'!A1:C40")}?valueRenderOption=FORMATTED_VALUE`, { headers })
+    const vd = await vr.json().catch(() => ({}))
+    if (!vr.ok) throw new Error('Marketing Review sheet read failed (' + vr.status + '): ' + (vd.error?.message || 'unknown'))
+    const all = (vd.values || []).map(r => [0, 1, 2].map(i => (r[i] == null ? '' : String(r[i]).trim())))
+    const h = all.findIndex(r => r[0] === '#')
+    out[key] = { tab: tab.title, items: all.slice(h + 1).filter(r => r[1]).map(r => ({ n: r[0], title: r[1], detail: r[2] })) }
+  }
+  return out
+}
+
 // The one function every save/delete/restore/finished-import routes through.
 // Best-effort and independent per connector -- one connector failing (a dead
 // webhook URL, the bot not yet invited to the Slack channel) never blocks or
@@ -4549,7 +4581,7 @@ async function handleBigQuery(req, res, me) {
   const mode = (req.query && req.query.mode) || 'ping'
   const gateId = mode === 'careers_leads' ? 'leverage_careers'
     : mode === 'ql_split_totals' ? 'overall'
-    : mode === 'marketing_review_cac' ? 'marketing_review'
+    : (mode === 'marketing_review_cac' || mode === 'marketing_review_tabs') ? 'marketing_review'
     : OVERALL_BQ_READ_MODES.includes(mode) ? 'overall_bigquery'
     : 'settings'
   if (!auth.canAccessDashboard(me.role, gateId)) {
@@ -4638,6 +4670,13 @@ async function handleBigQuery(req, res, me) {
   // (message 1 only) have nothing in this sheet to bucket by, and Superbot is
   // deliberately excluded from Total QL here per direct confirmation, unlike
   // every other "Total QLs" figure elsewhere in this app.
+  if (mode === 'marketing_review_tabs') {
+    try {
+      return res.status(200).json(await fetchMarketingReviewTabs())
+    } catch (err) {
+      return res.status(502).json({ error: String((err && err.message) || err) })
+    }
+  }
   if (mode === 'marketing_review_cac') {
     try {
       return res.status(200).json(await fetchH1CacSheet())
