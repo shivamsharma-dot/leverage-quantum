@@ -636,7 +636,17 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
         return d
       })
       .then(d => { if (!dead) setReviewTabs(d) })
-      .catch(e => { if (!dead) setReviewTabsError(String((e && e.message) || e)) })
+      .catch(async e => {
+        // The live sheet read needs the sheet shared with the server's Google login; until then use the
+        // copy saved in app_preferences (mr_review_tabs_copy), so the slides never go blank.
+        try {
+          const r = await fetch('/api/preferences', { credentials: 'include' })
+          const p = await r.json()
+          const copy = p && p.prefs && p.prefs.mr_review_tabs_copy
+          if (copy && copy.whatWorked && copy.nextPriorities) { if (!dead) setReviewTabs(copy); return }
+        } catch (_) { /* fall through to the error */ }
+        if (!dead) setReviewTabsError(String((e && e.message) || e))
+      })
     return () => { dead = true }
   }, [cacToken, frozen, cacApplies])
 
