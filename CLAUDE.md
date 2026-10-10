@@ -2436,3 +2436,7 @@ New slide `inbound-calls` ("When students call, and how many we miss", `InboundC
 ## 2026-10-10 (later) -- Marketing Review: story pass on traffic, wins and CAC slides
 
 Traffic slide gets a green "What stands out" box (computed: QLs per 1,000 site users vs last year / previous half, biggest channel-group increases, and a "fewer visitors, more QLs" line when that is true). "What worked" shows only the headline title of each pointer (the descriptive line is gone, also in the computed fallback). CAC slide's top-left header now reads "H1 FY26-27 (Apr to Sep 2026)" so the figures are clearly the half-year.
+
+## 2026-10-10 (later still) -- Marketing Review: Organic slide shows QL by sub-source as a month-by-month table
+
+Replaced the single-month bar list with a table (sub-source rows x the six months of the review period, plus Total and a Total row). Sub-sources with under 5 QLs in the whole period are folded into "Blog-High Priority" (if that row exists). Snapshots of frozen reviews taken before this keep working but show dashes in the month columns (they stored only totals).

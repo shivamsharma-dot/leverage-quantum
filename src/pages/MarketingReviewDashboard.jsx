@@ -862,20 +862,32 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
   // (organicSubRows === null) from "loaded, genuinely nothing this month".
   const organicSubSourceBreakdown = useMemo(() => {
     if (!organicSubRows) return null
+    const mk = months.current.monthKeys
     const bySub = new Map()
     for (const r of organicSubRows) {
       if (String(r.Source || '').trim().toLowerCase() === 'branding') continue // Branding is not Organic
       const key = r.Sub_Source || 'Unlabeled'
-      const e = bySub.get(key) || { name: key, ql: 0, leads: 0 }
-      e.ql += reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+      const e = bySub.get(key) || { name: key, ql: 0, leads: 0, byMonth: mk.map(() => 0) }
+      const q = reviewNum(r['Futwork Human QL']) + reviewNum(r['Futwork AI QL']) + reviewNum(r['Superbot AI QL'])
+      e.ql += q
       e.leads += reviewNum(r['Total Leads Generated'])
+      const mi = mk.indexOf(r.month)
+      if (mi >= 0) e.byMonth[mi] += q
       bySub.set(key, e)
     }
-    return [...bySub.values()]
-      .filter(e => e.ql > 0 || e.leads > 0)
-      .sort((a, b) => (b.ql - a.ql) || (b.leads - a.leads))
-      .slice(0, 8)
-  }, [organicSubRows])
+    // One-off tails (under 5 QLs in the whole period) are folded into "Blog-High Priority" so the
+    // table lists real sub-sources only; if there is no such row they simply stay as they are.
+    const all = [...bySub.values()].filter(e => e.ql > 0 || e.leads > 0)
+    const blog = all.find(e => /^blog.*high priority/i.test(e.name))
+    const kept = []
+    for (const e of all) {
+      if (blog && e !== blog && e.ql < 5) {
+        blog.ql += e.ql; blog.leads += e.leads
+        e.byMonth.forEach((v, i) => { blog.byMonth[i] += v })
+      } else kept.push(e)
+    }
+    return kept.sort((a, b) => (b.ql - a.ql) || (b.leads - a.leads)).slice(0, 10)
+  }, [organicSubRows, months])
 
   // Freezing: takes every figure the slides read (already computed, JSON-safe) plus the top-5
   // campaigns for each channel (normally fetched on click) and returns one object to store. Refuses
@@ -900,8 +912,8 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
     }
     const collapsedOrganic = new Map()
     for (const r of organicSubRows) {
-      const k = r.Sub_Source || ''
-      const e = collapsedOrganic.get(k) || { Sub_Source: k, 'Total Leads Generated': 0, 'Futwork Human QL': 0, 'Futwork AI QL': 0, 'Superbot AI QL': 0 }
+      const k = (r.Sub_Source || '') + '|' + (r.Source || '') + '|' + (r.month || '')
+      const e = collapsedOrganic.get(k) || { Sub_Source: r.Sub_Source || '', Source: r.Source || '', month: r.month || '', 'Total Leads Generated': 0, 'Futwork Human QL': 0, 'Futwork AI QL': 0, 'Superbot AI QL': 0 }
       for (const f of ['Total Leads Generated', 'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL']) e[f] += reviewNum(r[f])
       collapsedOrganic.set(k, e)
     }
@@ -1715,7 +1727,7 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
       {channel === 'Organic' && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-            QL by sub-source, {months ? months.current.label : 'this period'}
+            QL by sub-source, month by month, {months ? months.current.label : 'this period'}
           </div>
           {ctx.organicSubSourceBreakdown == null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94A3B8', fontSize: 13 }}>
@@ -1723,15 +1735,45 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
             </div>
           ) : ctx.organicSubSourceBreakdown.length === 0 ? (
             <div style={{ color: '#94A3B8', fontSize: 13 }}>No sub-source activity recorded in this period.</div>
-          ) : (
-            (() => {
-              const subMax = Math.max(1, ...ctx.organicSubSourceBreakdown.map(s => s.ql))
-              return ctx.organicSubSourceBreakdown.map((s, i) => (
-                <ChannelBar key={s.name} ch={{ name: s.name, value: s.ql, hue: BRAND_RAMP[i % 4] }}
-                  max={subMax} active={active} delay={0.08 * i} labelWidth={220} />
-              ))
-            })()
-          )}
+          ) : (() => {
+            const rowsB = ctx.organicSubSourceBreakdown
+            const mLabels = months.current.monthDates.map(d => REVIEW_MONTH_NAMES[d.getMonth()].slice(0, 3))
+            const n = mLabels.length
+            const cols = 'minmax(190px, 1.6fr) repeat(' + n + ', minmax(0, 1fr)) 84px'
+            const totals = mLabels.map((_, i) => rowsB.reduce((s2, r) => s2 + ((r.byMonth && r.byMonth[i]) || 0), 0))
+            const grand = rowsB.reduce((s2, r) => s2 + r.ql, 0)
+            const head = { fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', textAlign: 'right', letterSpacing: '0.03em' }
+            const cell = { fontSize: 13, fontWeight: 700, color: '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+            return (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 8, borderBottom: '2px solid #0F1B33', paddingBottom: 6 }}>
+                  <div />
+                  {mLabels.map(m => <div key={m} style={head}>{m}</div>)}
+                  <div style={head}>Total</div>
+                </div>
+                {rowsB.map((r, i) => (
+                  <div key={r.name} className={active ? styles.staggerItem : undefined} style={{
+                    display: 'grid', gridTemplateColumns: cols, columnGap: 8, alignItems: 'center', padding: '7px 0',
+                    borderBottom: '0.5px solid #EEF2F7', animationDelay: active ? (0.04 * i) + 's' : undefined,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 3, background: BRAND_RAMP[i % 4], flexShrink: 0 }} />{r.name}
+                    </div>
+                    {mLabels.map((m, mi) => {
+                      const v = r.byMonth ? r.byMonth[mi] : null
+                      return <div key={m} style={{ ...cell, color: v ? '#0F172A' : '#CBD5E1', fontWeight: 600 }}>{v == null ? '-' : (v ? fmtN(v) : '-')}</div>
+                    })}
+                    <div style={{ ...cell, fontWeight: 800 }}>{fmtN(r.ql)}</div>
+                  </div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 8, alignItems: 'center', padding: '8px 0', background: '#F8FAFC' }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#334155' }}>Total</div>
+                  {totals.map((t, i) => <div key={i} style={{ ...cell, fontWeight: 800 }}>{fmtN(t)}</div>)}
+                  <div style={{ ...cell, fontWeight: 800, color: NAVY }}>{fmtN(grand)}</div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
     </LiveDataFrame>
