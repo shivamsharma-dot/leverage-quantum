@@ -1188,7 +1188,7 @@ function HeadlineSlide({ active, period }) {
           {headlineRows.map((row, i) => (
             <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
               display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, alignItems: 'center',
-              padding: '5.5px 0', borderBottom: '1px solid #F1F5F9',
+              padding: '4.5px 0', borderBottom: '1px solid #F1F5F9',
               animationDelay: active ? (0.035 * i) + 's' : undefined,
             }}>
               <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1696,7 +1696,7 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
           {rows.map((row, i) => (
             <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
               display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, alignItems: 'center',
-              padding: '10px 0', borderBottom: '1px solid #F1F5F9',
+              padding: channel === 'Organic' ? '5px 0' : '10px 0', borderBottom: '1px solid #F1F5F9',
               animationDelay: active ? (0.035 * i) + 's' : undefined,
             }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{row.label}</div>
