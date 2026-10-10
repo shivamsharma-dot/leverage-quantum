@@ -2460,3 +2460,7 @@ Inbound-calls slide: two new pointers under "What this means" (parallel calling 
 ## 2026-10-10 (later still) -- Marketing Review: headline CPQL is now blended, Organic sub-source table loads month by month
 
 Headline CPQL = total spend / total QL (was spend / paid-source QL); CPL and CPA are unchanged. The Organic "QL by sub-source" table fetched the whole half (Organic + Branding) in one request, which can time out and showed a false empty table; it now fetches month by month, two at a time with one retry, and collapses each month as it arrives. Month keys were checked against live data (they match). Build-verified, not click-tested live.
+
+## 2026-10-10 (later still) -- Marketing Review headline: Apps ITD row, CPA and cost per app now on Apps ITD
+
+New "Apps ITD" row (apps by intake to date) under Apps: H1 FY25-26 17,367 (Sep'2025 intake), H2 FY25-26 3,710 (Jan'2026), H1 FY26-27 8,317 (Sep'2026), fixed in code (`APPS_ITD_BY_PERIOD`, copied once from the Channel x Intake tab of the 10 Oct apps export; other period types show dashes). CPA = spend / Apps ITD, and "Cost per (App + AC sale)" is now "Cost per (App ITD + AC sale)" = spend / (Apps ITD + AC sales). A note under "What stands out" says older intakes have had longer to fill so the columns are not like for like; the Wins / Risks auto-insights skip these three rows for the same reason. The new apps export sheet also got a "Channel x Intake" tab and a channel helper column (K) built by me. Build-verified, not click-tested live; the extra row may crowd the slide, check the layout.

@@ -420,6 +420,14 @@ function sumManualForPeriod(map, spec, periodTotals) {
   return { total: entered ? total : null, entered }
 }
 
+// Apps ITD (intake to date): applications by INTAKE, copied once on 2026-10-10 from the Channel x Intake
+// tab of the 10 Oct apps export (apps counted per intake, not per submitted date). H1 maps to the Sep
+// intake and H2 to the Jan intake. Older intakes have had longer to fill, so the columns are not like for like.
+const APPS_ITD_BY_PERIOD = { 'half:2025-1': 17367, 'half:2025-2': 3710, 'half:2026-1': 8317 }
+function appsItdFor(spec) {
+  const v = spec && spec.spec ? APPS_ITD_BY_PERIOD[specKey(spec.spec)] : null
+  return v != null ? v : null
+}
 function organicAcKey(span) { return span.ymKeys[0] + '_' + span.ymKeys.length }
 function buildHeadlineRows(months, aggByMonth, acSales, acTotals, roasCur) {
   const acCur = sumManualForPeriod(acSales, months.current, acTotals)
@@ -428,11 +436,13 @@ function buildHeadlineRows(months, aggByMonth, acSales, acTotals, roasCur) {
   const ac1 = acPrior.total, ac0 = acCur.total, acLYv = acLY.total
   const cpsOf = (agg, ac) => (ac != null && ac > 0 && agg.hasData) ? agg.spend / ac : null
   // Cost per (App + AC sale): spend divided by the two kinds of conversion added together.
-  const cpacOf = (agg, ac) => (ac != null && agg.hasData && (agg.apps + ac) > 0) ? agg.spend / (agg.apps + ac) : null
+  // Cost per (App ITD + AC sale) and CPA both use Apps ITD (not the ordinary Apps count).
+  const cpacOf = (agg, ac, itd) => (ac != null && itd != null && agg.hasData && (itd + ac) > 0) ? agg.spend / (itd + ac) : null
+  const itd1 = appsItdFor(months.prior), itd0 = appsItdFor(months.current), itdLY = appsItdFor(months.lastYear)
 
   const metric = (label, key, invert, money, getter) => {
-    const v1 = getter(aggByMonth.prior, ac1)
-    const v0 = getter(aggByMonth.current, ac0), vLY = getter(aggByMonth.lastYear, acLYv)
+    const v1 = getter(aggByMonth.prior, ac1, itd1)
+    const v0 = getter(aggByMonth.current, ac0, itd0), vLY = getter(aggByMonth.lastYear, acLYv, itdLY)
     return {
       key, label, invert, money,
       values: [vLY, v1, v0],
@@ -448,12 +458,13 @@ function buildHeadlineRows(months, aggByMonth, acSales, acTotals, roasCur) {
     metric('Leads', 'leads', false, false, a => a.hasData ? a.leads : null),
     metric('QL', 'ql', false, false, a => a.hasData ? a.ql : null),
     metric('Apps', 'apps', false, false, a => a.hasData ? a.apps : null),
+    metric('Apps ITD', 'appsItd', false, false, (a, ac, itd) => itd),
     metric('AC Sales', 'acSales', false, false, (a, ac) => (ac != null ? ac : null)),
     metric('CPL', 'cpl', true, true, a => a.cpl),
     metric('CPQL', 'cpql', true, true, a => a.cpql),
-    metric('CPA', 'cpa', true, true, a => a.cpa),
+    metric('CPA', 'cpa', true, true, (a, ac, itd) => (itd != null && itd > 0 && a.hasData) ? a.spend / itd : null),
     metric('CPS', 'cps', true, true, (a, ac) => cpsOf(a, ac)),
-    metric('Cost per (App + AC sale)', 'cpac', true, true, (a, ac) => cpacOf(a, ac)),
+    metric('Cost per (App ITD + AC sale)', 'cpac', true, true, (a, ac, itd) => cpacOf(a, ac, itd)),
     // ROAS comes from the Finance "B2C H1 CAC" sheet (Rev Total / Spend), which only covers H1 FY26-27,
     // so only the review column has a value; the older two columns stay empty.
     { key: 'roas', label: 'ROAS', invert: false, money: false, values: [null, null, roasCur != null ? roasCur : null],
@@ -1169,8 +1180,9 @@ function HeadlineInsights({ rows, months, active }) {
   ]
   if (cpac && cpac.values[2] != null && cpac.deltaVsPrior != null && cpac.deltaVsPrior !== 'new') {
     const d = cpac.deltaVsPrior
-    lines.push('Cost per (App + AC sale) is ' + fmtINRShort(cpac.values[2]) + ', ' + (d <= 0 ? 'down ' : 'up ') + Math.abs(d).toFixed(1) + '% vs ' + months.prior.label + '.')
+    lines.push('Cost per (App ITD + AC sale) is ' + fmtINRShort(cpac.values[2]) + ', ' + (d <= 0 ? 'down ' : 'up ') + Math.abs(d).toFixed(1) + '% vs ' + months.prior.label + '.')
   }
+  const hasItd = rows.some(r => r.key === 'appsItd' && r.values.some(v => v != null))
   return (
     <div className={active ? styles.staggerItem : undefined} style={{ marginTop: 14, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '12px 16px', animationDelay: active ? '0.4s' : undefined }}>
       <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
@@ -1179,6 +1191,11 @@ function HeadlineInsights({ rows, months, active }) {
           <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, marginTop: 6, flexShrink: 0 }} />{t}
         </div>
       ))}
+      {hasItd && (
+        <div style={{ marginTop: 7, fontSize: 11.5, fontWeight: 600, color: '#64748B', lineHeight: 1.4 }}>
+          Apps ITD counts applications by intake to date. Older intakes have had longer to fill than the latest one, so Apps ITD, CPA and Cost per (App ITD + AC sale) are not like for like across columns.
+        </div>
+      )}
     </div>
   )
 }
@@ -2258,7 +2275,7 @@ function buildInsights(headlineRows, byChannelByMonth, months) {
       { key: 'deltaVsLastYear', label: `vs ${months.lastYear.label}` },
     ]
     for (const row of headlineRows) {
-      if (row.key === 'acSales' || row.key === 'cps') continue // manual-entry-dependent, often incomplete
+      if (row.key === 'acSales' || row.key === 'cps' || row.key === 'appsItd' || row.key === 'cpa' || row.key === 'cpac') continue // manual-entry-dependent, often incomplete; ITD-based figures are not like for like across halves
       for (const cmp of comparisons) {
         const delta = row[cmp.key]
         if (delta == null || delta === 'new') continue
