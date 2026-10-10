@@ -2264,6 +2264,89 @@ function NextStepsSlide({ active, period }) {
   )
 }
 
+// Inbound call timing, September 2026 (Sep 1 to 26, Monday to Saturday). Fixed figures from the call-timing
+// analysis shared as an artifact (BigQuery inbound call log, timestamps shifted from UTC to IST); not live data.
+// Working hours are 10:30 AM to 7:30 PM IST. Sundays are left out of every number here except the weekend note.
+const CALLS_HOURLY = [3319, 2113, 1005, 494, 245, 185, 180, 98, 80, 51, 55, 162, 337, 565, 777, 1157, 3503, 4590, 4406, 3870, 2868, 3894, 3956, 4111]
+const CALL_TILES = [
+  ['Inbound calls', '42,021', 'Sep 1 to 26, Mon to Sat'],
+  ['Outside working hours', '57.6%', '24,221 of the calls'],
+  ['Calls missed', '60.1%', '25,241 not picked up'],
+  ['Busiest hour', '5 to 6 PM', '4,590 calls in that hour'],
+]
+const CALL_POINTS = [
+  'More than half of inbound calls (57.6%) arrive outside 10:30 AM to 7:30 PM IST, even though that window is shorter: working hours still run hotter per hour (about 1,980 calls an hour against about 1,610).',
+  'The answer rate is the same inside and outside working hours (40.6% vs 39.4%), so the problem is not only the hour of the day: about 6 in 10 calls go unanswered at any time.',
+  '14,668 calls were missed outside working hours, and 10,573 were missed inside them. The inside number is the one to chase, since someone is meant to be on shift.',
+  'Sunday is the weakest day: 29.1% answered, against 41.9% on Saturday and 39.6% on weekdays.',
+]
+function InboundCallsSlide({ active, period }) {
+  const max = Math.max(...CALLS_HOURLY)
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '52px 64px 30px', boxSizing: 'border-box' }}>
+      <PeriodBadge period={period} live />
+      <div style={{ marginBottom: -8 }}><SectionKicker label="Inbound calls" title="When students call, and how many we miss" /></div>
+      <div style={{ fontSize: 13.5, color: '#475569', fontWeight: 600, lineHeight: 1.5, maxWidth: 980, marginBottom: 12 }}>
+        Based on September 2026 (1 to 26 Sep). Four in ten inbound calls are answered, and more than half come in outside shift hours, so the missed calls are not just an evening problem.
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+        {CALL_TILES.map(([label, v, sub], i) => (
+          <div key={label} className={active ? styles.staggerItem : undefined} style={{ flex: 1, background: i === 2 ? C.navyBg : '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '10px 14px', animationDelay: active ? (0.06 * i) + 's' : undefined }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>{v}</div>
+            <div style={{ fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 28 }}>
+        <div style={{ flex: '0 0 560px', minWidth: 0 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Calls by hour of day (IST)</div>
+          <div style={{ position: 'relative', height: 178 }}>
+            <div style={{ position: 'absolute', left: (10.5 / 24 * 100) + '%', width: (9 / 24 * 100) + '%', top: 0, bottom: 18, background: C.navyBg, borderRadius: 4 }} />
+            <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'flex-end', gap: 3, paddingBottom: 18 }}>
+              {CALLS_HOURLY.map((n, h) => {
+                const working = h >= 10.5 && h < 19.5
+                return (
+                  <div key={h} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative' }}>
+                    <div title={n.toLocaleString('en-IN') + ' calls'} style={{ width: '100%', height: active ? Math.max(2, (n / max) * 150) : 0, background: working ? NAVY : CYAN, borderRadius: '3px 3px 0 0', transition: `height .8s cubic-bezier(.22,1,.36,1) ${0.02 * h}s` }} />
+                    <div style={{ position: 'absolute', bottom: -16, left: 0, right: 0, textAlign: 'center', fontSize: 9.5, color: '#94A3B8', fontWeight: 600 }}>{h % 3 === 0 ? (h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : (h - 12) + 'p') : ''}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 4, fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: NAVY }} />Working hours, 10:30 AM to 7:30 PM</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: CYAN }} />Outside working hours</span>
+          </div>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '14px 0 6px' }}>Answered vs missed</div>
+          {[['Working hours', 40.6], ['Outside working hours', 39.4]].map(([label, ans], i) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ width: 150, fontSize: 12.5, fontWeight: 700, color: '#334155' }}>{label}</span>
+              <div style={{ flex: 1, height: 18, borderRadius: 5, overflow: 'hidden', display: 'flex', background: '#F1F5F9' }}>
+                <div style={{ width: active ? ans + '%' : '0%', background: GREEN, transition: `width .8s cubic-bezier(.22,1,.36,1) ${0.1 * i}s`, color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', paddingLeft: 7 }}>{ans}%</div>
+                <div style={{ flex: 1, background: NAVY, color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 7 }}>{(100 - ans).toFixed(1)}%</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 16, fontSize: 11.5, color: '#64748B', fontWeight: 600 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: GREEN }} />Answered</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: NAVY }} />Missed</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>What this means</div>
+          {CALL_POINTS.map((t, i) => (
+            <div key={i} className={active ? styles.staggerItem : undefined} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, fontWeight: 600, color: '#1E2A44', lineHeight: 1.5, marginBottom: 9, animationDelay: active ? (0.1 + 0.07 * i) + 's' : undefined }}>
+              <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, marginTop: 7, flexShrink: 0 }} />{t}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ClosingSlide({ active, period }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: 'linear-gradient(160deg,#0B1330 0%,#111E45 55%,#0B1330 100%)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2294,6 +2377,7 @@ const SLIDES = [
   { id: 'tof', section: 'Top-of-Funnel & Branding', title: 'Awareness & offline campaigns', Body: TofCampaignsSlide },
   { id: 'wins', section: 'Wins & Highlights', title: 'What worked', Body: WinsSlide, agenda: 'Wins & highlights' },
   { id: 'risks', section: 'Risks & Watch-outs', title: 'What needs attention', Body: RisksSlide, agenda: 'Risks & watch-outs' },
+  { id: 'inbound-calls', section: 'Inbound Calls', title: 'When students call, and how many we miss', Body: InboundCallsSlide, agenda: 'Inbound calls, when students call and how many we miss' },
   { id: 'next', section: 'Next Priorities', title: "What we're doing next", Body: NextStepsSlide, agenda: unit => 'Next ' + unit + '’s priorities' },
   { id: 'closing', section: 'Closing', title: 'Questions?', Body: ClosingSlide, dark: true },
 ]
