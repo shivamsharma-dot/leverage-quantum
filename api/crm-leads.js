@@ -4288,7 +4288,7 @@ LEFT JOIN
 LEFT JOIN
  v3 ON v2.prospect_id = v3.prospectid
 WHERE
- date(dma.first_app_submitted_at) > '2025-12-31' ;`
+ date(dma.first_app_submitted_at) > '2022-12-31' ;`
 
 // The saved query named "Overall", copied verbatim from the BigQuery Console
 // (same text .github/workflows/overall-bq-sync.yml's standalone Python script
