@@ -2448,3 +2448,7 @@ The page said "no day up to 2026-10-09 has been filled in yet". Cause: Finance r
 ## 2026-10-10 (later still) -- Marketing Review: traffic slide has no QL lines, Organic gets an "AC sale" row
 
 Traffic slide "What stands out" now only lists channel-group user changes (no QL lines) and sits under the comparison table in the left column so the bottom left is no longer empty. Organic slide table gets an "AC sale" row right under Apps (review-period value from the Finance sheet, dash until Finance fills it; older halves dash).
+
+## 2026-10-10 (later) -- Marketing Review: hide / show and slide order are now remembered
+
+They only lived in memory until "Save" was pressed, so a reload lost them. Now the working review (period, order, hidden slides) is kept in this browser (`localStorage` key `mr_work_draft_v1`, never for frozen reviews) and restored on open; a saved live review also auto-saves its changes about 1 second after the last change (to `mr_reviews`). Unsaved new reviews are remembered per browser only until saved.

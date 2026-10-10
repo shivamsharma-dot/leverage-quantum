@@ -2920,6 +2920,7 @@ function GalleryCard({ slide, number, onOpen, period, editMode, hidden, onMove, 
 // Reviews are stored in app_preferences: ONE small list under `mr_reviews` (name, period, slide order,
 // hidden slides, live/frozen), and each frozen review's numbers under its own `mr_snap_<id>` row.
 const REVIEWS_KEY = 'mr_reviews'
+const WORK_DRAFT_KEY = 'mr_work_draft_v1'
 function autoReviewName(spec) {
   if (spec.type === 'month') return REVIEW_MONTH_NAMES[spec.month] + ' ' + spec.year + ' Review'
   return buildSpan(spec).label + ' Review'
@@ -3319,7 +3320,15 @@ export default function MarketingReviewDashboard() {
   const isOwner = isMarketingReviewOwner(user && user.email)
   const meEmail = (user && user.email) || ''
   const [reviews, setReviews] = useState(null)
-  const [work, setWork] = useState(() => newWork(defaultReviewSpec()))
+  // The working review survives a reload: the last state (period, slide order, hidden slides) is kept in
+  // this browser, and a saved live review also auto-saves its changes (below). Frozen reviews are never kept here.
+  const [work, setWork] = useState(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(WORK_DRAFT_KEY) || 'null')
+      if (d && d.spec && Array.isArray(d.order) && Array.isArray(d.hidden) && d.status !== 'frozen') return { ...d, order: sanitizeOrder(d.order) }
+    } catch (e) { /* no draft */ }
+    return newWork(defaultReviewSpec())
+  })
   const [snapshot, setSnapshot] = useState(null)
   const [snapState, setSnapState] = useState('idle') // idle | loading | error
   const [busy, setBusy] = useState(false)
@@ -3453,6 +3462,23 @@ export default function MarketingReviewDashboard() {
       return { ...w, spec, hidden, name: wasAuto ? autoReviewName(spec) : w.name }
     })
   }, [])
+
+  useEffect(() => {
+    try {
+      if (work.status === 'frozen') localStorage.removeItem(WORK_DRAFT_KEY)
+      else localStorage.setItem(WORK_DRAFT_KEY, JSON.stringify(work))
+    } catch (e) { /* storage unavailable: the page still works */ }
+  }, [work])
+
+  // Auto-save a saved, live review a moment after its slide order / hidden slides / period change.
+  useEffect(() => {
+    if (!savedEntry || work.status === 'frozen' || savedEntry.status === 'frozen' || !work.name.trim() || !dirty) return undefined
+    const t = setTimeout(() => {
+      const entry = entryFromWork(work, work.id, savedEntry)
+      mutateReviews(list => list.map(r => (r.id === work.id && r.status !== 'frozen') ? entry : r)).catch(() => { /* the draft above still holds it */ })
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [work, savedEntry, dirty, mutateReviews])
 
   const frozenLoading = work.status === 'frozen' && !snapshot
   const providerKey = specKey(work.spec) + (work.status === 'frozen' ? ':frozen' : ':live')
