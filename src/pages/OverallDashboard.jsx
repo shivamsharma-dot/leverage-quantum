@@ -357,7 +357,7 @@ function advFieldValue(r, field) {
   // declared further down this module, but this function's BODY only runs when
   // called at render time, long after module evaluation finishes, so referencing
   // it here is safe (unlike a component-scope useMemo, which runs immediately).
-  if (field === 'paidStatus') return isPaidSource(r.source) ? 'Paid' : 'Non-Paid'
+  if (field === 'paidStatus') return isPaidSource(r.source) ? 'Paid' : (isBrandingSource(r.source) ? 'Branding' : 'Non-Paid')
   return (r.campaign || '').trim() // 'campaign'
 }
 // classifyCorridor('') resolves to 'unclassified' -> label 'Unclassified' -- that's
@@ -917,6 +917,9 @@ const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim
 // Branding is its own Source (2026-10-09, see docs/overall-query-source-fix.sql). It is not a paid
 // channel here and must never be folded into the scorecard's Organic row.
 const isBrandingSource = label => String(label || '').trim().toLowerCase() === 'branding'
+// Band a Source belongs to: Paid, Branding (awareness spend, not lead-gen) or Non-Paid.
+const sourceBand = label => isPaidSource(label) ? 'paid' : (isBrandingSource(label) ? 'branding' : 'free')
+const SOURCE_BANDS = [['Paid Channels', 'paid'], ['Branding', 'branding'], ['Non-Paid Channels', 'free']]
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 const PIN_COLS_STORAGE_KEY = 'lq_overall_summary_pin_cols'
@@ -2219,7 +2222,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     source: sources.filter(s => s !== 'All'),
     corridor: CORRIDORS.map(c => c.label),
     campaign: campaignOptions.map(c => c.name),
-    paidStatus: ['Paid', 'Non-Paid'],
+    paidStatus: ['Paid', 'Branding', 'Non-Paid'],
   }), [sources, campaignOptions])
 
   // Is the selected month the current calendar month?
@@ -3512,10 +3515,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const flat = tableRows.map((row, i) => ({ kind: 'row', row, i }))
     if (grpBy !== 'source') return flat
     const out = []
-    ;[['Paid Channels', true], ['Non-Paid Channels', false]].forEach(([name, wantPaid]) => {
-      const shown = tableRows.filter(r => isPaidSource(r.label) === wantPaid)
+    SOURCE_BANDS.forEach(([name, bandKey]) => {
+      const shown = tableRows.filter(r => sourceBand(r.label) === bandKey)
       if (!shown.length) return
-      const all = sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
+      const all = sortedFilteredRows.filter(r => sourceBand(r.label) === bandKey)
       out.push({ kind: 'band', label: name, row: aggregateRows(all, name) })
       shown.forEach((row, i) => {
         out.push({ kind: 'source', row, i })
@@ -3891,9 +3894,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       t.rows.push([label, ...cols.map(c => cell(g, c))])
     }
     push('TOTAL', totalsRow, true)
-    const bands = grpBy === 'source' ? [['Paid Channels', true], ['Non-Paid Channels', false]] : [[null, null]]
-    bands.forEach(([band, wantPaid]) => {
-      const rows = band === null ? sortedFilteredRows : sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
+    const bands = grpBy === 'source' ? SOURCE_BANDS : [[null, null]]
+    bands.forEach(([band, bandKey]) => {
+      const rows = band === null ? sortedFilteredRows : sortedFilteredRows.filter(r => sourceBand(r.label) === bandKey)
       if (!rows.length) return
       if (band) push(band.toUpperCase(), aggregateRows(rows, band), true)
       rows.forEach(g => push(g.label, g, false))
@@ -4398,9 +4401,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (paidBand) out.push({ label:'PAID CHANNELS', strong:true, g:paidBand })
     srcs.filter(x => isPaidSource(x.label)).sort((a, b) => (b.spend || 0) - (a.spend || 0))
       .forEach(x => out.push({ label:x.label, strong:false, g:x }))
-    const freeBand = band('NON-PAID CHANNELS', r => !isPaidSource(r.source))
+    const brandBand = band('BRANDING', r => isBrandingSource(r.source))
+    if (brandBand) out.push({ label:'BRANDING', strong:true, g:brandBand })
+    srcs.filter(x => isBrandingSource(x.label)).sort((a, b) => (b.spend || 0) - (a.spend || 0))
+      .forEach(x => out.push({ label:x.label, strong:false, g:x }))
+    const freeBand = band('NON-PAID CHANNELS', r => sourceBand(r.source) === 'free')
     if (freeBand) out.push({ label:'NON-PAID CHANNELS', strong:true, g:freeBand })
-    srcs.filter(x => !isPaidSource(x.label)).sort((a, b) => (b.leads || 0) - (a.leads || 0))
+    srcs.filter(x => sourceBand(x.label) === 'free').sort((a, b) => (b.leads || 0) - (a.leads || 0))
       .forEach(x => out.push({ label:x.label, strong:false, g:x }))
     return { rows: out, totalSpend: total ? (total.spend || 0) : 0 }
   }, [aggReport, joinPrev])
@@ -4707,7 +4714,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       cpl: summaryValue(g, 'cpl'), cpql: summaryValue(g, 'cpql'), cpa: summaryValue(g, 'cpa'),
     })
     const paidRows = sortedFilteredRows.filter(r => isPaidSource(r.label))
-    const freeRows = sortedFilteredRows.filter(r => !isPaidSource(r.label))
+    const freeRows = sortedFilteredRows.filter(r => sourceBand(r.label) === 'free')
     return {
       grpByLabel, periodLabel, filterLine, rowCount: sortedFilteredRows.length,
       minQL: CORRIDOR_MIN_QL, fmtINR, fmtN,
