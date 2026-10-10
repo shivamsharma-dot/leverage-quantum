@@ -406,7 +406,13 @@ function reviewPctDelta(cur, prev) {
 // counts how many of those six months actually have a value, so a half with
 // only some months typed in can be flagged as partial instead of passing for a
 // complete total. null total = no month entered at all (renders as a dash).
-function sumManualForPeriod(map, spec) {
+// A whole-period total (app_preferences.ac_sales_period_totals, {'half:2025-1': n}) wins over the
+// monthly entries for that exact period -- used for figures that only exist as a period total, such
+// as the AC full-sale counts copied once from the "3. YoY Exec Summary" tab of the H1_FY27 Marketing
+// Review sheet (H1 FY26 378, H2 FY26 718, H1 FY27 1,027).
+function sumManualForPeriod(map, spec, periodTotals) {
+  const fixed = periodTotals && spec.spec ? periodTotals[specKey(spec.spec)] : null
+  if (fixed != null && Number.isFinite(Number(fixed))) return { total: Number(fixed), entered: spec.ymKeys.length }
   let total = 0, entered = 0
   for (const ym of spec.ymKeys) {
     if (map && map[ym] != null) { total += Number(map[ym]) || 0; entered++ }
@@ -414,10 +420,10 @@ function sumManualForPeriod(map, spec) {
   return { total: entered ? total : null, entered }
 }
 
-function buildHeadlineRows(months, aggByMonth, acSales) {
-  const acCur = sumManualForPeriod(acSales, months.current)
-  const acPrior = sumManualForPeriod(acSales, months.prior)
-  const acLY = sumManualForPeriod(acSales, months.lastYear)
+function buildHeadlineRows(months, aggByMonth, acSales, acTotals) {
+  const acCur = sumManualForPeriod(acSales, months.current, acTotals)
+  const acPrior = sumManualForPeriod(acSales, months.prior, acTotals)
+  const acLY = sumManualForPeriod(acSales, months.lastYear, acTotals)
   const ac1 = acPrior.total, ac0 = acCur.total, acLYv = acLY.total
   const cpsOf = (agg, ac) => (ac != null && ac > 0 && agg.hasData) ? agg.spend / ac : null
 
@@ -558,6 +564,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
   const [error, setError] = useState(null)
   const [retryToken, setRetryToken] = useState(0)
   const [acSales, setAcSales] = useState({})
+  const [acTotals, setAcTotals] = useState({})
   const [acSalesLoaded, setAcSalesLoaded] = useState(false)
   const [acSaving, setAcSaving] = useState(false)
   const [acRevenue, setAcRevenue] = useState({})
@@ -720,6 +727,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       .then(d => {
         if (!dead) {
           setAcSales((d.prefs && d.prefs.ac_sales_manual) || {})
+          setAcTotals((d.prefs && d.prefs.ac_sales_period_totals) || {})
           setAcRevenue((d.prefs && d.prefs.ac_actual_revenue_manual) || {})
           setAcSalesLoaded(true)
         }
@@ -792,8 +800,8 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
 
   const headlineRows = useMemo(() => {
     if (!aggByMonth || !acSalesLoaded) return null
-    return buildHeadlineRows(months, aggByMonth, acSales)
-  }, [aggByMonth, acSalesLoaded, acSales, months])
+    return buildHeadlineRows(months, aggByMonth, acSales, acTotals)
+  }, [aggByMonth, acSalesLoaded, acSales, acTotals, months])
 
   const channelRowsByChannel = useMemo(() => {
     if (!byChannelByMonth) return null
