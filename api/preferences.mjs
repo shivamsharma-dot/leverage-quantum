@@ -133,7 +133,7 @@ export default async function handler(req, res) {
     // writes it now, and that page is admin-only already.)
     const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'overall_ac_sales_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual', 'cost_excluded_campaign_patterns', 'careers_programs', 'team_ac_countries', 'team_sr_countries', 'overall_summary_table_views'])
     // Marketing Review's own saved figures (read only here; writing stays admin-only) for anyone granted that page.
-    const MR_READ_KEYS = new Set(['mr_reviews', 'ac_sales_manual', 'ac_sales_period_totals', 'ac_actual_revenue_manual', 'mr_review_tabs_copy'])
+    const MR_READ_KEYS = new Set(['mr_reviews', 'ac_sales_manual', 'ac_sales_period_totals', 'ac_actual_revenue_manual', 'mr_review_tabs_copy', 'mr_organic_ac_sale'])
     const mrReader = me.role !== 'admin' && canAccessDashboard(me.role, 'marketing_review')
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key) || (mrReader && MR_READ_KEYS.has(row.key)))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))

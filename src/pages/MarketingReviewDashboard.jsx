@@ -420,6 +420,7 @@ function sumManualForPeriod(map, spec, periodTotals) {
   return { total: entered ? total : null, entered }
 }
 
+function organicAcKey(span) { return span.ymKeys[0] + '_' + span.ymKeys.length }
 function buildHeadlineRows(months, aggByMonth, acSales, acTotals, roasCur) {
   const acCur = sumManualForPeriod(acSales, months.current, acTotals)
   const acPrior = sumManualForPeriod(acSales, months.prior, acTotals)
@@ -575,6 +576,8 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
   const [acSales, setAcSales] = useState({})
   const [acTotals, setAcTotals] = useState({})
   const [acSalesLoaded, setAcSalesLoaded] = useState(false)
+  const [organicAc, setOrganicAc] = useState({})
+  const [organicAcSaving, setOrganicAcSaving] = useState(false)
   const [acSaving, setAcSaving] = useState(false)
   const [acRevenue, setAcRevenue] = useState({})
   const [acRevenueSaving, setAcRevenueSaving] = useState(false)
@@ -772,6 +775,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
           setAcSales((d.prefs && d.prefs.ac_sales_manual) || {})
           setAcTotals((d.prefs && d.prefs.ac_sales_period_totals) || {})
           setAcRevenue((d.prefs && d.prefs.ac_actual_revenue_manual) || {})
+          setOrganicAc((d.prefs && d.prefs.mr_organic_ac_sale) || {})
           setAcSalesLoaded(true)
         }
       })
@@ -798,6 +802,26 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       setAcSaving(false)
     }
   }, [acSales])
+
+  // Organic slide AC sale: one typed number per review period (key = first month + month count),
+  // saved to app_preferences.mr_organic_ac_sale so it is remembered. Same optimistic-write pattern.
+  const saveOrganicAc = useCallback(async (next) => {
+    const prev = organicAc
+    setOrganicAc(next); setOrganicAcSaving(true)
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'mr_organic_ac_sale', value: next }),
+      })
+      if (!r.ok) throw new Error('Save failed')
+      return true
+    } catch (e) {
+      setOrganicAc(prev)
+      return false
+    } finally {
+      setOrganicAcSaving(false)
+    }
+  }, [organicAc])
 
   // AC Actual Revenue -- a NEW, separate manual ₹ entry (per user's explicit
   // choice, 2026-09-10: NOT derived from the existing AC Sales count, which
@@ -922,19 +946,19 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       v: 1, takenAt: new Date().toISOString(), specKey: sKey,
       headlineRows, aggByMonth, byChannelByMonth: chanObj(byChannelByMonth), channelRowsByChannel,
       organicSubRows: [...collapsedOrganic.values()], organicSubSourceBreakdown,
-      acSales: pickManual(acSales), acRevenue: pickManual(acRevenue),
+      acSales: pickManual(acSales), acRevenue: pickManual(acRevenue), organicAcSale: organicAc[organicAcKey(months.current)] != null ? organicAc[organicAcKey(months.current)] : null,
       cacSheet: cacApplies ? cacSheet : null, reviewTabs: cacApplies ? reviewTabs : null, gaTraffic, syncedAt: syncedAt ? new Date(syncedAt).toISOString() : null, campaigns,
     }))
-  }, [headlineRows, aggByMonth, byChannelByMonth, channelRowsByChannel, error, organicSubRows, organicSubSourceBreakdown, cacApplies, cacError, cacSheet, reviewTabs, reviewTabsError, gaError, gaTraffic, fetchChannelCampaigns, months, acSales, acRevenue, syncedAt, sKey])
+  }, [headlineRows, aggByMonth, byChannelByMonth, channelRowsByChannel, error, organicSubRows, organicSubSourceBreakdown, cacApplies, cacError, cacSheet, reviewTabs, reviewTabsError, gaError, gaTraffic, fetchChannelCampaigns, months, acSales, acRevenue, organicAc, syncedAt, sKey])
 
   const liveValue = useMemo(() => ({
     months, frozen: false, cacApplies, buildSnapshot,
     loading: (rows == null || !acSalesLoaded) && !error, error, headlineRows,
-    acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt,
+    acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, organicAc, organicAcSaving, saveOrganicAc, syncedAt,
     aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows,
     organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, reviewTabs, reviewTabsError, gaTraffic, gaError, retryGa,
     retry: () => setRetryToken(t => t + 1),
-  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, reviewTabs, reviewTabsError, gaTraffic, gaError, retryGa])
+  }), [months, cacApplies, buildSnapshot, rows, acSalesLoaded, error, headlineRows, acSales, acSaving, saveAcSales, acRevenue, acRevenueSaving, saveAcRevenue, organicAc, organicAcSaving, saveOrganicAc, syncedAt, aggByMonth, byChannelByMonth, channelRowsByChannel, organicSubRows, organicSubSourceBreakdown, fetchChannelCampaigns, cacSheet, cacError, retryCac, reviewTabs, reviewTabsError, gaTraffic, gaError, retryGa])
 
   // A frozen review: the same shape, read from the saved snapshot. Nothing here fetches.
   const frozenValue = useMemo(() => {
@@ -946,6 +970,7 @@ function MarketingReviewDataProvider({ spec, snapshot, children }) {
       loading: false, error: null, headlineRows: snapshot.headlineRows,
       acSales: snapshot.acSales || {}, acSaving: false, saveAcSales: noopSave,
       acRevenue: snapshot.acRevenue || {}, acRevenueSaving: false, saveAcRevenue: noopSave,
+      organicAc: snapshot.organicAcSale != null ? { [organicAcKey(months.current)]: snapshot.organicAcSale } : {}, organicAcSaving: false, saveOrganicAc: noopSave,
       syncedAt: snapshot.syncedAt ? new Date(snapshot.syncedAt) : null,
       aggByMonth: snapshot.aggByMonth, byChannelByMonth: mapOf(snapshot.byChannelByMonth),
       channelRowsByChannel: snapshot.channelRowsByChannel, organicSubRows: snapshot.organicSubRows || [],
@@ -1670,6 +1695,8 @@ function FunnelSlide({ active, period }) {
 // Sales/CPS are dropped since neither has a real per-channel figure.
 function ChannelSpotlightBody({ active, period, channel, title }) {
   const ctx = useMarketingReviewData()
+  const [acEditOpen, setAcEditOpen] = useState(false)
+  const [acDraft, setAcDraft] = useState('')
   if (!ctx) return null
   // Organic only: Apps, AC sales and their total for the channel, read from the Finance "B2C H1 CAC" sheet
   // (H1 FY26-27 only). AC sales is blank in the sheet until Finance fills it, shown as a dash until then.
@@ -1681,8 +1708,23 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
     const n = r ? parseFloat(String(r[orgCol] || '').replace(/,/g, '')) : NaN
     return Number.isFinite(n) ? n : null
   }
-  const orgApps = sheetNum('total apps'), orgAc = sheetNum('total ac sales')
   const { months, channelRowsByChannel } = ctx
+  const manualKey = months ? organicAcKey(months.current) : ''
+  const manualAc = ctx.organicAc && ctx.organicAc[manualKey] != null ? Number(ctx.organicAc[manualKey]) : null
+  const orgApps = sheetNum('total apps')
+  const orgAc = manualAc != null ? manualAc : sheetNum('total ac sales')
+  const canEditAc = channel === 'Organic' && active && !ctx.frozen
+  const saveAcDraft = async () => {
+    const next = { ...(ctx.organicAc || {}) }
+    const t = acDraft.trim()
+    if (t === '') delete next[manualKey]
+    else {
+      const n = Number(t)
+      if (!Number.isFinite(n) || n < 0) return
+      next[manualKey] = n
+    }
+    if (await ctx.saveOrganicAc(next)) setAcEditOpen(false)
+  }
   const displayPeriods = months ? [months.lastYear, months.prior, months.current] : []
   let rows = channelRowsByChannel ? channelRowsByChannel[channel] : null
   if (rows && channel === 'Organic') {
@@ -1717,7 +1759,16 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
               padding: channel === 'Organic' ? '5px 0' : '10px 0', borderBottom: '1px solid #F1F5F9',
               animationDelay: active ? (0.035 * i) + 's' : undefined,
             }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{row.label}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {row.label}
+                {row.key === 'acSale' && canEditAc && (
+                  <button type="button" className={styles.noPrint} title="Enter AC sale for this period"
+                    onClick={() => { setAcDraft(manualAc != null ? String(manualAc) : ''); setAcEditOpen(true) }}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BLUE, padding: 2, display: 'inline-flex' }}>
+                    <EditIcon />
+                  </button>
+                )}
+              </div>
               {row.values.map((v, ci) => (
                 <div key={ci} title={exactHeadlineTitle(v, row.money)}
                   style={{ fontSize: 14.5, fontWeight: 800, color: v == null ? '#CBD5E1' : '#0F172A', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
@@ -1780,6 +1831,20 @@ function ChannelSpotlightBody({ active, period, channel, title }) {
               </div>
             )
           })()}
+        </div>
+      )}
+      {acEditOpen && (
+        <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 420, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC sale (Organic)</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 14, lineHeight: 1.5 }}>Number of AC sales from organic leads for {months.current.label}. Saved here and remembered. Leave blank to use the Finance sheet figure.</div>
+            <input type="number" min="0" autoFocus value={acDraft} onChange={e => setAcDraft(e.target.value)} placeholder="0"
+              style={{ width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 14, fontFamily: FONT, boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+              <Button size="sm" variant="secondary" onClick={() => setAcEditOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={saveAcDraft} disabled={ctx.organicAcSaving}>{ctx.organicAcSaving ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </div>
         </div>
       )}
     </LiveDataFrame>
@@ -2348,6 +2413,8 @@ const CALL_POINTS = [
   'The answer rate is the same inside and outside working hours (40.6% vs 39.4%), so the problem is not only the hour of the day: about 6 in 10 calls go unanswered at any time.',
   '14,668 calls were missed outside working hours, and 10,573 were missed inside them. The inside number is the one to chase, since someone is meant to be on shift.',
   'Sunday is the weakest day: 29.1% answered, against 41.9% on Saturday and 39.6% on weekdays.',
+  'Done: parallel calling is now enabled, so more calls should be picked up and fewer missed. It is early, so we will check once the numbers mature to see whether it worked.',
+  'Next: keep a roster so some coaches are available after working hours to pick up inbound calls, or put AI on the line to answer and qualify the leads. Inbound is a high-intent channel, so this is worth doing.',
 ]
 function InboundCallsSlide({ active, period }) {
   const max = Math.max(...CALLS_HOURLY)

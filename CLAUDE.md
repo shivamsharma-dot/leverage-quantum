@@ -2452,3 +2452,7 @@ Traffic slide "What stands out" now only lists channel-group user changes (no QL
 ## 2026-10-10 (later) -- Marketing Review: hide / show and slide order are now remembered
 
 They only lived in memory until "Save" was pressed, so a reload lost them. Now the working review (period, order, hidden slides) is kept in this browser (`localStorage` key `mr_work_draft_v1`, never for frozen reviews) and restored on open; a saved live review also auto-saves its changes about 1 second after the last change (to `mr_reviews`). Unsaved new reviews are remembered per browser only until saved.
+
+## 2026-10-10 (later still) -- Marketing Review: inbound-calls slide gets two next-step pointers, Organic "AC sale" is now typed in and remembered
+
+Inbound-calls slide: two new pointers under "What this means" (parallel calling is enabled, check once numbers mature; roster of coaches after hours or AI on inbound to qualify leads). Organic slide: an edit pencil next to the "AC sale" row opens a one-number box for the review period, saved to `app_preferences.mr_organic_ac_sale` (key = first month + month count, admin-only write, in the Marketing Review read list); it overrides the Finance sheet figure when set, flows into the AC sales and Apps + AC sales tiles, is kept in frozen snapshots. Build-verified, not click-tested live; the six pointers on the calls slide may be tight, check the layout.
