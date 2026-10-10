@@ -1184,15 +1184,15 @@ function HeadlineInsights({ rows, months, active }) {
   }
   const hasItd = rows.some(r => r.key === 'appsItd' && r.values.some(v => v != null))
   return (
-    <div className={active ? styles.staggerItem : undefined} style={{ marginTop: 14, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '12px 16px', animationDelay: active ? '0.4s' : undefined }}>
+    <div className={active ? styles.staggerItem : undefined} style={{ marginTop: 8, background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 12, padding: '8px 14px', animationDelay: active ? '0.4s' : undefined }}>
       <div style={{ fontSize: 10.5, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>What stands out</div>
       {lines.map((t, i) => (
-        <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, fontWeight: 600, color: '#1E2A44', lineHeight: 1.45, marginBottom: i < lines.length - 1 ? 4 : 0 }}>
+        <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 12.5, fontWeight: 600, color: '#1E2A44', lineHeight: 1.35, marginBottom: i < lines.length - 1 ? 2 : 0 }}>
           <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, marginTop: 6, flexShrink: 0 }} />{t}
         </div>
       ))}
       {hasItd && (
-        <div style={{ marginTop: 7, fontSize: 11.5, fontWeight: 600, color: '#64748B', lineHeight: 1.4 }}>
+        <div style={{ marginTop: 5, fontSize: 11, fontWeight: 600, color: '#64748B', lineHeight: 1.35 }}>
           Apps ITD counts applications by intake to date. Older intakes have had longer to fill than the latest one, so Apps ITD, CPA and Cost per (App ITD + AC sale) are not like for like across columns.
         </div>
       )}
@@ -1268,7 +1268,7 @@ function HeadlineSlide({ active, period }) {
           {headlineRows.map((row, i) => (
             <div key={row.key} className={active ? styles.staggerItem : undefined} style={{
               display: 'grid', gridTemplateColumns: HEADLINE_GRID_COLS, columnGap: 16, alignItems: 'center',
-              padding: '4.5px 0', borderBottom: '1px solid #F1F5F9',
+              padding: '2.2px 0', borderBottom: '1px solid #F1F5F9',
               animationDelay: active ? (0.035 * i) + 's' : undefined,
             }}>
               <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
