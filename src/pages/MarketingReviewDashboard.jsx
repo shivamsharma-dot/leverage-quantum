@@ -113,22 +113,22 @@ function buildSpan(spec) {
     monthDates = monthRun(spec.year, spec.month, 1)
     const d = monthDates[0]
     label = SHORT_MON[d.getMonth()] + "'" + String(d.getFullYear()).slice(-2)
-    range = '1–' + new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ' ' + SHORT_MON[d.getMonth()] + ' ' + d.getFullYear()
+    range = '1 to ' + new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ' ' + SHORT_MON[d.getMonth()] + ' ' + d.getFullYear()
   } else if (spec.type === 'fy') {
     monthDates = monthRun(spec.fy, 3, 12)
     label = fyLabel(spec.fy)
-    range = 'Apr ' + spec.fy + ' – Mar ' + (spec.fy + 1)
+    range = 'Apr ' + spec.fy + ' to Mar ' + (spec.fy + 1)
   } else if (spec.type === 'cy') {
     monthDates = monthRun(spec.year, 0, 12)
     label = 'CY' + spec.year
-    range = 'Jan – Dec ' + spec.year
+    range = 'Jan to Dec ' + spec.year
   } else {
     monthDates = monthRun(spec.fy, spec.half === 1 ? 3 : 9, 6)
     const first = monthDates[0], last = monthDates[5]
     label = 'H' + spec.half + ' ' + fyLabel(spec.fy)
     range = first.getFullYear() === last.getFullYear()
-      ? SHORT_MON[first.getMonth()] + '–' + SHORT_MON[last.getMonth()] + ' ' + last.getFullYear()
-      : SHORT_MON[first.getMonth()] + ' ' + first.getFullYear() + ' – ' + SHORT_MON[last.getMonth()] + ' ' + last.getFullYear()
+      ? SHORT_MON[first.getMonth()] + ' to ' + SHORT_MON[last.getMonth()] + ' ' + last.getFullYear()
+      : SHORT_MON[first.getMonth()] + ' ' + first.getFullYear() + ' to ' + SHORT_MON[last.getMonth()] + ' ' + last.getFullYear()
   }
   const first = monthDates[0], last = monthDates[monthDates.length - 1]
   const info = periodTypeInfo(spec.type)
@@ -515,6 +515,8 @@ function AmbientBackground({ variant = 'cover' }) {
   )
 }
 
+const noDash = t => String(t == null ? '' : t).replace(/\s*[\u2014\u2013]\s*/g, ', ')
+
 function PeriodBadge({ period, live }) {
   return (
     <div style={{ position: 'absolute', top: 28, right: 40, display: 'flex', alignItems: 'center', gap: 8, zIndex: 2 }}>
@@ -526,7 +528,7 @@ function PeriodBadge({ period, live }) {
         <span style={{
           fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', color: '#8A6A00', background: '#FFF6DA',
           border: '1px solid #F2E2A8', borderRadius: 999, padding: '5px 12px', textTransform: 'uppercase',
-        }}>Sample data — pending real figures</span>
+        }}>Sample data, pending real figures</span>
       )}
     </div>
   )
@@ -956,7 +958,7 @@ function CoverSlide({ active, period }) {
         <div style={{
           fontSize: 17, color: 'rgba(255,255,255,0.72)', maxWidth: 620, margin: '0 auto', lineHeight: 1.55,
           animation: active ? 'mrFadeUp .5s cubic-bezier(.22,1,.36,1) .45s both' : undefined,
-        }}>Performance across paid channels, organic growth and lead qualification — spend, funnel, wins and what's next.</div>
+        }}>Performance across paid channels, organic growth and lead qualification, spend, funnel, wins and what's next.</div>
       </div>
       <div style={{
         position: 'absolute', bottom: 26, left: 0, right: 0, textAlign: 'center', fontSize: 11.5, fontWeight: 600,
@@ -1040,12 +1042,12 @@ function useCountUp(target, active, { duration = 900, delay = 0 } = {}) {
 function AnimatedNumber({ value, money, active, delay = 0, duration = 900 }) {
   const numeric = typeof value === 'number' ? value : null
   const display = useCountUp(numeric, active, { duration, delay: delay * 1000 })
-  if (value == null) return <>—</>
+  if (value == null) return <>-</>
   return <>{money ? fmtINRShort(display) : fmtN(display)}</>
 }
 
 function DeltaCell({ delta, prior, money, invert, showPrior = true }) {
-  if (delta == null) return <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>—</span>
+  if (delta == null) return <span style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8' }}>-</span>
   const isNew = delta === 'new'
   const up = !isNew && delta >= 0
   const good = isNew ? true : (invert ? !up : up)
@@ -1183,7 +1185,7 @@ function HeadlineSlide({ active, period }) {
         <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 640, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Sales</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the sales count for each month. The figure for a period is the sum of its months; leave a month blank if it is not known. CPS (Spend ÷ AC Sales) is computed automatically.</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum, enter the sales count for each month. The figure for a period is the sum of its months; leave a month blank if it is not known. CPS (Spend ÷ AC Sales) is computed automatically.</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
               {displayPeriods.map(h => (
                 <div key={h.label}>
@@ -1281,7 +1283,7 @@ function ChannelCampaignsList({ campaigns, isPaid, active }) {
           <div title={c.name} style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
           <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmtN(c.ql)} QL</div>
           {isPaid && <div style={{ fontSize: 11.5, fontWeight: 700, color: '#94A3B8', fontVariantNumeric: 'tabular-nums', flexShrink: 0, width: 78, textAlign: 'right' }}>
-            {c.cpql != null ? fmtINRShort(c.cpql) + ' CPQL' : '—'}
+            {c.cpql != null ? fmtINRShort(c.cpql) + ' CPQL' : '-'}
           </div>}
         </div>
       ))}
@@ -1554,7 +1556,7 @@ function FunnelSlide({ active, period }) {
         <div className={styles.noPrint} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 6 }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: '22px 24px', width: 380, boxShadow: '0 20px 50px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Enter AC Actual Revenue</div>
-            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum — enter the rupee revenue for each month of {months ? months.current.label : 'the period'}. The deck adds them up; leave a month blank if it is not known.</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 16, lineHeight: 1.5 }}>Not tracked in Quantum, enter the rupee revenue for each month of {months ? months.current.label : 'the period'}. The deck adds them up; leave a month blank if it is not known.</div>
             {months && months.current.monthDates.map((m, mi) => {
               const ym = months.current.ymKeys[mi]
               return (
@@ -1681,7 +1683,7 @@ function CacSheetSlide({ active, period }) {
       <SectionKicker label="Acquisition cost & return" title="CAC and ROAS by channel" />
       {ctx && !ctx.cacApplies ? (
         <div style={{ color: '#64748B', fontSize: 15, lineHeight: 1.6, maxWidth: 640, padding: '30px 0' }}>
-          Not available for this period. This table comes from Finance's hand-maintained "B2C H1 CAC" sheet, which only covers H1 FY26-27 (Apr–Sep 2026). Hide this slide for other periods.
+          Not available for this period. This table comes from Finance's hand-maintained "B2C H1 CAC" sheet, which only covers H1 FY26-27 (Apr to Sep 2026). Hide this slide for other periods.
         </div>
       ) : !ctx || (!rows && !error) ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#64748B', fontSize: 14, fontWeight: 600, padding: '50px 0' }}>
@@ -1726,7 +1728,7 @@ function CacSheetSlide({ active, period }) {
                     color: ci === 0 ? '#334155' : (c ? '#0F172A' : '#CBD5E1'),
                     background: ci === 1 ? 'rgba(31,60,132,0.05)' : undefined,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{c || (ci === 0 ? '' : '—')}</div>
+                  }}>{c || (ci === 0 ? '' : '-')}</div>
                 ))}
               </div>
             )
@@ -1886,7 +1888,7 @@ function TofCampaignsSlide({ active, period }) {
   return (
     <LiveDataFrame ctx={ctx} label="Top-of-Funnel & Branding" title="Awareness & offline campaigns" period={period} active={active}>
       <div style={{ fontSize: 12.5, color: '#64748B', lineHeight: 1.6, marginBottom: 18, maxWidth: 560 }}>
-        Reach-oriented campaigns (print, radio, out-of-home) — near-zero QLs is expected
+        Reach-oriented campaigns (print, radio, out-of-home), near-zero QLs is expected
         here; these are measured on awareness, not direct lead conversion.
       </div>
       {tof == null ? (
@@ -2043,8 +2045,8 @@ function WinsSlide({ active, period }) {
             }}>
               <div style={{ width: 26, height: 26, borderRadius: 8, background: GREEN, color: '#fff', fontSize: 12, fontWeight: 800, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{w.n || i + 1}</div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', marginBottom: 3 }}>{w.title}</div>
-                <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>{w.detail}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', marginBottom: 3 }}>{noDash(w.title)}</div>
+                <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.45 }}>{noDash(w.detail)}</div>
               </div>
             </div>
           ))}
@@ -2094,7 +2096,7 @@ function NextStepsSlide({ active, period }) {
   if (sheetNext && sheetNext.length) {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', padding: '56px 64px', boxSizing: 'border-box' }}>
-        <PeriodBadge period={period} />
+        <PeriodBadge period={period} live />
         <SectionKicker label={"Next " + unit + "'s priorities"} title="What we're doing next" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
           {sheetNext.map((p, i) => (
@@ -2105,8 +2107,8 @@ function NextStepsSlide({ active, period }) {
                 fontSize: 13, fontWeight: 800, color: NAVY, background: C.navyBg, border: `1.5px solid ${NAVY}33`,
               }}>{p.n || i + 1}</div>
               <div>
-                <div style={{ fontSize: 15.5, fontWeight: 800, color: '#1E2A44', marginBottom: 2 }}>{p.title}</div>
-                <div style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.4 }}>{p.detail}</div>
+                <div style={{ fontSize: 15.5, fontWeight: 800, color: '#1E2A44', marginBottom: 2 }}>{noDash(p.title)}</div>
+                <div style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.4 }}>{noDash(p.detail)}</div>
               </div>
             </div>
           ))}
@@ -2153,11 +2155,11 @@ function ClosingSlide({ active, period }) {
 const SLIDES = [
   { id: 'cover', section: 'Cover', title: 'Marketing Review', Body: CoverSlide, dark: true },
   { id: 'agenda', section: 'Agenda', title: "What we'll cover", Body: AgendaSlide },
-  { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide, agenda: 'Executive summary — the headline numbers' },
-  { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide, agenda: 'Channel performance — where the leads came from' },
-  { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide, agenda: 'Funnel & conversion — how leads moved through the pipeline' },
-  { id: 'cac-sheet', section: 'Acquisition Cost & Return', title: 'CAC and ROAS by channel', Body: CacSheetSlide, agenda: 'Acquisition cost & return — CAC and ROAS by channel' },
-  { id: 'traffic', section: 'Website Traffic', title: 'Where the traffic came from', Body: TrafficSourcesSlide, agenda: 'Website traffic — where visitors came from, and organic’s share' },
+  { id: 'summary', section: 'Executive Summary', title: 'The headline numbers', Body: HeadlineSlide, agenda: 'Executive summary, the headline numbers' },
+  { id: 'channels', section: 'Channel Performance', title: 'Where the QLs came from', Body: ChannelPerformanceSlide, agenda: 'Channel performance, where the leads came from' },
+  { id: 'funnel', section: 'Funnel & Conversion', title: 'How leads moved through the pipeline', Body: FunnelSlide, agenda: 'Funnel & conversion, how leads moved through the pipeline' },
+  { id: 'cac-sheet', section: 'Acquisition Cost & Return', title: 'CAC and ROAS by channel', Body: CacSheetSlide, agenda: 'Acquisition cost & return, CAC and ROAS by channel' },
+  { id: 'traffic', section: 'Website Traffic', title: 'Where the traffic came from', Body: TrafficSourcesSlide, agenda: 'Website traffic, where visitors came from, and organic’s share' },
   { id: 'channel-google', section: 'Channel Spotlight', title: 'Google Ads', Body: GoogleAdsChannelSlide },
   { id: 'channel-meta', section: 'Channel Spotlight', title: 'Meta Ads', Body: MetaAdsChannelSlide },
   { id: 'channel-organic', section: 'Channel Spotlight', title: 'Organic', Body: OrganicChannelSlide },
@@ -2511,7 +2513,7 @@ function DeckView({ slides, index, setIndex, period, onExit, onPrint, onReorder 
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12 }}>
             <div style={{ fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Notes</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>No speaker notes yet — add them per slide once real content is defined.</div>
+            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>No speaker notes yet, add them per slide once real content is defined.</div>
           </div>
         </div>
       )}
@@ -2912,7 +2914,7 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
                   {isOwner && saved && !frozen && !freezeAsk && <Button size="sm" variant="secondary" onClick={() => { setFreezeError(''); setFreezeAsk(true) }}>Freeze this review…</Button>}
                   {isOwner && frozen && <Button size="sm" variant="secondary" onClick={() => actions.unfreeze()} disabled={busy}>Unfreeze (go live again)</Button>}
                   <span style={{ fontSize: 12, fontWeight: 700, color: frozen ? NAVY : (dirty ? '#8A6A00' : '#94A3B8') }}>
-                    {frozen ? 'Frozen — read only' : (!saved ? 'Not saved yet' : (dirty ? 'Unsaved changes' : 'All changes saved'))}
+                    {frozen ? 'Frozen, read only' : (!saved ? 'Not saved yet' : (dirty ? 'Unsaved changes' : 'All changes saved'))}
                   </span>
                 </div>
 
@@ -2920,9 +2922,9 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
                   <div style={{ marginTop: 14, background: C.navyBg, border: `1px solid ${NAVY}22`, borderRadius: 12, padding: '14px 16px' }}>
                     <div style={{ fontSize: 13.5, fontWeight: 800, color: NAVY, marginBottom: 4 }}>Freeze “{work.name}”?</div>
                     <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
-                      Every number is saved exactly as it is now — figures, campaign lists, the AC entries and the slide order. After that the review never changes when data refreshes, and nobody else can edit it. Only you can unfreeze it.
+                      Every number is saved exactly as it is now, figures, campaign lists, the AC entries and the slide order. After that the review never changes when data refreshes, and nobody else can edit it. Only you can unfreeze it.
                     </div>
-                    {ctx.loading && <div style={{ fontSize: 12.5, color: '#7A5C00', fontWeight: 700, marginTop: 8 }}>The figures are still loading — wait a moment, then freeze.</div>}
+                    {ctx.loading && <div style={{ fontSize: 12.5, color: '#7A5C00', fontWeight: 700, marginTop: 8 }}>The figures are still loading, wait a moment, then freeze.</div>}
                     {freezeError && <div style={{ fontSize: 12.5, color: '#B42318', fontWeight: 700, marginTop: 8 }}>{freezeError}</div>}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>
                       <Button size="sm" onClick={doFreeze} disabled={!!freezeBusy || ctx.loading}>{freezeBusy || 'Freeze now'}</Button>
@@ -2938,8 +2940,8 @@ function ReviewWorkspace({ work, patchWork, isOwner, reviews, dirty, busy, notic
                 background: frozen ? C.navyBg : '#E8F5EE', border: `1px solid ${frozen ? NAVY + '22' : '#BFE3CE'}`, borderRadius: 12, fontSize: 12.5, color: frozen ? NAVY : '#2F6B47', fontWeight: 600,
               }}>
                 {frozen
-                  ? `Frozen on ${fmtWhen(work.frozenAt)}${work.frozenBy ? ' by ' + nameOfEmail(work.frozenBy) : ''} — these numbers are exactly as they were saved and will not change.`
-                  : 'Live — figures are read fresh from the data each time you open this review. Freeze it once it has been presented to lock the numbers.'}
+                  ? `Frozen on ${fmtWhen(work.frozenAt)}${work.frozenBy ? ' by ' + nameOfEmail(work.frozenBy) : ''}, these numbers are exactly as they were saved and will not change.`
+                  : 'Live, figures are read fresh from the data each time you open this review. Freeze it once it has been presented to lock the numbers.'}
               </div>
 
               <div style={{ marginBottom: 26 }}>
