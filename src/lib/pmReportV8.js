@@ -95,7 +95,7 @@ function scoreTable(rows, fmtINR, fmtN) {
   // still count there (it was always a genuine part of Overall, same as "Others"
   // folding into Organic without a dedicated row of its own); only the display
   // row for it is gone, not any underlying figure.
-  rows.filter(r => r.label !== 'Referral').forEach(r => {
+  rows.filter(r => r.label !== 'Referral' && r.label !== 'Branding').forEach(r => {
     const blankCost = r.label === 'Organic'
     // cplSpend/cplLeads/cpqlSpend/cpqlQL carry the Settings > Cost-metric exclusions (same rule
     // as the Overall dashboard, 2026-10-05); absent when that lookup failed -> raw figures.
