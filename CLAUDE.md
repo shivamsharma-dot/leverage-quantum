@@ -2472,5 +2472,3 @@ The Marketing Efficiency table showed Overall spend ₹1.17 Cr against Paid ₹1
 ## 2026-10-12 -- Slack MTD Scorecard: SR / AC now add up across rows (QL Split sheet override switched off)
 
 Overall row's Total QL / SR / AC came from the QL Split sheet (Oct 1-11: SR 946 / AC 2,719, SR share ~26% every day) while Paid / Organic used Monthly QLs' SR share (~62%, 12-country list), so Overall SR (946) was below Paid SR alone (2,110). The two sources define SR differently; which is business-correct is unconfirmed. Fix, Slack report only (the `mtdScorecard` effect in `OverallDashboard.jsx`): `USE_QL_SPLIT_SHEET = false`, so every row uses the BigQuery QL total and the Monthly QLs ratio and rows reconcile. `qlSource` is now `'monthly'` (no "sheet not filled" note). Set the flag back to true to restore the sheet. No page figure changed.
-
-**Correction, same day:** the owner wants SR / AC from the QL Split sheet only. `USE_QL_SPLIT_SHEET` removed; the sheet drives the Overall row and Paid / Organic / Referral show a dash for SR / AC (the sheet has no source column). Falls back to BigQuery + Monthly QLs on every row (with the existing note) if the sheet is missing days.
