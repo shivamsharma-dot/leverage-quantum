@@ -135,6 +135,7 @@ jobs:
                 'Discover Future Intent',
                 'Interested in 2026 Intakes',
                 'Interested in 2027 Intakes',
+                'Low Intent Lead',
                 'Call Transferred To Counsellor'
               )
               AND DATE(f.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
