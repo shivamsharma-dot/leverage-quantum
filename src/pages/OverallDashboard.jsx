@@ -3645,8 +3645,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // Retried, and null (not an empty prefs object) on final failure so a failed lookup can be told
       // apart from "no exclusions configured" -- it also carries affiliate_spend_manual below.
       retryFetch(() => fetch('/api/preferences', { credentials: 'include' }).then(r => { if (!r.ok) throw new Error('preferences ' + r.status); return r.json() })).catch(() => null),
-      fetch(`/api/crm-leads?source=bigquery&mode=ql_split_totals&since=${monthStart}&until=${until}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(async ([raw, appsCount, qlSplitRaw, prefsResp, qlSplitSheet]) => {
+    ]).then(async ([raw, appsCount, qlSplitRaw, prefsResp]) => {
       if (dead) return
       // Settings > Cost-metric exclusions, applied to this report's CPL/CPQL the same way the
       // dashboard does (2026-10-05). The agg table above has no campaign_name, so the rows of
@@ -3718,14 +3717,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           sr: a.sr + r.futwork_qualified_sr + r.futwork_ai_qualified_sr,
           ac: a.ac + r.futwork_qualified_ac + r.futwork_ai_qualified_ac,
         }), { sr: 0, ac: 0 })
+        // 2026-10-12: Total QL / SR / AC for every row now come straight from Monthly QLs'
+        // own per-source counts (Human + AI, Superbot excluded), so SR + AC equals Total QL
+        // on every row and the rows add up to Overall. The QL Split sheet and the ratio
+        // estimate are gone (Monthly QLs now uses the same SR rule as that sheet).
         const applySplit = (row, filterFn) => {
           const s = qlBucket(filterFn)
-          const futworkTotal = row.humanQL + row.futworkAiQl
-          const observedTotal = s.sr + s.ac
-          if (futworkTotal <= 0) { row.srQl = 0; row.acQl = 0; return }
-          if (observedTotal <= 0) { row.srQl = null; row.acQl = null; return } // Monthly QLs has no split data for this bucket -- don't fabricate one
-          row.srQl = Math.round(futworkTotal * (s.sr / observedTotal))
-          row.acQl = futworkTotal - row.srQl
+          row.srQl = s.sr
+          row.acQl = s.ac
+          row.totalQL = s.sr + s.ac
         }
         applySplit(overallRow, () => true)
         applySplit(paidRow, r => isPaidSource(r.source))
@@ -3734,31 +3734,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
       }
 
-      // OVERALL row's Total QL/SR/AC -- and therefore message 2 too, which reads
-      // this exact object -- now comes from a dedicated "QL Split" Google Sheet
-      // instead of the ratio-derived split above (2026-09-18, asked for
-      // directly: "you have to fetch total ql and sr ac split from a separate
-      // sheet"). Scoped to ONLY this report, per explicit instruction ("dont
-      // touch anything on any page, no logic change anywhere, just in this
-      // report") -- Paid/Organic/Referral rows above are UNTOUCHED (that sheet
-      // has no source/channel dimension to bucket by), and every other Total
-      // QLs figure app-wide is unaffected. This sheet also has no Superbot
-      // rows -- Total QL here is deliberately Futwork (Human) + Futwork AI
-      // only (confirmed directly: "Exclude Superbot, use sheet as-is"), unlike
-      // the broader Total QLs definition used everywhere else in this app. If
-      // the sheet fetch fails, this silently falls back to the ratio-derived
-      // numbers just computed above rather than showing a broken report.
-      // Only trusted once the sheet covers EVERY complete day of the window (2026-10-05: early in a
-      // month it is still catching up, and used to overwrite the real BigQuery count with 0 -- the
-      // Overall row showed Total QL 0 / SR 0 / AC 0 and a 0 run-rate while Paid showed 1,192). If it is
-      // missing days the BigQuery-derived numbers computed above stay, and the report says so.
-      let qlSource = 'bigquery'
-      if (qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) >= daysDone) {
-        overallRow.totalQL = qlSplitSheet.totalQL
-        overallRow.srQl = qlSplitSheet.srQl
-        overallRow.acQl = qlSplitSheet.acQl
-        qlSource = 'sheet'
-      }
+      const qlSource = Array.isArray(qlSplitRaw) ? 'monthly' : 'bigquery'
 
       // Per-bucket CPL / CPQL inputs, computed EXACTLY like the dashboard (summaryValue):
       //  - numerator = the bucket's spend minus the spend of campaigns excluded for that

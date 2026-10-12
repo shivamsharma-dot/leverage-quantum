@@ -129,7 +129,7 @@ export function buildV9(ctx) {
   const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions — they could not be loaded just now; reopen the panel._' : null
   // Overall row's Total QL / SR / AC come from the QL Split sheet only once it is filled through the
   // whole window; otherwise BigQuery counts are used and the reader is told (2026-10-05).
-  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts — the QL Split sheet is not filled through ' + s.throughLabel + ' yet._' : null
+  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts — the Monthly QLs data could not be loaded just now._' : null
   const one = [
     testLine(ctx),
     '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
