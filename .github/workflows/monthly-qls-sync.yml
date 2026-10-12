@@ -124,7 +124,7 @@ jobs:
               DATE(f.activity_creation_date) AS act_date,
               s.source,
               COUNT(f.prospect_id) AS futwork_qualified,
-              COUNT(CASE WHEN f.country_interested IN ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') THEN f.prospect_id END) AS futwork_qualified_sr
+              COUNT(CASE WHEN (DATE(f.activity_creation_date) < DATE '2026-09-12' AND f.country_interested IN ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta')) OR (DATE(f.activity_creation_date) >= DATE '2026-09-12' AND f.country_interested IN ('UK','Dubai')) THEN f.prospect_id END) AS futwork_qualified_sr
             FROM leverage_direct.lsq_activities_futwork f
             LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id_futwork
             WHERE LOWER(f.note) LIKE '%post%'
@@ -181,7 +181,7 @@ jobs:
               DATE(f.activity_creation_date) AS act_date,
               s.source,
               COUNT(f.opportunity_id) AS futwork_ai_qualified,
-              COUNT(CASE WHEN f.Country_Preference IN ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') THEN f.opportunity_id END) AS futwork_ai_qualified_sr
+              COUNT(CASE WHEN (DATE(f.activity_creation_date) < DATE '2026-09-12' AND f.Country_Preference IN ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta')) OR (DATE(f.activity_creation_date) >= DATE '2026-09-12' AND f.Country_Preference IN ('UK','Dubai')) THEN f.opportunity_id END) AS futwork_ai_qualified_sr
             FROM leverage_direct.lsq_activities_futwork_ai f
             LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id
             WHERE LOWER(f.notes) LIKE '%post%'
