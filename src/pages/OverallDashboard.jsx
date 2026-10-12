@@ -3686,14 +3686,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const buckets = [
         { label: 'Overall', test: () => true },
         { label: 'Paid', test: r => isPaidSource(r.source) },
-        // 2026-10-12: Branding leads stay inside Organic (asked for directly); only its SPEND gets its
-        // own display row below, so Paid + Branding spend adds up to Overall spend.
-        { label: 'Organic', test: r => !isPaidSource(r.source) && r.source !== 'Referral' },
+        { label: 'Organic', test: r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source) },
         { label: 'Referral', test: r => r.source === 'Referral' },
-        { label: 'Branding', test: r => isBrandingSource(r.source) },
       ].map(b => bucket(b.label, b.test))
       const [overallRow, paidRow, organicRow, referralRow] = buckets
-      const bucketTests = [() => true, r => isPaidSource(r.source), r => !isPaidSource(r.source) && r.source !== 'Referral', r => r.source === 'Referral', r => isBrandingSource(r.source)]
+      const bucketTests = [() => true, r => isPaidSource(r.source), r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source), r => r.source === 'Referral']
 
       // SR/AC QL split -- Overall's own data has no vertical dimension on QL (only
       // Applications carry one), so the SR:AC RATIO comes from Monthly QLs' own,
@@ -3732,7 +3729,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         }
         applySplit(overallRow, () => true)
         applySplit(paidRow, r => isPaidSource(r.source))
-        applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral')
+        applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source))
         applySplit(referralRow, r => r.source === 'Referral')
         superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
       }

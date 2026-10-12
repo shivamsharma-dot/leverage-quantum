@@ -44,12 +44,6 @@ function scoreTable(rows, fmtINR, fmtN) {
   // row for it is gone, not any underlying figure.
   rows.filter(r => r.label !== 'Referral').forEach(r => {
     const blankCost = r.label === 'Organic'
-    // Branding: spend only (2026-10-12). Its leads / QLs stay inside Organic, so every other cell is a dash.
-    // The row exists so Paid + Branding spend adds up to Overall's spend.
-    if (r.label === 'Branding') {
-      t.rows.push([r.label + ' (top of funnel)', moneyCompact(r.spend), DASH, DASH, DASH, DASH, DASH, DASH, DASH])
-      return
-    }
     const cpl = !blankCost && r.leads > 0 ? r.spend / r.leads : null
     const cpql = !blankCost && r.totalQL > 0 ? r.spend / r.totalQL : null
     const futworkQueued = r.futworkHumanQ + r.futworkAiQ
