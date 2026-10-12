@@ -3755,12 +3755,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // month it is still catching up, and used to overwrite the real BigQuery count with 0 -- the
       // Overall row showed Total QL 0 / SR 0 / AC 0 and a 0 run-rate while Paid showed 1,192). If it is
       // missing days the BigQuery-derived numbers computed above stay, and the report says so.
-      // 2026-10-12: the QL Split sheet override is OFF (USE_QL_SPLIT_SHEET). Its SR share (~26%) is a different
-      // definition from Monthly QLs' (~62%), so Overall's SR/AC did not add up against the Paid / Organic rows.
-      // Every row now uses the same BigQuery total and the same Monthly QLs ratio. Slack report only; no page changed.
-      const USE_QL_SPLIT_SHEET = false
-      let qlSource = 'monthly'
-      if (USE_QL_SPLIT_SHEET && qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) >= daysDone) {
+      let qlSource = 'bigquery'
+      if (qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) >= daysDone) {
         overallRow.totalQL = qlSplitSheet.totalQL
         overallRow.srQl = qlSplitSheet.srQl
         overallRow.acQl = qlSplitSheet.acQl
