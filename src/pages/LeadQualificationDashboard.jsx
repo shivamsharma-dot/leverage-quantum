@@ -876,6 +876,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
     MQ_METRICS.forEach(m => { t[m.key] = monthlyFiltered.reduce((s,r) => s + mNum(r[m.key]), 0) })
     return t
   }, [monthlyFiltered, MQ_METRICS])
+  const showSbM = (monthlyTotals.superbot_queued || 0) + (monthlyTotals.superbot_qualified || 0) > 0
   const monthlyBySource = useMemo(() => {
     const map = {}
     monthlyFiltered.forEach(r => {
@@ -982,7 +983,8 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
     a.click()
     URL.revokeObjectURL(a.href)
   }
-  const dayExportRows = useMemo(() => monthlyByDate.map(r => ({
+  const dropSb = rows => showSbM ? rows : rows.map(r => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('superbot'))))
+  const dayExportRows = useMemo(() => dropSb(monthlyByDate.map(r => ({
     date: r.date,
     total_ql: mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified),
     total_opp_count: r.opp_count, floor_queued: r.floor_queued,
@@ -994,8 +996,8 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
     futwork_q_to_ql_pct: convNum(r.futwork_qualified, r.futwork_queued),
     superbot_q_to_ql_pct: convNum(r.superbot_qualified, r.superbot_queued),
     futwork_ai_q_to_ql_pct: convNum(r.futwork_ai_qualified, r.futwork_ai_queued),
-  })), [monthlyByDate])
-  const monthExportRows = useMemo(() => monthlyByPeriodScoped.map(r => ({
+  }))), [monthlyByDate, showSbM])
+  const monthExportRows = useMemo(() => dropSb(monthlyByPeriodScoped.map(r => ({
     period: r.period,
     total_ql: mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified),
     total_opp_count: r.opp_count, floor_queued: r.floor_queued,
@@ -1007,7 +1009,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
     futwork_q_to_ql_pct: convNum(r.futwork_qualified, r.futwork_queued),
     superbot_q_to_ql_pct: convNum(r.superbot_qualified, r.superbot_queued),
     futwork_ai_q_to_ql_pct: convNum(r.futwork_ai_qualified, r.futwork_ai_queued),
-  })), [monthlyByPeriodScoped])
+  }))), [monthlyByPeriodScoped, showSbM])
 
   // 4. Apply the Advanced Filter conditions
   const filtered = useMemo(() => dateFilteredRows.filter(matchesAdvancedRow), [dateFilteredRows, matchesAdvancedRow]);
@@ -1632,7 +1634,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                 <PremKPI label="Total Qualified" value={fmtN(totals.total)} sub={selMonth}                       delta={totals.totalDelta} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork"          value={fmtN(totals.fw)}   sub={pct(totals.fw, totals.total) + ' share'}   delta={totals.fwDelta}    accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI"       value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' share'} delta={totals.fwaiDelta}  accent="#29B9C3" accentBg="#E4F8F9" icon={KPI_ICONS.ai} />
-                <PremKPI label="Superbot"         value={fmtN(totals.sb)}   sub={pct(totals.sb, totals.total) + ' share'}   delta={totals.sbDelta}    accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.bot} />
+                {totals.sb > 0 && <PremKPI label="Superbot"         value={fmtN(totals.sb)}   sub={pct(totals.sb, totals.total) + ' share'}   delta={totals.sbDelta}    accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.bot} />}
                 {/* Vertical (SR/AC) -- same clickable-card-scopes-the-page pattern as
                     Human/AI QL Detail's own SR/AC cards, wired here into the Advanced
                     Filter that already exists on this page instead of a separate toggle. */}
@@ -2036,12 +2038,12 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Qualified (SR)</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Qualified (AC)</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Queued</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Qualified</th>
+                        {showSbM && <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Queued</th>}
+                        {showSbM && <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Qualified</th>}
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Queued -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork Q -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Q -> QL %</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Q -> QL %</th>
+                        {showSbM && <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Q -> QL %</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -2059,12 +2061,12 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified_sr)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified_ac)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
+                          {showSbM && <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>}
+                          {showSbM && <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>}
                           <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 600, color: heatColor(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)), background: heatBg(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)) }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_qualified, row.futwork_queued)), background: heatBg(pctN(row.futwork_qualified, row.futwork_queued)) }}>{pct(row.futwork_qualified, row.futwork_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)), background: heatBg(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)) }}>{pct(row.futwork_ai_qualified, row.futwork_ai_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
+                          {showSbM && <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>}
                         </tr>
                       ))}
                       {monthlyByDate.length === 0 && (
@@ -2092,12 +2094,12 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Qualified</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Qualified (SR)</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Qualified (AC)</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Queued</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Qualified</th>
+                          {showSbM && <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Queued</th>}
+                          {showSbM && <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Qualified</th>}
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Queued -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork Q -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Q -> QL %</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Q -> QL %</th>
+                        {showSbM && <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Q -> QL %</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -2115,12 +2117,12 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified_sr)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified_ac)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
+                            {showSbM && <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>}
+                            {showSbM && <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>}
                           <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 600, color: heatColor(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)), background: heatBg(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)) }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_qualified, row.futwork_queued)), background: heatBg(pctN(row.futwork_qualified, row.futwork_queued)) }}>{pct(row.futwork_qualified, row.futwork_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)), background: heatBg(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)) }}>{pct(row.futwork_ai_qualified, row.futwork_ai_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
+                          {showSbM && <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>}
                           </tr>
                         ))}
                       </tbody>

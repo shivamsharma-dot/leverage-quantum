@@ -1879,6 +1879,26 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     try { return localStorage.getItem(SUMMARY_SCHEMA_VERSION_KEY) !== String(SUMMARY_SCHEMA_VERSION) }
     catch { return false }
   })()
+  // Manual column widths (drag a header's right edge, Excel / Sheets style), saved per browser.
+  const [colWidths, setColWidths] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lq_overall_col_widths') || '{}') || {} } catch { return {} }
+  })
+  const setColWidth = useCallback((key, w) => {
+    setColWidths(prev => {
+      const next = { ...prev }
+      if (w == null) delete next[key]; else next[key] = Math.max(36, Math.round(w))
+      try { localStorage.setItem('lq_overall_col_widths', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [])
+  const startColResize = useCallback((e, key) => {
+    e.preventDefault(); e.stopPropagation()
+    const th = e.currentTarget.parentElement
+    const startX = e.clientX, startW = th.getBoundingClientRect().width
+    const move = ev => setColWidth(key, startW + (ev.clientX - startX))
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up)
+  }, [setColWidth])
   const [visibleCols, setVisibleCols] = useState(() => {
     // Newly-added columns (not in a previously-saved list) default to visible, same as
     // colOrder below -- otherwise a brand new column silently never appears for a device
@@ -2304,6 +2324,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }
   }
   const kpis = useMemo(() => sumKpis(filtered), [filtered, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
+  // Superbot is deactivated: show its figures only when the current view actually has some.
+  const showSuperbot = ((kpis.superbotQ || 0) + (kpis.superbotAiQl || 0)) > 0
   // Total Queued -- all 3 third-party channels combined (Futwork Human + Futwork AI +
   // Superbot), excluding Floor (handled directly, a parallel branch, see the info
   // tooltip). Distinct from totalFutworkQ below, which is Futwork's own subtotal only.
@@ -3367,8 +3389,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // other grouping either has no such field on the row (source view's own label already
       // IS the source) or would just be noise (a column of "—" everywhere).
       .filter(k => (k !== 'corridor' && k !== 'source' && k !== 'subSource') || grpBy === 'campaign')
+      // Superbot is deactivated: hide its columns while the current view has none (totals unchanged).
+      .filter(k => showSuperbot || (k !== 'superbotQ' && k !== 'superbotAiQl'))
       .map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
-  }, [colOrder, visibleCols, grpBy, isMobileTable])
+  }, [colOrder, visibleCols, grpBy, isMobileTable, showSuperbot])
 
   // Sorted + search-filtered, but NOT sliced to the on-screen row limit -- this is the set
   // that export should always draw from, so "Show 10/25/50" (a display-density control) never
@@ -4819,6 +4843,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (isExtremePct ? 400 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400))),
           background: isExtremePct ? 'transparent' : (isPct ? heatBg(v) : 'transparent'),
           whiteSpace: isTextCol ? 'nowrap' : 'normal',
+          ...(colWidths[col.key] ? { width: colWidths[col.key], minWidth: colWidths[col.key], maxWidth: colWidths[col.key], overflow:'hidden', textOverflow:'ellipsis' } : null),
         }}>
         {summaryFmt(col.key, v)}
       </td>
@@ -5142,7 +5167,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="FUTWORK QUEUED" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={kpiDelta(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
             <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            {showSuperbot && <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />}
             {/* Human/AI/Total QLs — same drill-down as the funnel bars below
                 (setQlDrillOpen). Total QLs opens Daily QLs, the one page that
                 actually covers all three channels it sums (Human + AI + Superbot);
@@ -5176,7 +5201,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
               <HighlightKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} />
             </div>
-            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            {showSuperbot && <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />}
             <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINR(cpql)}>{fmtINRShort(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
             {/* onClickCapture, not onClick -- see the identical comment on the Human/AI
@@ -5392,6 +5417,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             // group reads as one thing at a glance while scanning the header row --
                             // adjacency alone doesn't visually read as "grouped" across 30 columns.
                             background: 'transparent',
+                            ...(colWidths[col.key] ? { width: colWidths[col.key], minWidth: colWidths[col.key], maxWidth: colWidths[col.key], overflow:'hidden' } : null),
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
                           }}>
                           {col.key === 'contribPct' ? (
@@ -5443,6 +5469,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               {shortLabel(col)}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                             </button>
                           )}
+                          <span role="separator" aria-orientation="vertical" title="Drag to resize, double-click to reset" draggable onDragStart={e => { e.preventDefault(); e.stopPropagation() }} onMouseDown={e => startColResize(e, col.key)} onDoubleClick={e => { e.stopPropagation(); setColWidth(col.key, null) }} style={{ position:'absolute', top:0, right:0, bottom:0, width:7, cursor:'col-resize', zIndex:2 }} />
                         </th>
                       ))}
                     </tr>
