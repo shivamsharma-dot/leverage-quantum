@@ -509,3 +509,8 @@ input:focus, textarea:focus {
     max-width: calc(100vw - 16px) !important;
   }
 }
+
+/* Overall funnel table: column-resize grip. A faint line shows on header hover, a solid one on the grip itself. */
+.lq-col-resize::after{content:'';position:absolute;top:22%;bottom:22%;left:4px;width:2px;border-radius:2px;background:transparent;transition:background .12s}
+th:hover > .lq-col-resize::after{background:rgba(31,60,132,.18)}
+.lq-col-resize:hover::after,.lq-col-resize:active::after{background:#1C9FD4}

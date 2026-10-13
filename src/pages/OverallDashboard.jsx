@@ -1896,7 +1896,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const th = e.currentTarget.parentElement
     const startX = e.clientX, startW = th.getBoundingClientRect().width
     const move = ev => setColWidth(key, startW + (ev.clientX - startX))
-    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize'
+    const up = () => { document.body.style.userSelect = ''; document.body.style.cursor = ''; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up)
   }, [setColWidth])
   const [visibleCols, setVisibleCols] = useState(() => {
@@ -5410,7 +5411,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           title={col.label + ' — click to sort, drag to reorder'}
                           style={{
                             position:'relative', padding:'9px 6px', fontSize:11, lineHeight:1.2, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.02em',
-                            color: sortKey === col.key ? C.navy : 'var(--text2)', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
+                            color: sortKey === col.key ? C.navy : 'var(--text2)', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'pointer', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
                             // Header-only tint on the whole Futwork/Superbot column family (queued
                             // by channel -> QL'd by channel -> the rates derived from those) so the
@@ -5469,7 +5470,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               {shortLabel(col)}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                             </button>
                           )}
-                          <span role="separator" aria-orientation="vertical" title="Drag to resize, double-click to reset" draggable onDragStart={e => { e.preventDefault(); e.stopPropagation() }} onMouseDown={e => startColResize(e, col.key)} onDoubleClick={e => { e.stopPropagation(); setColWidth(col.key, null) }} style={{ position:'absolute', top:0, right:0, bottom:0, width:7, cursor:'col-resize', zIndex:2 }} />
+                          <span className="lq-col-resize" role="separator" aria-orientation="vertical" title="Drag to resize, double-click to reset" draggable onDragStart={e => { e.preventDefault(); e.stopPropagation() }} onMouseDown={e => startColResize(e, col.key)} onDoubleClick={e => { e.stopPropagation(); setColWidth(col.key, null) }} style={{ position:'absolute', top:0, right:-3, bottom:0, width:9, cursor:'col-resize', zIndex:3 }} />
                         </th>
                       ))}
                     </tr>
