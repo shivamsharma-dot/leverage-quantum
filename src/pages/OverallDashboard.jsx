@@ -817,12 +817,11 @@ const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? 
 // Compact header labels so more columns fit on one screen; the full name stays in the
 // header tooltip, the Columns picker and exports.
 const SUMMARY_SHORT_LABELS = {
-  contribPct:'Contrib %', floorQueued:'Floor Q', queued:'Total Q', futworkHumanQ:'Human Q', futworkAiQ:'AI Q',
-  superbotQ:'Superbot Q', humanQL:'Human QL', futworkAiQl:'AI QL', superbotAiQl:'Superbot QL',
-  futworkQlPct:'Lead>QL %', futworkHumanQlPct:'Lead>QL % H', futworkAiQlPct:'Lead>QL % AI',
+  contribPct:'%', floorQueued:'Floor Q', queued:'Total Q', futworkHumanQ:'HQ', futworkAiQ:'AIQ',
+  superbotQ:'Superbot Q', humanQL:'HQL', futworkAiQl:'AIQL', superbotAiQl:'SQL',
+  futworkQlPct:'Lead to QL %', futworkHumanQlPct:'HQL %', futworkAiQlPct:'AIQL %',
   totalQL:'QLs', avgQlPerDay:'QLs/day', apps:'Apps', raus:'RAUs', estimatedRaus:'Est RAU',
-  depositPct:'Dep %', estSrRevenue:'Est Rev', actSrRevenue:'Act Rev', roas:'ROAS', estimatedRoas:'Est ROAS',
-  subSource:'Sub Src',
+  estSrRevenue:'Est SR Revenue', actSrRevenue:'SR Revenue', roas:'ROAS', estimatedRoas:'Est ROAS',
 }
 const shortLabel = col => SUMMARY_SHORT_LABELS[col.key] || col.label
 const SUMMARY_COLUMNS = [
@@ -863,9 +862,6 @@ const SUMMARY_COLUMNS = [
   { key:'deposits', label:'Deposits' },
   { key:'raus', label:'Actual RAUs' },
   { key:'estimatedRaus', label:'Estimated RAU' },
-  { key:'qlPct', label:'QL %' },
-  { key:'appPct', label:'App %' },
-  { key:'depositPct', label:'Deposit %' },
   { key:'cpl', label:'CPL' },
   { key:'cpql', label:'CPQL' },
   { key:'cpa', label:'CPA' },
@@ -5395,7 +5391,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             // by channel -> QL'd by channel -> the rates derived from those) so the
                             // group reads as one thing at a glance while scanning the header row --
                             // adjacency alone doesn't visually read as "grouped" across 30 columns.
-                            background: FUTWORK_GROUP_KEYS.includes(col.key) ? 'var(--navy-tint)' : 'transparent',
+                            background: 'transparent',
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
                           }}>
                           {col.key === 'contribPct' ? (
@@ -5430,13 +5426,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               {showContribPicker && contribPickerPos && (
                                 <>
                                   <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                                  <div ref={contribPickerRef} role="dialog" aria-modal="true" aria-labelledby="contrib-picker-title" tabIndex={-1} onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
-                                    <div style={{ padding:'6px 10px 10px', marginBottom:4, borderBottom:`0.5px solid ${C.border}` }}>
-                                      <div id="contrib-picker-title" style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
-                                      <div style={{ fontSize:13, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
-                                        Each row's <b>{(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')}</b> divided by the grand total {(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')} for the current filters, ×100.
-                                      </div>
-                                    </div>
+                                  <div ref={contribPickerRef} role="dialog" aria-modal="true" aria-label="Contribution metric" tabIndex={-1} onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
+                                    
                                     {CONTRIB_METRICS.map(m => (
                                       <button key={m.key} onClick={e => { e.stopPropagation(); setContribMetric(m.key); setShowContribPicker(false) }}
                                         style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight: m.key === contribMetric ? 700 : 400, textTransform:'none', letterSpacing:0, background: m.key === contribMetric ? C.navyBg : 'transparent', color: m.key === contribMetric ? C.navy : C.text }}>
