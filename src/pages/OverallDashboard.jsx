@@ -844,19 +844,19 @@ const SUMMARY_COLUMNS = [
   { key:'futworkHumanQ', label:'Futwork Human Queued' },
   { key:'futworkAiQ', label:'Futwork AI Queued' },
   { key:'superbotQ', label:'Superbot Queued' },
+  { key:'totalQL', label:'Total QLs' },
   { key:'humanQL', label:'Futwork Human QL' },
   { key:'futworkAiQl', label:'Futwork AI QL' },
   { key:'superbotAiQl', label:'Superbot AI QL' },
+  // Total QLs / days in the active date scope -- see daysInRange below. The same single
+  // day-count applies to every row and to TOTAL, regardless of grouping, per explicit
+  // request: it answers "at this pace, how many QLs a day", not "this row's own span".
+  { key:'avgQlPerDay', label:'Average QLs/day' },
   // Single-channel queued-to-QL conversion, distinct from the whole-funnel QL %
   // below (which divides by Total Queued, i.e. all 3 channels combined).
   { key:'futworkQlPct', label:'Lead to QL %' },
   { key:'futworkHumanQlPct', label:'Lead to QL % (Human)' },
   { key:'futworkAiQlPct', label:'Lead to QL % (AI)' },
-  { key:'totalQL', label:'Total QLs' },
-  // Total QLs / days in the active date scope -- see daysInRange below. The same single
-  // day-count applies to every row and to TOTAL, regardless of grouping, per explicit
-  // request: it answers "at this pace, how many QLs a day", not "this row's own span".
-  { key:'avgQlPerDay', label:'Average QLs/day' },
   { key:'apps', label:'Applications' },
   { key:'offers', label:'Offers' },
   { key:'deposits', label:'Deposits' },
@@ -954,7 +954,7 @@ const MOBILE_TABLE_BREAKPOINT = 768
 // from before this grouping existed, or from a manual drag at some point. Bumping the version
 // is the documented, no-manual-Reset way to correct that drift for anyone carrying it, not
 // just this one browser.
-const SUMMARY_SCHEMA_VERSION = 4
+const SUMMARY_SCHEMA_VERSION = 5
 const SUMMARY_SCHEMA_VERSION_KEY = 'lq_overall_summary_schema_version'
 // Shared with Settings > Data > SR Revenue Assumptions — same rate everywhere.
 // RAU = "Registered At University". Estimated RAUs is a projection (Deposits x
@@ -5289,11 +5289,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   ))}
                 </div>
 
-                {summaryTotalPages > 1 && (
-                  <SummaryPagination page={summarySafePage} totalPages={summaryTotalPages}
-                    onPrev={() => setTablePage(summarySafePage - 1)} onNext={() => setTablePage(summarySafePage + 1)} />
-                )}
-
                 <div style={{ position:'relative' }}>
                   <Button
                     onClick={() => !isMobileTable && setShowColsPicker(v => !v)}
@@ -5322,33 +5317,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   {pinCols ? 'Pinned' : 'Pin columns'}
                 </Button>
 
-                <div style={{ position:'relative' }}>
-                  <Button
-                    onClick={() => setShowRatesPicker(v => !v)}
-                    size="sm"
-                    variant="secondary"
-                    icon={<span style={{ fontSize:14.5, fontWeight:800, lineHeight:1, fontFamily:FONT }}>₹</span>}
-                  >
-                    SR Fee
-                  </Button>
-                  {showRatesPicker && (
-                    <>
-                      <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                      <div ref={ratesPickerRef} role="dialog" aria-modal="true" aria-labelledby="sr-fee-popover-title" tabIndex={-1} style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:270 }}>
-                        <div id="sr-fee-popover-title" style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
-                        <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:2 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:12.5, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
-                        <div style={{ fontSize:13, fontWeight:700, color:C.navy, fontFamily:FONT, marginBottom:8 }}>{rauPct}% <span style={{ fontSize:11.5, fontWeight:600, color:C.muted }}>Deposits → RAU conversion</span></div>
-                        <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.7 }}>
-                          <b>Estimated RAU</b> = Deposits × {rauPct}%<br />
-                          <b>Est. SR Revenue</b> = Estimated RAU × SR Fee<br />
-                          <b>Actual SR Revenue</b> = Actual RAUs × SR Fee<br />
-                          <b>ROAS</b> = Actual SR Revenue ÷ Spend (Est. ROAS uses Est. SR Revenue)
-                        </div>
-                        <div style={{ fontSize:12, color:C.muted, marginTop:10, lineHeight:1.5 }}>This rate is shared with Settings &gt; Data &gt; SR Revenue Assumptions — change it there to update it everywhere.</div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {summaryTotalPages > 1 && (
+                  <SummaryPagination page={summarySafePage} totalPages={summaryTotalPages}
+                    onPrev={() => setTablePage(summarySafePage - 1)} onNext={() => setTablePage(summarySafePage + 1)} />
+                )}
 
             <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
               <Button size="sm" variant="secondary" onClick={() => setSlackPanelOpen(true)}
