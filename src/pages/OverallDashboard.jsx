@@ -5256,7 +5256,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               action={
                 <div style={{ display:'flex', gap:6 }}>
                   {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
-                    <button key={v} onClick={() => { setGrpBy(v); setTablePage(0) }} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : 'var(--card-border,#E5E7EB)'), background: grpBy === v ? C.navy : 'var(--card,#fff)', color: grpBy === v ? '#fff' : 'var(--text2,#374151)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
+                    <button key={v} onClick={() => { setGrpBy(v); setTablePage(0); if (v === 'day' || v === 'month') { setSortKey('label'); setSortDir('desc') } else if (sortKey === 'label') { setSortKey('leads'); setSortDir('desc') } }} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : 'var(--card-border,#E5E7EB)'), background: grpBy === v ? C.navy : 'var(--card,#fff)', color: grpBy === v ? '#fff' : 'var(--text2,#374151)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
               }
@@ -5387,7 +5387,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   the first screenful. maxHeight is roughly 14-15 data rows -- enough to
                   see real structure at a glance without the table swallowing the page. */}
               <div style={{ overflow:'auto', maxHeight:640, border:`0.5px solid ${C.border}`, borderRadius:10 }}>
-                <table ref={tableRef} className="lq-sum-table" style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT, ...(colWidths.label ? { '--lq-label-w': colWidths.label + 'px' } : null) }}>
+                <table ref={tableRef} className="lq-sum-table" style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT, ...((colWidths.label || grpBy === 'day' || grpBy === 'month') ? { '--lq-label-w': (colWidths.label || 120) + 'px' } : null) }}>
                   <thead style={{ position:'sticky', top:0, zIndex:3 }}>
                     <tr style={{ background:'var(--bg3,#F8FAFC)', borderBottom:'2px solid var(--card-border,#E2E8F0)' }}>
                       <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : 'var(--text2,#64748B)', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...(colWidths.label ? { width: colWidths.label, minWidth: colWidths.label, maxWidth: colWidths.label, overflow:'hidden' } : null), ...stickyLabelStyle(pinCols, 'var(--bg3,#F8FAFC)') }}>
@@ -5453,8 +5453,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               </button>
                               {showContribPicker && contribPickerPos && (
                                 <>
-                                  <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                                  <div ref={contribPickerRef} role="dialog" aria-modal="true" aria-label="Contribution metric" tabIndex={-1} onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
+                                  <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399, background:'rgba(15,23,42,0.25)' }} />
+                                  <div ref={contribPickerRef} role="dialog" aria-modal="true" aria-label="Contribution metric" tabIndex={-1} onClick={e => e.stopPropagation()} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', maxHeight:'80vh', overflowY:'auto', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
                                     
                                     {CONTRIB_METRICS.map(m => (
                                       <button key={m.key} onClick={e => { e.stopPropagation(); setContribMetric(m.key); setShowContribPicker(false) }}
