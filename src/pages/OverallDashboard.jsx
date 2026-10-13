@@ -1449,7 +1449,7 @@ function HighlightKPI({ label, value, sub, delta, prevValue }) {
     <div style={{
       background: 'linear-gradient(135deg, #4CAE6F, #3D9A5E)', borderRadius: 12,
       padding: '16px 20px 14px', color: '#fff', display: 'flex', flexDirection: 'column', gap: 4,
-      boxShadow: '0 4px 14px -6px rgba(61,154,94,0.55)',
+      boxShadow: '0 4px 14px -6px rgba(61,154,94,0.55)', flex: 1,
     }}>
       <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.85)', fontFamily: FONT }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-1px', fontFamily: FONT }}>{value}</div>
@@ -4899,7 +4899,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
            20 different kpiVariants render functions; threading a click handler
            through all of them is real surface area for zero benefit here), so the
            click/hover/focus affordance lives on a plain wrapping div instead. */
-        .lq-kpi-clickable{cursor:pointer;border-radius:12px;transition:transform .15s,box-shadow .15s}
+        .lq-kpi-clickable{display:flex;cursor:pointer;border-radius:12px;transition:transform .15s,box-shadow .15s}
         .lq-kpi-clickable:hover{transform:translateY(-2px);box-shadow:0 10px 24px -12px rgba(31,60,132,0.35)}
         .lq-kpi-clickable:focus-visible{outline:2px solid #1C9FD4;outline-offset:2px}
       `}</style>
@@ -5165,7 +5165,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               the minimum column width scales up to claim a full 1/5 of the row on a wide
               screen, so 6+ columns can never form; below that width it degrades to fewer
               columns exactly like plain auto-fit (same overflow-safety as before). */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:12 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns: showSuperbot ? 'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))' : 'repeat(auto-fit, minmax(max(150px, calc((100% - 60px) / 6)), 1fr))', gap:12, marginBottom:20 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINR(estSrRevenue)}>{fmtINRShort(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINR(kpis.spend)}>{fmtINRShort(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={kpiDelta(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -5197,11 +5197,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
               <HighlightKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} />
             </div>
-          </div>
-
-          {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
-              Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:20 }}>
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
               onClickCapture={() => setQlDrillOpen('ai')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
@@ -5392,10 +5387,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   the first screenful. maxHeight is roughly 14-15 data rows -- enough to
                   see real structure at a glance without the table swallowing the page. */}
               <div style={{ overflow:'auto', maxHeight:640, border:`0.5px solid ${C.border}`, borderRadius:10 }}>
-                <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
+                <table ref={tableRef} className="lq-sum-table" style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT, ...(colWidths.label ? { '--lq-label-w': colWidths.label + 'px' } : null) }}>
                   <thead style={{ position:'sticky', top:0, zIndex:3 }}>
                     <tr style={{ background:'var(--bg3,#F8FAFC)', borderBottom:'2px solid var(--card-border,#E2E8F0)' }}>
-                      <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : 'var(--text2,#64748B)', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...stickyLabelStyle(pinCols, 'var(--bg3,#F8FAFC)') }}>
+                      <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : 'var(--text2,#64748B)', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...(colWidths.label ? { width: colWidths.label, minWidth: colWidths.label, maxWidth: colWidths.label, overflow:'hidden' } : null), ...stickyLabelStyle(pinCols, 'var(--bg3,#F8FAFC)') }}>
                         {/* C10 fix: was a bare onClick on the <th> itself -- no tabIndex, no role,
                             no keyboard equivalent. A real <button> is focusable and Enter/Space-
                             activatable for free; sized/styled to fill the cell so the click target
@@ -5403,6 +5398,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                         <button type="button" onClick={() => handleSort('label')} style={{ display:'block', width:'100%', textAlign:'inherit', background:'none', border:'none', padding:0, margin:0, font:'inherit', color:'inherit', cursor:'pointer' }}>
                           {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                         </button>
+                        <span className="lq-col-resize" role="separator" aria-orientation="vertical" title="Drag to resize, double-click to reset" draggable onDragStart={e => { e.preventDefault(); e.stopPropagation() }} onMouseDown={e => startColResize(e, 'label')} onDoubleClick={e => { e.stopPropagation(); setColWidth('label', null) }} style={{ position:'absolute', top:0, right:-3, bottom:0, width:9, cursor:'col-resize', zIndex:3 }} />
                       </th>
                       {renderCols.map(col => (
                         <th key={col.key}

@@ -514,3 +514,4 @@ input:focus, textarea:focus {
 .lq-col-resize::after{content:'';position:absolute;top:22%;bottom:22%;left:4px;width:2px;border-radius:2px;background:transparent;transition:background .12s}
 th:hover > .lq-col-resize::after{background:rgba(31,60,132,.18)}
 .lq-col-resize:hover::after,.lq-col-resize:active::after{background:#1C9FD4}
+.lq-sum-table[style*="--lq-label-w"] tr > :first-child{width:var(--lq-label-w)!important;min-width:var(--lq-label-w)!important;max-width:var(--lq-label-w)!important;overflow:hidden;text-overflow:ellipsis}
