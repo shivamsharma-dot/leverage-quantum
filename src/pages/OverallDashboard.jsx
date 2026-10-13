@@ -814,6 +814,17 @@ const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? 
 // ── Grouped summary table — customizable columns (show/hide + reorder, persisted to
 // localStorage so the layout sticks between sessions), sortable headers, search, and a
 // per-view export button — same "creative table" pattern as Meta Ads Creatives.
+// Compact header labels so more columns fit on one screen; the full name stays in the
+// header tooltip, the Columns picker and exports.
+const SUMMARY_SHORT_LABELS = {
+  contribPct:'Contrib %', floorQueued:'Floor Q', queued:'Total Q', futworkHumanQ:'Human Q', futworkAiQ:'AI Q',
+  superbotQ:'Superbot Q', humanQL:'Human QL', futworkAiQl:'AI QL', superbotAiQl:'Superbot QL',
+  futworkQlPct:'Lead>QL %', futworkHumanQlPct:'Lead>QL % H', futworkAiQlPct:'Lead>QL % AI',
+  totalQL:'QLs', avgQlPerDay:'QLs/day', apps:'Apps', raus:'RAUs', estimatedRaus:'Est RAU',
+  depositPct:'Dep %', estSrRevenue:'Est Rev', actSrRevenue:'Act Rev', roas:'ROAS', estimatedRoas:'Est ROAS',
+  subSource:'Sub Src',
+}
+const shortLabel = col => SUMMARY_SHORT_LABELS[col.key] || col.label
 const SUMMARY_COLUMNS = [
   { key:'corridor', label:'Corridor' },
   // Source/Sub Source -- only meaningful (and only ever shown, see displayCols below) in
@@ -4805,7 +4816,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       <td key={col.key}
         title={isMoney && v != null ? fmtINRShort(v) : isExtremePct ? 'Small sample -- this stage’s real count is low enough that the ratio swings wide. Read the raw counts, not this %.' : undefined}
         style={{
-          padding: opts.padding || '11px 10px', fontSize: opts.fontSize || 14,
+          padding: opts.padding || '10px 7px', fontSize: opts.fontSize || 13.5,
           textAlign: isTextCol ? 'left' : 'right',
           color: opts.colorOverride || (isTextCol ? 'var(--text2)' : (isExtremePct ? 'var(--text3)' : (isPct ? heatColor(v) : summaryColor(col.key)))),
           fontStyle: isExtremePct ? 'italic' : 'normal',
@@ -5375,9 +5386,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           onDragLeave={() => setDragOverKey(k => (k === col.key ? null : k))}
                           onDrop={e => { e.preventDefault(); reorderColumns(dragKey, col.key); setDragKey(null); setDragOverKey(null) }}
                           onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
-                          title="Click to sort — drag to reorder"
+                          title={col.label + ' — click to sort, drag to reorder'}
                           style={{
-                            position:'relative', padding:'11px 10px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+                            position:'relative', padding:'9px 6px', fontSize:11, lineHeight:1.2, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.02em',
                             color: sortKey === col.key ? C.navy : 'var(--text2)', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
                             // Header-only tint on the whole Futwork/Superbot column family (queued
@@ -5394,7 +5405,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                                   avoid also triggering a sort, which only worked for a mouse. Both
                                   triggers are now real buttons; aria-sort moved to the <th> itself. */}
                               <button type="button" onClick={() => handleSort(col.key)} style={{ background:'none', border:'none', padding:0, margin:0, font:'inherit', color:'inherit', textTransform:'inherit', letterSpacing:'inherit', cursor:'pointer' }}>
-                                {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                                {shortLabel(col)}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                               </button>
                               <button
                                 type="button"
@@ -5438,7 +5449,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             </span>
                           ) : (
                             <button type="button" onClick={() => handleSort(col.key)} style={{ display:'block', width:'100%', textAlign:'inherit', background:'none', border:'none', padding:0, margin:0, font:'inherit', color:'inherit', textTransform:'inherit', letterSpacing:'inherit', cursor:'pointer' }}>
-                              {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                              {shortLabel(col)}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                             </button>
                           )}
                         </th>
