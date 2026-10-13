@@ -1557,7 +1557,7 @@ function FunnelSlide({ active, period }) {
         sub: [
           { label: 'Futwork Human QL', value: a.humanQl },
           { label: 'Futwork AI QL', value: a.aiQl },
-          { label: 'Superbot QL', value: a.superbotQl },
+          ...(a.superbotQl > 0 ? [{ label: 'Superbot QL', value: a.superbotQl }] : []),
         ],
       },
       { key: 'apps', label: 'Applications', value: a.apps },

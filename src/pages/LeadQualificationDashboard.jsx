@@ -1077,7 +1077,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
   const provPie = useMemo(() => [
     { name: 'Futwork', value: totals.fw },
     { name: 'Futwork AI', value: totals.fwai },
-    { name: 'Superbot', value: totals.sb },
+    ...(totals.sb > 0 ? [{ name: 'Superbot', value: totals.sb }] : []),
   ].filter(d => d.value > 0), [totals])
 
   const trend = useMemo(() => months.map(m => {
@@ -1674,10 +1674,10 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                       <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                       <Bar dataKey="Futwork"    stackId="a" fill="url(#gFw)"   radius={[0,0,0,0]} maxBarSize={46} />
                       <Bar dataKey="Futwork AI" stackId="a" fill="url(#gFwai)" radius={[0,0,0,0]} maxBarSize={46} />
-                      <Bar dataKey="Superbot"   stackId="a" fill="url(#gSb)"   radius={[7,7,0,0]} maxBarSize={46} />
+                      {totals.sb > 0 && <Bar dataKey="Superbot"   stackId="a" fill="url(#gSb)"   radius={[7,7,0,0]} maxBarSize={46} />}
                     </BarChart>
                   </ResponsiveContainer>
-                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, { name: 'Superbot', color: C.blue }]} />
+                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, ...(totals.sb > 0 ? [{ name: 'Superbot', color: C.blue }] : [])]} />
                 </Card>
 
                 <Card title="Provider share" sub="Donut by qualified count">
@@ -1815,10 +1815,10 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                       <Tooltip content={<BrandTooltip />} />
                       <Line type="monotone" dataKey="Futwork"    stroke="#1F3C84" strokeWidth={2.5} dot={{ r: 3, fill: '#1F3C84', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
                       <Line type="monotone" dataKey="Futwork AI" stroke="#29B9C3" strokeWidth={2.5} dot={{ r: 3, fill: '#29B9C3', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
-                      <Line type="monotone" dataKey="Superbot"   stroke="#1C9FD4" strokeWidth={2.5} dot={{ r: 3, fill: '#1C9FD4', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
+                      {totals.sb > 0 && <Line type="monotone" dataKey="Superbot"   stroke="#1C9FD4" strokeWidth={2.5} dot={{ r: 3, fill: '#1C9FD4', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />}
                     </LineChart>
                   </ResponsiveContainer>
-                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, { name: 'Superbot', color: C.blue }]} />
+                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, ...(totals.sb > 0 ? [{ name: 'Superbot', color: C.blue }] : [])]} />
                 </Card>
               </div>
 
@@ -1836,7 +1836,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                         <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Date</th>
                         <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#1F3C84', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Futwork</th>
                         <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#29B9C3', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Futwork AI</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#1C9FD4', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Superbot</th>
+                        {totals.sb > 0 && <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#1C9FD4', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Superbot</th>}
                         <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Total</th>
                       </tr>
                     </thead>
@@ -1849,7 +1849,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
                             <td style={{ textAlign: 'left', padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>{lbl}</td>
                             <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.Futwork)}</td>
                             <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row['Futwork AI'])}</td>
-                            <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.Superbot)}</td>
+                            {totals.sb > 0 && <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.Superbot)}</td>}
                             <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, fontWeight: 800, color: '#0F1F4B', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.total)}</td>
                           </tr>
                         );
