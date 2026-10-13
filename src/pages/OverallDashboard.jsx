@@ -5387,7 +5387,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   the first screenful. maxHeight is roughly 14-15 data rows -- enough to
                   see real structure at a glance without the table swallowing the page. */}
               <div style={{ overflow:'auto', maxHeight:640, border:`0.5px solid ${C.border}`, borderRadius:10 }}>
-                <table ref={tableRef} className="lq-sum-table" style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT, ...((colWidths.label || grpBy === 'day' || grpBy === 'month') ? { '--lq-label-w': (colWidths.label || 120) + 'px' } : null) }}>
+                <table ref={tableRef} className="lq-sum-table" style={{ width: (colWidths.label || grpBy === 'day' || grpBy === 'month') ? 'max-content' : '100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT, ...((colWidths.label || grpBy === 'day' || grpBy === 'month') ? { '--lq-label-w': (colWidths.label || 120) + 'px' } : null) }}>
                   <thead style={{ position:'sticky', top:0, zIndex:3 }}>
                     <tr style={{ background:'var(--bg3,#F8FAFC)', borderBottom:'2px solid var(--card-border,#E2E8F0)' }}>
                       <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : 'var(--text2,#64748B)', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...(colWidths.label ? { width: colWidths.label, minWidth: colWidths.label, maxWidth: colWidths.label, overflow:'hidden' } : null), ...stickyLabelStyle(pinCols, 'var(--bg3,#F8FAFC)') }}>
