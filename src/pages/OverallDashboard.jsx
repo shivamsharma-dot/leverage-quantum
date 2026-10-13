@@ -2657,7 +2657,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     // for a live one is exactly the kind of thing this app has a documented history of
     // (see the 2026-08-05 CLAUDE.md entry) -- say "unknown" rather than say nothing.
     setBqSyncUnknown(false)
-    fetchOverallBqSyncedAt().then(ts => { if (dead) return; if (ts) setLastSync(ts); else setBqSyncUnknown(true) })
+    ;(async () => {
+      // The sync-time read is flaky under load (a transient 500) -- retry before giving up.
+      let ts = null
+      for (let i = 0; i < 3 && !ts && !dead; i++) { ts = await fetchOverallBqSyncedAt(); if (!ts) await new Promise(r => setTimeout(r, 1500 * (i + 1))) }
+      if (dead) return
+      if (ts) setLastSync(ts); else setBqSyncUnknown(true)
+    })()
     return () => { dead = true }
   }, [bqMode, bqNonce, loadData])
 
@@ -5085,13 +5091,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 any "last updated" timestamp collapses in a tight toolbar. Nothing is
                 lost, it's one hover away instead of permanently on screen. */}
             {bgRefreshing && <span title="Showing a cached snapshot from your last visit while a fresh copy loads in the background" style={{ fontSize:11.5, fontWeight:700, color:C.blue, fontFamily:FONT, whiteSpace:'nowrap' }}>Refreshing…</span>}
-            {!lastSync && bqMode && bqSyncUnknown && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Sync time unknown</span>}
-            <Button
+                        <Button
               onClick={() => { if (bqMode) { setBqError(null); setBqNonce(n => n + 1) } else loadData(true) }}
               disabled={loading || bqBusy}
               size="sm"
               variant="secondary"
-              title={lastSync ? 'Synced ' + syncFmt.format(lastSync) : undefined}
+              title={lastSync ? 'Synced ' + syncFmt.format(lastSync) : (bqMode && bqSyncUnknown ? 'Sync time unknown' : undefined)}
               icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: (loading || bqBusy) ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
             >
               {(loading || bqBusy) ? 'Refreshing' : 'Refresh'}
