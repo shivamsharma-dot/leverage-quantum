@@ -817,9 +817,9 @@ const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? 
 // Compact header labels so more columns fit on one screen; the full name stays in the
 // header tooltip, the Columns picker and exports.
 const SUMMARY_SHORT_LABELS = {
-  contribPct:'%', floorQueued:'Floor Q', queued:'Total Q', futworkHumanQ:'HQ', futworkAiQ:'AIQ',
-  superbotQ:'Superbot Q', humanQL:'HQL', futworkAiQl:'AIQL', superbotAiQl:'SQL',
-  futworkQlPct:'Lead to QL %', futworkHumanQlPct:'HQL %', futworkAiQlPct:'AIQL %',
+  contribPct:'%', floorQueued:'DTF', queued:'Total Q', futworkHumanQ:'HQ', futworkAiQ:'AIQ',
+  superbotQ:'SQ', humanQL:'HQL', futworkAiQl:'AIQL', superbotAiQl:'SQL',
+  futworkQlPct:'L to QL%', futworkHumanQlPct:'HQL %', futworkAiQlPct:'AIQL %',
   totalQL:'QLs', avgQlPerDay:'QLs/day', apps:'Apps', raus:'RAUs', estimatedRaus:'Est RAU',
   estSrRevenue:'Est SR Revenue', actSrRevenue:'SR Revenue', roas:'ROAS', estimatedRoas:'Est ROAS',
 }
