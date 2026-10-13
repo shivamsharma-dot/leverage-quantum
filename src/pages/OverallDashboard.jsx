@@ -4899,6 +4899,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
            20 different kpiVariants render functions; threading a click handler
            through all of them is real surface area for zero benefit here), so the
            click/hover/focus affordance lives on a plain wrapping div instead. */
+        .lq-kpi-clickable>*{flex:1 1 auto;min-width:0;width:100%}
         .lq-kpi-clickable{display:flex;cursor:pointer;border-radius:12px;transition:transform .15s,box-shadow .15s}
         .lq-kpi-clickable:hover{transform:translateY(-2px);box-shadow:0 10px 24px -12px rgba(31,60,132,0.35)}
         .lq-kpi-clickable:focus-visible{outline:2px solid #1C9FD4;outline-offset:2px}
