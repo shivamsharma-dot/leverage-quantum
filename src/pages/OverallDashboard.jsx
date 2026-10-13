@@ -820,7 +820,7 @@ const SUMMARY_SHORT_LABELS = {
   contribPct:'%', floorQueued:'DTF', queued:'Total Q', futworkHumanQ:'HQ', futworkAiQ:'AIQ',
   superbotQ:'SQ', humanQL:'HQL', futworkAiQl:'AIQL', superbotAiQl:'SQL',
   futworkQlPct:'L to QL%', futworkHumanQlPct:'HQL %', futworkAiQlPct:'AIQL %',
-  totalQL:'QLs', avgQlPerDay:'QLs/day', apps:'Apps', raus:'RAUs', estimatedRaus:'Est RAU',
+  totalQL:'Total QL', avgQlPerDay:'QLs/day', apps:'Apps', raus:'RAUs', estimatedRaus:'Est RAU',
   estSrRevenue:'Est SR Revenue', actSrRevenue:'SR Revenue', roas:'ROAS', estimatedRoas:'Est ROAS',
 }
 const shortLabel = col => SUMMARY_SHORT_LABELS[col.key] || col.label
