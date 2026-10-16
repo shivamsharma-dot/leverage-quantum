@@ -2380,7 +2380,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // CPL/CPA denominators: same paid-source basis, but only the scope-'all' exclusions apply.
   const paidCplKpis = useMemo(() => sumKpis(filtered.filter(r => paidSources.has(r.source) && !isCplCostExcluded(r))), [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const cpl = paidCplKpis.leads > 0 ? kpis.cplCostSpend / paidCplKpis.leads : 0
-  const cpql = paidKpis.totalQL > 0 ? kpis.costSpend / paidKpis.totalQL : 0
+  // Blended CPQL (2026-10-16): spend without the excluded campaigns / ALL QLs from every source (free
+  // channels and excluded campaigns' QLs included). Paid/Non-paid/per-source rows stay paid-only.
+  const cpql = kpis.totalQL > 0 ? kpis.costSpend / kpis.totalQL : 0
   const paidCpaKpis = useMemo(() => sumKpis(filtered.filter(r => paidSources.has(r.source) && !isCpaCostExcluded(r))), [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const cpa = paidCpaKpis.apps > 0 ? kpis.cpaCostSpend / paidCpaKpis.apps : 0
 
@@ -2481,7 +2483,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return sumKpis(base.filter(r => s.has(r.source)))
   }, [canUseAggPrev, prevAggFiltered, prevFiltered])
   const prevCpl = prevPaidKpis.leads > 0 ? prevKpis.cplCostSpend / prevPaidKpis.leads : 0
-  const prevCpql = prevPaidKpis.totalQL > 0 ? prevKpis.costSpend / prevPaidKpis.totalQL : 0
+  const prevCpql = prevKpis.totalQL > 0 ? prevKpis.costSpend / prevKpis.totalQL : 0
   const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.cpaCostSpend / prevPaidKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkHumanQ + prevKpis.futworkAiQ + prevKpis.superbotQ
   const prevTotalFutworkQ = prevKpis.futworkHumanQ + prevKpis.futworkAiQ
@@ -3498,6 +3500,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     SUMMARY_ADDITIVE_KEYS.forEach(k => {
       t[k] = rows.reduce((sum, g) => sum + (Number(g[k]) || 0), 0)
     })
+    // TOTAL row only: CPQL is blended, so its denominator is every QL, not just paid-source QLs.
+    if (label === 'TOTAL') t.paidQL = t.totalQL
     t.roas = t.spend > 0 ? t.actSrRevenue / t.spend : 0
     t.estimatedRoas = t.spend > 0 ? t.estSrRevenue / t.spend : 0
     return t
@@ -3816,7 +3820,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           b.cplSpend = b.spend - sum(cplOut, 'spend')
           b.cplLeads = sum(paidIn, 'leads') - sum(paidOf(cplOut), 'leads')
           b.cpqlSpend = b.spend - sum(sub, 'spend')
-          b.cpqlQL = sum(paidIn, 'totalQL') - sum(paidOf(sub), 'totalQL')
+          // Overall row is blended: all QLs from the Overall data (excluded campaigns' QLs included).
+          b.cpqlQL = i === 0 ? sum(inBucket, 'totalQL') : sum(paidIn, 'totalQL') - sum(paidOf(sub), 'totalQL')
         })
       }
 
