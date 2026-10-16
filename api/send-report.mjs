@@ -30,7 +30,7 @@ const CYAN  = '#29B9C3'
 const GREEN = '#4CAE6F'
 const FONT  = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
 
-// Logo mark bars (green/blue/navy, heights 9/14/17px) — canonical source is
+// Logo mark bars (green/blue/navy, heights 9/14/17px) - canonical source is
 // shared/brandLogo.mjs. Duplicated here as literals (not imported) because this
 // is a Vercel serverless .js handler and a static top-level import of an .mjs
 // file from here risks ERR_REQUIRE_ESM (see CLAUDE.md). Email uses table-cell
@@ -549,7 +549,7 @@ async function handleSlackExport(req, res) {
   }
 }
 
-// ── Ask AI "email this answer" — standalone, deliberately NOT sharing buildReport()'s
+// ── Ask AI "email this answer" - standalone, deliberately NOT sharing buildReport()'s
 // Meta-token/campaign-table logic (that's tightly coupled to the auto-generated report
 // shape). This is a much simpler wrapper: brand header/footer + the answer's own HTML.
 function buildChatAnswerEmail({ question, answerHtml, askedBy }) {
@@ -558,7 +558,7 @@ function buildChatAnswerEmail({ question, answerHtml, askedBy }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light">
-<title>Ask AI answer — ${todayLabel}</title></head>
+<title>Ask AI answer - ${todayLabel}</title></head>
 <body style="margin:0;padding:0;background-color:#F4F6F9;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
 <div style="margin:0;padding:32px 12px;background-color:#F4F6F9">
 <div style="max-width:600px;margin:0 auto">
@@ -815,7 +815,7 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows, humanUrl, aiUrl }) {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light">
-<title>Unassigned Leads — ${todayLabel}</title></head>
+<title>Unassigned Leads - ${todayLabel}</title></head>
 <body style="margin:0;padding:0;background-color:#F4F6F9;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
 <div style="margin:0;padding:32px 12px;background-color:#F4F6F9">
 <div style="max-width:640px;margin:0 auto">
@@ -855,7 +855,7 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows, humanUrl, aiUrl }) {
       <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 10px">${total} leads still need a floor owner</div>
       <div style="font-size:13.5px;color:#374151;line-height:1.7">
         Hi Akash,<br/>
-        There are currently <strong>${total} leads</strong> without a real floor owner in LeadSquared — <strong>${human.length}</strong> from the Human calling channel and <strong>${ai.length}</strong> from the AI channel. The oldest has been sitting unassigned for <strong>${oldestAge == null ? '—' : oldestAge + ' days'}</strong>. Please review and assign owners as soon as possible.
+        There are currently <strong>${total} leads</strong> without a real floor owner in LeadSquared - <strong>${human.length}</strong> from the Human calling channel and <strong>${ai.length}</strong> from the AI channel. The oldest has been sitting unassigned for <strong>${oldestAge == null ? '-' : oldestAge + ' days'}</strong>. Please review and assign owners as soon as possible.
       </div>
 
     </td></tr>
@@ -864,7 +864,7 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows, humanUrl, aiUrl }) {
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
         ${statCard('Human Unassigned', human.length, BLUE)}
         ${statCard('AI Unassigned', ai.length, GREEN)}
-        ${statCard('Oldest Unassigned', (oldestAge ?? '—') + 'd', NAVY)}
+        ${statCard('Oldest Unassigned', (oldestAge ?? '-') + 'd', NAVY)}
       </tr></table>
     </td></tr>
 
@@ -938,7 +938,7 @@ async function handleUnassignedLeadsReport(req, res) {
         from: fromAddr,
         to: UNASSIGNED_LEADS_RECIPIENTS,
         cc: UNASSIGNED_LEADS_CC,
-        subject: `Unassigned Leads: ${total} need a floor owner — ${todayLabel}`,
+        subject: `Unassigned Leads: ${total} need a floor owner - ${todayLabel}`,
         html,
         attachments: [
           { filename: 'human_unassigned.csv', content: Buffer.from(human.text).toString('base64') },
@@ -985,9 +985,9 @@ async function fetchMeta(token, since, until) {
 
 async function getAIAnalysis(summary, camps, reportType) {
   const key = process.env.ANTHROPIC_API_KEY
-  if (!key) return '<p style="color:#94A3B8;font-size:13px">AI analysis unavailable — API key not configured.</p>'
+  if (!key) return '<p style="color:#94A3B8;font-size:13px">AI analysis unavailable - API key not configured.</p>'
 
-  // Compact camp data — top 10 only, minimal fields
+  // Compact camp data - top 10 only, minimal fields
   const campText = camps.slice(0, 10).map(c => {
     const s   = parseFloat(c.ins.spend || 0)
     const ctr = parseFloat(c.ins.ctr || 0)
@@ -1013,9 +1013,9 @@ Write exactly 3 HTML sections using ONLY these inline styles:
 - Section title: <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #F1F5F9">TITLE</div>
 - Highlight: <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">VALUE</strong>
 
-SECTION 1 — KEY SIGNALS (2-3 boxes: biggest win, biggest risk, one anomaly. Each box = 1 sentence with a real ₹ or % figure)
-SECTION 2 — CAMPAIGN FLAGS (flag only campaigns with freq >3.5 OR EPS <20 OR CTR <0.5%. One line each. Name the campaign.)
-SECTION 3 — TOP 3 ACTIONS (numbered divs. Specific. Each must name a campaign or metric. What to do THIS WEEK.)
+SECTION 1 - KEY SIGNALS (2-3 boxes: biggest win, biggest risk, one anomaly. Each box = 1 sentence with a real ₹ or % figure)
+SECTION 2 - CAMPAIGN FLAGS (flag only campaigns with freq >3.5 OR EPS <20 OR CTR <0.5%. One line each. Name the campaign.)
+SECTION 3 - TOP 3 ACTIONS (numbered divs. Specific. Each must name a campaign or metric. What to do THIS WEEK.)
 
 Output only HTML. No preamble. No code fences. Max 600 words.`
 
@@ -1064,7 +1064,7 @@ function campTable(camps, avgCTR) {
       <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${ctr >= 1 ? '#166534' : ctr >= avgCTR ? '#1E3A8A' : '#991B1B'}">${ctr.toFixed(2)}%</td>
       <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${fr > 3.5 ? '#C2410C' : '#475569'}">${fr.toFixed(1)}x${fr > 3.5 ? ' ⚠' : ''}</td>
       <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:#0F172A">${l.toLocaleString('en-IN')}</td>
-      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#475569">${cpl > 0 ? fmtINR(cpl) : '—'}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#475569">${cpl > 0 ? fmtINR(cpl) : '-'}</td>
     </tr>`
   }).join('')
 
@@ -1098,16 +1098,16 @@ async function buildReport(token, reportType) {
   if (reportType === 'daily') {
     const yest = new Date(now); yest.setDate(yest.getDate() - 1)
     since = fmt(yest); until = fmt(yest)
-    periodLabel = 'Yesterday — ' + yest.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' })
+    periodLabel = 'Yesterday - ' + yest.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' })
   } else if (reportType === 'weekly') {
     const end = new Date(now); end.setDate(end.getDate() - 1)
     const start = new Date(end); start.setDate(end.getDate() - 6)
     since = fmt(start); until = fmt(end)
-    periodLabel = `Last 7 Days — ${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} to ${end.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`
+    periodLabel = `Last 7 Days - ${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} to ${end.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`
   } else {
     const start = new Date(now); start.setDate(start.getDate() - 30)
     since = fmt(start); until = today
-    periodLabel = `Last 30 Days — ${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} to ${new Date(today).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`
+    periodLabel = `Last 30 Days - ${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} to ${new Date(today).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`
   }
 
   const { acc, camps } = await fetchMeta(token, since, until)
@@ -1138,7 +1138,7 @@ async function buildReport(token, reportType) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="color-scheme" content="light">
-<title>Leverage Quantum — ${typeLabel} Report · ${todayLabel}</title>
+<title>Leverage Quantum - ${typeLabel} Report · ${todayLabel}</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F4F6F9;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
 <div style="margin:0;padding:32px 12px;background-color:#F4F6F9">
@@ -1237,7 +1237,7 @@ async function buildReport(token, reportType) {
 
     <!-- AI ANALYSIS -->
     <tr><td style="padding:20px 26px 32px">
-      ${sectionTitle('🤖', 'AI Analysis — Claude Sonnet')}
+      ${sectionTitle('🤖', 'AI Analysis - Claude Sonnet')}
       ${aiHTML}
     </td></tr>
 
@@ -1377,7 +1377,7 @@ Use get_overall_totals for a direct "what was X" question. Use analyze_campaign_
 
 Keep your answer to 1-4 short sentences, in plain text (no markdown table, no bullet list of raw numbers) -- the exact figures from your tool call are rendered as a real table separately, right under your answer, so do not restate every number yourself. If a tool call fails or returns no data, say so plainly instead of guessing.`
 
-function fmtN(n) { return n == null ? '—' : Math.round(n).toLocaleString('en-IN') }
+function fmtN(n) { return n == null ? '-' : Math.round(n).toLocaleString('en-IN') }
 
 // get_overall_totals's {rows:[{label,spend,leads,totalQL,cpl,cpql,cpa,apps,offers,deposits,raus}], group_by:'none'|'source'|'campaign'}
 function overallTotalsTable(result) {
@@ -1386,7 +1386,7 @@ function overallTotalsTable(result) {
   const firstCol = result.group_by === 'campaign' ? 'Campaign' : result.group_by === 'source' ? 'Source' : 'Total'
   return {
     columns: [firstCol, 'Spend', 'Leads', 'Total QL', 'CPQL', 'CPL', 'Applications', 'Offers', 'Deposits', 'RAUs'],
-    rows: rows.map(r => [r.label, fmtINR(r.spend), fmtN(r.leads), fmtN(r.totalQL), r.cpql == null ? '—' : fmtINR(r.cpql), r.cpl == null ? '—' : fmtINR(r.cpl), fmtN(r.apps), fmtN(r.offers), fmtN(r.deposits), fmtN(r.raus)]),
+    rows: rows.map(r => [r.label, fmtINR(r.spend), fmtN(r.leads), fmtN(r.totalQL), r.cpql == null ? '-' : fmtINR(r.cpql), r.cpl == null ? '-' : fmtINR(r.cpl), fmtN(r.apps), fmtN(r.offers), fmtN(r.deposits), fmtN(r.raus)]),
     wrapFirst: result.group_by === 'campaign',
   }
 }
@@ -1397,7 +1397,7 @@ function contributionTable(result) {
   if (!rows.length) return null
   return {
     columns: ['Campaign', 'Channel', 'Total QL', 'vs prev', 'Δ QL', 'Share', 'CPQL', 'Action'],
-    rows: rows.map(r => [r.campaign, r.channel, fmtN(r.currentQL), fmtN(r.previousQL), (r.deltaQL >= 0 ? '+' : '') + fmtN(r.deltaQL), (r.shareOfChangePct == null ? '—' : r.shareOfChangePct + '%'), r.cpql == null ? '—' : fmtINR(r.cpql), r.action || '—']),
+    rows: rows.map(r => [r.campaign, r.channel, fmtN(r.currentQL), fmtN(r.previousQL), (r.deltaQL >= 0 ? '+' : '') + fmtN(r.deltaQL), (r.shareOfChangePct == null ? '-' : r.shareOfChangePct + '%'), r.cpql == null ? '-' : fmtINR(r.cpql), r.action || '-']),
     wrapFirst: true,
   }
 }
@@ -1477,7 +1477,7 @@ async function answerOverallQuestion({ channel, threadTs, question, priorTurns, 
       const table = lastGood.name === 'get_overall_totals' ? overallTotalsTable(lastGood.result) : contributionTable(lastGood.result)
       if (table) blocks.push(slackTableBlock(table))
     }
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ':information_source: AI-generated from Overall’s live data — verify anything decision-critical on the dashboard.' }] })
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ':information_source: AI-generated from Overall’s live data - verify anything decision-critical on the dashboard.' }] })
     await deliver((text || 'Overall answer').slice(0, 200), blocks)
     await saveQaThread(channel, threadTs, [...(priorTurns || []), { q: question, a: (text || '').slice(0, 800) }])
   } catch (e) {
@@ -1497,7 +1497,7 @@ async function handleSlackAppMention(event) {
   const question = String(event.text || '').replace(/<@[^>]+>/g, '').trim()
   if (!question) {
     await slackPostBlocks(token, channel, 'Ask me about Overall.', [
-      { type: 'section', text: { type: 'mrkdwn', text: "Ask me something about Overall — spend, leads, QLs, CPQL, by source, or what's driving a change." } },
+      { type: 'section', text: { type: 'mrkdwn', text: "Ask me something about Overall - spend, leads, QLs, CPQL, by source, or what's driving a change." } },
     ], threadTs).catch(() => {})
     return
   }
@@ -1551,7 +1551,7 @@ async function handleSlackHomeAction(payload) {
     return publishHome(token, userId, menuBlocks({ notice: ':lock: You do not have access to *' + rep.group + '* in Quantum. Ask an admin to grant it, then try again.' }))
   }
   await publishHome(token, userId, [
-    { type: 'header', text: { type: 'plain_text', text: rep.group + ' — ' + rep.label } },
+    { type: 'header', text: { type: 'plain_text', text: rep.group + ' - ' + rep.label } },
     { type: 'section', text: { type: 'mrkdwn', text: ':hourglass_flowing_sand: Pulling the latest numbers…' } },
   ]).catch(() => {})
   try {
@@ -2383,7 +2383,7 @@ function summaryBlocks(summary) {
   if (!summary) return []
   const blocks = [{
     type: 'section',
-    text: { type: 'mrkdwn', text: '*B2C — ' + summary.label + '*' + (summary.through ? '  ·  through ' + summary.through : '') },
+    text: { type: 'mrkdwn', text: '*B2C - ' + summary.label + '*' + (summary.through ? '  ·  through ' + summary.through : '') },
   }]
   if (summary.headline.length) {
     blocks.push({
@@ -2593,7 +2593,7 @@ async function handleSlackViewSubmission(payload) {
               buffer: Buffer.from(row.image_csv, 'utf8'), title: 'Cash Flow statement (CSV)',
             }))
             await slackCompleteUpload(token, {
-              files, channel: hook.channel, initialComment: ':bar_chart: *B2C Student Mobility — Cash Flow*',
+              files, channel: hook.channel, initialComment: ':bar_chart: *B2C Student Mobility - Cash Flow*',
             })
           } catch (e) { console.error('[b2c approve] cashflow image upload (real channel) failed', e.message) }
         }
@@ -2603,7 +2603,7 @@ async function handleSlackViewSubmission(payload) {
         const destLabel = hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
         const noteLine = note ? '\n>' + note : ''
         await slackUpdateBlocks(token, meta.channel, meta.ts, 'Approved', [
-          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* — sent to ${destLabel}.${noteLine}` } },
+          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* - sent to ${destLabel}.${noteLine}` } },
         ]).catch(() => {})
       }
     } catch (e) {
@@ -2969,9 +2969,9 @@ export default async function handler(req, res) {
     const { html, summary: reportSummary, periodLabel: reportPeriodLabel, typeLabel: reportTypeLabel } = await buildReport(token, report_type)
     const todayLabel = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
     const SUBJECTS = {
-      daily:   `Meta Ads Daily Report — Yesterday · ${todayLabel}`,
-      weekly:  `Meta Ads Weekly Report — Last 7 Days · ${todayLabel}`,
-      monthly: `Meta Ads Monthly Report — Last 30 Days · ${todayLabel}`,
+      daily:   `Meta Ads Daily Report - Yesterday · ${todayLabel}`,
+      weekly:  `Meta Ads Weekly Report - Last 7 Days · ${todayLabel}`,
+      monthly: `Meta Ads Monthly Report - Last 30 Days · ${todayLabel}`,
     }
 
     const sendRes = await fetch('https://api.resend.com/emails', {

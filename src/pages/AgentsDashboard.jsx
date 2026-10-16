@@ -73,7 +73,7 @@ function StatusPill({ status }) {
 }
 
 function fmtWhen(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso)
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
 }
@@ -181,7 +181,7 @@ export default function AgentsDashboard() {
                   ) : null}
                 >
                   <p style={{ margin: 0, fontSize: 13, color: C.sub, lineHeight: 1.6 }}>{agent.description}</p>
-                  {!isOn && <p style={{ margin: '10px 0 0', fontSize: 12, color: C.muted }}>This agent is turned off — the scheduled run will be skipped and "Run now" is disabled.</p>}
+                  {!isOn && <p style={{ margin: '10px 0 0', fontSize: 12, color: C.muted }}>This agent is turned off - the scheduled run will be skipped and "Run now" is disabled.</p>}
                   {runError && running !== agent.id && <p style={{ margin: '10px 0 0', fontSize: 12, color: C.navy, fontWeight: 600 }}>{runError}</p>}
                 </Card>
               </div>

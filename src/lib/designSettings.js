@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 // Shared "pick a design variant, applies everywhere instantly" system.
 // Two independently selectable variants: the Button component and the shared
-// KPI card. (The login page used to be a third — a 21-layout picker — but
+// KPI card. (The login page used to be a third - a 21-layout picker - but
 // that was removed; the login page is now a single fixed design, see
 // LoginScene.jsx.) Each is just an integer id persisted to localStorage;
 // every mounted component listening via useDesignStyle() re-renders the

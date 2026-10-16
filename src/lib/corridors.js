@@ -103,7 +103,7 @@ export const GOOGLE_CHANNEL_LABELS = {
 
 /** channel-type enum value (e.g. 'PERFORMANCE_MAX') -> short display label. */
 export function googleChannelLabel(channelType) {
-  return GOOGLE_CHANNEL_LABELS[channelType] || channelType || '—'
+  return GOOGLE_CHANNEL_LABELS[channelType] || channelType || '-'
 }
 
 /**

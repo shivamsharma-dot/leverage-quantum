@@ -36,7 +36,6 @@ import { fetchOverallBqCampaignRows,
 } from '../lib/overallBqCache'
 // Just the MTD application count for the "MTD Scorecard" Slack report (2026-09-10) --
 // see the mtdScorecard effect below.
-import { fetchAppsCountSince } from '../lib/appsCache'
 // The SR/AC QL split for that same report -- Overall's own data has no vertical
 // dimension on QL itself (Vertical only exists on Applications), but Monthly QLs'
 // own BigQuery pipeline already computes it per (date, source).
@@ -60,7 +59,7 @@ const AppsDetailEmbed = React.lazy(() => import('./AppsDashboard'))
 // target for the TOTAL QLs card rather than a channel-specific detail page.
 const DailyQLsEmbed = React.lazy(() => import('./LeadQualificationDashboard'))
 
-// "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
+// "Overall PM" - added by the admin as a custom Data Source (Settings > Data > Google Sheets).
 // Not part of the original SHEET_PREF_KEYS set, so this page resolves its own override the same
 // way Settings resolves any custom source: prefs[editKey] (if the admin later edits the URL from
 // Settings) falls back to the sheet's defaultUrl, falls back to this hardcoded default.
@@ -171,7 +170,7 @@ const retryFetch = (fn, attempts = 3, delay = 400) => {
 function parseNum(v) {
   if (v == null) return 0
   const s = String(v).trim()
-  if (!s || s === '—' || s === '-' || /^n\/?a$/i.test(s)) return 0
+  if (!s || s === '\u2014' || s === '-' || /^n\/?a$/i.test(s)) return 0
   const n = parseFloat(s.replace(/,/g, ''))
   return isNaN(n) ? 0 : n
 }
@@ -210,7 +209,7 @@ function mapRow(r) {
   }
 }
 
-// ── Header controls — ported verbatim (styling + behavior) from the Daily QLs
+// ── Header controls - ported verbatim (styling + behavior) from the Daily QLs
 // page under QL Ops (LeadQualificationDashboard.jsx), per instruction to match
 // that header exactly: pill/Dropdown/DateRangePicker components below are the
 // same components, just re-declared here since they're local to that file.
@@ -314,7 +313,7 @@ function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 
   )
 }
 
-// ── Advanced filter — condition-based Source/Corridor/Campaign filter ──────────
+// ── Advanced filter - condition-based Source/Corridor/Campaign filter ──────────
 // Same field/operator/AND-OR condition-builder pattern already shipped on Live QLs
 // (src/pages/LiveQLsDashboard.jsx) -- same 10-operator vocabulary, same one-popover-
 // many-rows layout, same shared Dropdown -- so "advanced filter" means the same
@@ -491,7 +490,7 @@ function AdvFilterBuilderPopover({
             from its default, since Advanced Conditions is now the one place to
             filter by Corridor or Campaign. */}
         {conditions.length === 0 && (
-          <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet — add one below.</div>
+          <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet - add one below.</div>
         )}
         {/* Deliberately no maxHeight/overflowY here -- a scrollable ancestor clips any
             position:absolute descendant to its own box regardless of z-index, which was
@@ -590,7 +589,7 @@ function useDebouncedValue(value, delay) {
   return debounced
 }
 
-// Campaign search — free-text filter with a ranked autocomplete list (top campaigns
+// Campaign search - free-text filter with a ranked autocomplete list (top campaigns
 // by leads shown by default, narrowed by substring match as the user types) since
 // campaign name is how people actually look things up on this page.
 function CampaignSearch({ value, onChange, suggestions, minWidth = 210 }) {
@@ -685,7 +684,7 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
 
 const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
 
-// Quick-select presets, computed relative to today — optional; only rendered
+// Quick-select presets, computed relative to today - optional; only rendered
 // when a `presets` array is passed (the main page's own "Custom" filter
 // doesn't pass one, so its popover is unchanged).
 function buildDatePresets() {
@@ -782,7 +781,7 @@ function BrandTooltip({ active, payload, label }) {
 // High CPQL is a red flag regardless of volume; low CPQL needs sufficient QL volume
 // (>= median) to count as a proven "best performer" rather than just a small, unproven sample.
 const QUADRANT_COLOR = { flag:C.navy, best:C.green, promising:C.blue }
-const QUADRANT_TAG = { flag:'High CPQL — red flag', best:'Best performer — scale', promising:'Promising — needs more volume' }
+const QUADRANT_TAG = { flag:'High CPQL - red flag', best:'Best performer - scale', promising:'Promising - needs more volume' }
 function EfficiencyMapTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null
   const d = payload[0].payload
@@ -806,14 +805,14 @@ const sectionTitle = (t, s) => (
 const axis = { fontSize:12.5, fill:C.muted, fontFamily:FONT }
 const grid2 = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }
 
-// Heat scale for conversion rates — brand colors only (no red/amber on data), matching
+// Heat scale for conversion rates - brand colors only (no red/amber on data), matching
 // the convention used elsewhere in the app (navy = needs attention, green = strong).
 const heatColor = v => v == null ? C.muted : v >= 50 ? C.green : v >= 25 ? C.cyan : v >= 10 ? C.blue : C.navy
 const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? C.cyanBg : v >= 10 ? C.blueBg : C.navyBg
 
-// ── Grouped summary table — customizable columns (show/hide + reorder, persisted to
+// ── Grouped summary table - customizable columns (show/hide + reorder, persisted to
 // localStorage so the layout sticks between sessions), sortable headers, search, and a
-// per-view export button — same "creative table" pattern as Meta Ads Creatives.
+// per-view export button - same "creative table" pattern as Meta Ads Creatives.
 // Compact header labels so more columns fit on one screen; the full name stays in the
 // header tooltip, the Columns picker and exports.
 const SUMMARY_SHORT_LABELS = {
@@ -956,7 +955,7 @@ const MOBILE_TABLE_BREAKPOINT = 768
 // just this one browser.
 const SUMMARY_SCHEMA_VERSION = 5
 const SUMMARY_SCHEMA_VERSION_KEY = 'lq_overall_summary_schema_version'
-// Shared with Settings > Data > SR Revenue Assumptions — same rate everywhere.
+// Shared with Settings > Data > SR Revenue Assumptions - same rate everywhere.
 // RAU = "Registered At University". Estimated RAUs is a projection (Deposits x
 // conversion factor); Actual RAUs is the real, already-realized count from the data.
 // Revenue = RAUs (estimated or actual) x SR Fee -- no extra discount on the actual side,
@@ -969,7 +968,7 @@ const SR_FEE_DEFAULT = 350000
 const RAU_PCT_KEY = 'lq_rau_conversion_pct'
 const RAU_PCT_DEFAULT = 75
 
-// Full INR formatter — the exact figure, no Cr/L shorthand. Primary display value for
+// Full INR formatter - the exact figure, no Cr/L shorthand. Primary display value for
 // money in the summary table and the Compare/Trend modals. On the 5 money KPI cards
 // (Est. SR Revenue/Spend/CPL/CPQL/CPA) this is deliberately the OTHER way around: the
 // short Cr/L form is the displayed value and this is only the hover tooltip -- a long
@@ -1028,7 +1027,7 @@ function summaryValue(g, key) {
     return pct > IMPLAUSIBLE_RATE_CEILING ? null : pct
   }
   // Cost metrics divide by PAID denominators only (leads/QLs/apps from rows that carried
-  // spend). null -- rendered as "—" -- when a row had no paid activity, since a flat ₹0
+  // spend). null -- rendered as "-" -- when a row had no paid activity, since a flat ₹0
   // reads like "free and excellent" when it actually means "no spend here at all".
   // The numerator is `costSpend`, not `spend` -- see src/lib/costExclusions.js: any
   // campaign matching a configured pattern (Settings > Data > Cost-metric exclusions)
@@ -1049,7 +1048,7 @@ function summaryValue(g, key) {
   return g[key]
 }
 function summaryFmt(key, v) {
-  if (v == null) return '—'
+  if (v == null) return '-'
   if (key === 'corridor' || key === 'source' || key === 'subSource') return v
   if (key === 'roas' || key === 'estimatedRoas') return v.toFixed(2) + 'x'
   if (key === 'avgQlPerDay') return v.toFixed(1)
@@ -1129,17 +1128,17 @@ function TreeChevron({ open }) {
 // one definition so the two features can never disagree on what "CPQL" means or
 // how it's formatted. fmt(null) must read '--', matching summaryFmt's own null rule.
 const DEEP_METRICS = [
-  { key:'spend', label:'Spend', fmt:v => v == null ? '—' : fmtINR(v) },
-  { key:'leads', label:'Leads', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'queued', label:'Total Queued', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'totalQL', label:'Total QL', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'apps', label:'Applications', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'offers', label:'Offers', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'deposits', label:'Deposits', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'raus', label:'Actual RAUs', fmt:v => v == null ? '—' : fmtN(v) },
-  { key:'cpl', label:'CPL', fmt:v => v == null ? '—' : fmtINR(v) },
-  { key:'cpql', label:'CPQL', fmt:v => v == null ? '—' : fmtINR(v) },
-  { key:'cpa', label:'CPA', fmt:v => v == null ? '—' : fmtINR(v) },
+  { key:'spend', label:'Spend', fmt:v => v == null ? '-' : fmtINR(v) },
+  { key:'leads', label:'Leads', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'queued', label:'Total Queued', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'totalQL', label:'Total QL', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'apps', label:'Applications', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'offers', label:'Offers', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'deposits', label:'Deposits', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'raus', label:'Actual RAUs', fmt:v => v == null ? '-' : fmtN(v) },
+  { key:'cpl', label:'CPL', fmt:v => v == null ? '-' : fmtINR(v) },
+  { key:'cpql', label:'CPQL', fmt:v => v == null ? '-' : fmtINR(v) },
+  { key:'cpa', label:'CPA', fmt:v => v == null ? '-' : fmtINR(v) },
 ]
 // Metrics the Contribution % column can be switched to via its header picker.
 const CONTRIB_METRICS = [
@@ -1249,7 +1248,7 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onReorder, onClose, o
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns — show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:270, maxWidth:300, maxHeight:480, overflowY:'auto' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns - show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:270, maxWidth:300, maxHeight:480, overflowY:'auto' }}>
         {/* Saved views -- lets a whole custom layout (order + visibility + sort) be named and
             switched back to instantly. Server-backed and shared with everyone who opens this
             page (see the `tableViews` state in OverallDashboard for the full reasoning) --
@@ -1273,7 +1272,7 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onReorder, onClose, o
           </div>
         )}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 4px' }}>
-          <span style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
+          <span style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns - show, hide, reorder</span>
           <Button onClick={onReset} variant="ghost" size="sm" style={{ padding:'2px 8px' }}>Reset</Button>
         </div>
         <div style={{ padding:'0 8px 8px', display:'flex', gap:6 }}>
@@ -1333,7 +1332,7 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onReorder, onClose, o
   )
 }
 
-// Compact "does the funnel actually convert" strip — stage-to-stage conversion, not just
+// Compact "does the funnel actually convert" strip - stage-to-stage conversion, not just
 // raw counts, since that's what tells a marketer where the real leak is.
 function ConversionChain({ steps }) {
   return (
@@ -1341,14 +1340,14 @@ function ConversionChain({ steps }) {
       {steps.map((s, i) => (
         <div key={i} style={{ padding:'10px 12px', borderRadius:10, background: heatBg(s.rate), border:'0.5px solid #EEF1F6', minWidth:0 }}>
           <div style={{ fontSize:11, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.from} → {s.to}</div>
-          <div style={{ fontSize:18, fontWeight:800, color: heatColor(s.rate), marginTop:3 }}>{s.rate == null ? '—' : s.rate.toFixed(1) + '%'}</div>
+          <div style={{ fontSize:18, fontWeight:800, color: heatColor(s.rate), marginTop:3 }}>{s.rate == null ? '-' : s.rate.toFixed(1) + '%'}</div>
         </div>
       ))}
     </div>
   )
 }
 
-// Ranked efficiency leaderboard (percentage-based, not volume-based) — reuses the same
+// Ranked efficiency leaderboard (percentage-based, not volume-based) - reuses the same
 // visual language as RankedBars (numbered chip + bar + value) but the bar length and
 // color both encode a conversion RATE (0-100%) rather than a raw count.
 function EfficiencyList({ data, labelKey, rateKey, subKey }) {
@@ -1499,7 +1498,7 @@ function AcSalesEditor({ monthLabel, value, saving, loaded, readOnly, onSave }) 
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span style={{ fontSize: 12.5, color: 'var(--text2,#475569)' }}>
         <b>AC Sales ({monthLabel}):</b> {value != null ? value.toLocaleString('en-IN') : 'Not entered yet'}
-        {' — for this Scorecard only, separate from Marketing Review’s own AC Sales'}
+        {' - for this Scorecard only, separate from Marketing Review’s own AC Sales'}
       </span>
       {!readOnly && <button type="button" style={btnStyle} onClick={() => setEditing(true)}>{value != null ? 'Edit' : 'Enter'}</button>}
     </div>
@@ -1736,7 +1735,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // this crash?" -- the wall-clock cost is the same either way).
   const [monthChangePending, startMonthChangeTransition] = useTransition()
 
-  // Compare — decision-focused period comparison. 'prev' reuses the exact same
+  // Compare - decision-focused period comparison. 'prev' reuses the exact same
   // previous-equivalent-period logic already computed for the KPI delta arrows
   // (prevWindow/prevFiltered/prevKpis below); 'yoy' shifts the same window back
   // exactly one year; 'custom' lets the marketer pick an arbitrary second range.
@@ -1761,7 +1760,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [showComparePickerA, setShowComparePickerA] = useState(false)
   const [showComparePickerB, setShowComparePickerB] = useState(false)
 
-  // Trend Analysis — a genuinely new capability alongside Compare: instead of two
+  // Trend Analysis - a genuinely new capability alongside Compare: instead of two
   // points (A vs B), show the trajectory across N trailing periods. Same 5
   // dimensions as Compare (corridor/source/campaign/month/day). For month/day the
   // dimension IS the period axis (one line, no further breakdown); for
@@ -1796,7 +1795,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [deepSourceFilter, setDeepSourceFilter] = useState(['All'])
   const [deepCampaignQuery, setDeepCampaignQuery] = useState('')
 
-  // Summary table customization — search, sortable columns, show/hide + reorder columns
+  // Summary table customization - search, sortable columns, show/hide + reorder columns
   // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
   const [tableSearch, setTableSearch] = useState('')
   const [sortKey, setSortKey] = useState('leads')
@@ -2039,7 +2038,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return () => { mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange) }
   }, [])
 
-  // Date filter state — mirrors Daily QLs exactly: a single "active filter" is either
+  // Date filter state - mirrors Daily QLs exactly: a single "active filter" is either
   // a preset (LD/L7D/MTD), the month picker, or a custom calendar range.
   const [datePreset, setDatePreset] = useState('month') // 'LD' | 'L7D' | 'MTD' | 'custom' | 'month'
   const [selMonth, setSelMonth] = useState('') // month label e.g. "Jul'26"
@@ -2229,7 +2228,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return ['All', ...[...set].sort()]
   }, [rows, bqActive, bqSourceOpts])
 
-  // Master campaign list — scoped to the FULL dataset (not the active period/source
+  // Master campaign list - scoped to the FULL dataset (not the active period/source
   // filters) so a campaign that only shows up in an earlier month is still searchable
   // right now, ranked by total leads (most-relevant / most-searched proxy) on top.
   const campaignOptions = useMemo(() => {
@@ -2346,7 +2345,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // DIFFERENT rows: manual affiliate spend arrives on synthetic rows carrying no leads
   // at all, while Affiliate's real leads sit on sheet rows with zero spend -- and
   // Remarketing behaves the same way. A row-level test therefore found zero paid leads
-  // for both and showed "—" on channels that plainly did spend money.
+  // for both and showed "-" on channels that plainly did spend money.
   //
   // Because the test is evaluated per row but keyed on the row's source, summing it
   // across any grouping (Source / Campaign / Corridor / Month / Day) yields the same
@@ -2366,7 +2365,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const paidCpaKpis = useMemo(() => sumKpis(filtered.filter(r => paidSources.has(r.source) && !isCpaCostExcluded(r))), [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const cpa = paidCpaKpis.apps > 0 ? kpis.cpaCostSpend / paidCpaKpis.apps : 0
 
-  // SR revenue + ROAS — Estimated RAUs projects Deposits forward at a user-configurable conversion %
+  // SR revenue + ROAS - Estimated RAUs projects Deposits forward at a user-configurable conversion %
   // rate (real RAUs haven't materialized yet); Actual RAUs is the real, already-realized
   // count, so it gets no discount. Both then multiply by the same shared SR Fee.
   const estimatedRaus = kpis.deposits * rauConversionFactor
@@ -2375,8 +2374,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const actualRoas = kpis.spend > 0 ? actSrRevenue / kpis.spend : 0
   const estimatedRoas = kpis.spend > 0 ? estSrRevenue / kpis.spend : 0
 
-  // Previous-equivalent-period comparison — same length window immediately before the
-  // active one (or the previous calendar month, when in month mode) — so every KPI can
+  // Previous-equivalent-period comparison - same length window immediately before the
+  // active one (or the previous calendar month, when in month mode) - so every KPI can
   // show a real vs-last-period delta instead of a static sub-label.
   const prevWindow = useMemo(() => {
     if (activeFilter === 'month') {
@@ -2484,7 +2483,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     Math.abs(prev || 0) < DELTA_NEW_FLOOR ? (cur > 0 ? 'new' : null) : deltaPct(cur, prev)
   )
 
-  // ── Compare — decision-focused period comparison ─────────────────────────
+  // ── Compare - decision-focused period comparison ─────────────────────────
   // Deliberately NOT an AI call: every number here is a direct sum/delta over
   // the same rows already loaded, so it's exactly as trustworthy as the rest
   // of the page's own KPIs, just re-sliced against a second period.
@@ -2924,10 +2923,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const periodACpql = periodAPaidKpis.totalQL > 0 ? periodAKpis.costSpend / periodAPaidKpis.totalQL : 0
 
   const compareLabel = useMemo(() => {
-    if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '—'
-    if (compareMode === 'yoy') return compareWindow ? (compareWindow.type === 'month' ? monthLabel(compareWindow.mk) : 'same period last year') : '—'
+    if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '-'
+    if (compareMode === 'yoy') return compareWindow ? (compareWindow.type === 'month' ? monthLabel(compareWindow.mk) : 'same period last year') : '-'
     if (compareMode === 'custom') return (compareCustomFrom && compareCustomTo) ? `${compareCustomFrom} -> ${compareCustomTo}` : 'pick a range'
-    return '—'
+    return '-'
   }, [compareMode, prevWindow, compareWindow, compareCustomFrom, compareCustomTo])
 
   const currentLabel = compareMode === 'custom'
@@ -2959,7 +2958,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }
   }
 
-  // Generic grouping used by the movers list — keyed by whichever dimension the
+  // Generic grouping used by the movers list - keyed by whichever dimension the
   // marketer picks (corridor / source / campaign), so "what's driving it" isn't
   // locked to corridor only.
   function groupByDimRaw(list, dim) {
@@ -2978,7 +2977,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }
 
   // Ranked movers: which segment (corridor/source/campaign) contributed most to
-  // the change in Total QL between the two periods — the single metric that
+  // the change in Total QL between the two periods - the single metric that
   // best answers "where do I put my next rupee" for a performance marketer,
   // vs a flat list of every segment's raw numbers.
   const compareMovers = useMemo(() => {
@@ -3010,9 +3009,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const qd = compareQlDeltaPct, cd = compareCpqlDeltaPct
     const volUp = qd != null && qd > 2, volDown = qd != null && qd < -2
     const costUp = cd != null && cd > 2, costDown = cd != null && cd < -2
-    if (volUp && costDown) return { tone:'good', text: `Total QL is up ${qd.toFixed(0)}% and it got cheaper — CPQL down ${Math.abs(cd).toFixed(0)}%. This is your best-case scenario.` }
+    if (volUp && costDown) return { tone:'good', text: `Total QL is up ${qd.toFixed(0)}% and it got cheaper - CPQL down ${Math.abs(cd).toFixed(0)}%. This is your best-case scenario.` }
     if (volUp && costUp) return { tone:'warn', text: `Total QL is up ${qd.toFixed(0)}%, but you're paying ${cd.toFixed(0)}% more per QL to get there.` }
-    if (volDown && costUp) return { tone:'bad', text: `Total QL is down ${Math.abs(qd).toFixed(0)}% and CPQL is up ${cd.toFixed(0)}% — both volume and efficiency declined.` }
+    if (volDown && costUp) return { tone:'bad', text: `Total QL is down ${Math.abs(qd).toFixed(0)}% and CPQL is up ${cd.toFixed(0)}% - both volume and efficiency declined.` }
     if (volDown && costDown) return { tone:'warn', text: `Total QL is down ${Math.abs(qd).toFixed(0)}%, though the QLs you did get were ${Math.abs(cd).toFixed(0)}% cheaper.` }
     if (volUp) return { tone:'good', text: `Total QL is up ${qd.toFixed(0)}% with CPQL roughly flat.` }
     if (volDown) return { tone:'bad', text: `Total QL is down ${Math.abs(qd).toFixed(0)}% with CPQL roughly flat.` }
@@ -3032,10 +3031,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       return `${worst.corridor} accounts for the biggest drop (${fmtN(Math.abs(worst.deltaQL))} fewer QLs). Check that ${compareDimWord} first before touching anything else.`
     }
     if (best && best.deltaQL > 0 && best.bCpql > 0 && best.aCpql <= best.bCpql) {
-      return `${best.corridor} grew ${fmtN(best.deltaQL)} QLs while holding or improving CPQL — the strongest candidate for more budget.`
+      return `${best.corridor} grew ${fmtN(best.deltaQL)} QLs while holding or improving CPQL - the strongest candidate for more budget.`
     }
     if (best && best.deltaQL > 0) {
-      return `${best.corridor} drove the largest gain (+${fmtN(best.deltaQL)} QLs) — worth a closer look at what changed there.`
+      return `${best.corridor} drove the largest gain (+${fmtN(best.deltaQL)} QLs) - worth a closer look at what changed there.`
     }
     return null
   }, [compareOpen, compareMovers, compareQlDeltaPct, compareDimWord])
@@ -3070,7 +3069,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     ]
   }, [kpis, totalFutworkQ])
 
-  // The real conversion PATH (not the parallel Floor/Queued split) — used both for the
+  // The real conversion PATH (not the parallel Floor/Queued split) - used both for the
   // conversion-chain strip and to find the biggest leak for the insights row.
   const conversionChain = useMemo(() => ([
     { from:'Leads', to:'Queued', a:kpis.leads, b:totalQueued },
@@ -3156,7 +3155,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return [...m.values()].sort((a, b) => a.mk - b.mk)
   }, [summaryMonthRows])
 
-  // Daily trend — last 30 days present in the active selection, gives the "what happened
+  // Daily trend - last 30 days present in the active selection, gives the "what happened
   // recently" pulse a marketer checks first thing in the morning.
   const byDay = useMemo(() => {
     const m = new Map()
@@ -3231,7 +3230,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }, [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
 
   // Full day-level breakdown (all metrics, no 30-day cap) for the summary table's Day
-  // grouping — distinct from `byDay` above, which is the chart's lighter/capped version.
+  // grouping - distinct from `byDay` above, which is the chart's lighter/capped version.
   const byDayFull = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
@@ -3320,7 +3319,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
-  // SR Revenue — Estimated (Deposits × rate) and Actual (RAUs × rate). Both rates are
+  // SR Revenue - Estimated (Deposits × rate) and Actual (RAUs × rate). Both rates are
   // user-configurable in the toolbar below and persist to localStorage.
   // Shared by groupedWithRevenue below AND sourceSubBreakdown's tree nodes, so the Source
   // view's Sub Source/Campaign rows compute Est./Actual SR Revenue and ROAS by the exact
@@ -3394,7 +3393,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return baseOrder.filter(k => baseVisible.includes(k))
       // Corridor/Source/Sub Source only carry a value when grouping by campaign -- every
       // other grouping either has no such field on the row (source view's own label already
-      // IS the source) or would just be noise (a column of "—" everywhere).
+      // IS the source) or would just be noise (a column of "-" everywhere).
       .filter(k => (k !== 'corridor' && k !== 'source' && k !== 'subSource') || grpBy === 'campaign')
       // Superbot is deactivated: hide its columns while the current view has none (totals unchanged).
       .filter(k => showSuperbot || (k !== 'superbotQ' && k !== 'superbotAiQl'))
@@ -3595,7 +3594,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   // Unformatted twin of the table export: same columns and order, but the underlying
   // numbers rather than display strings, so a spreadsheet can sum/sort them. Percentages
-  // stay as plain numbers (15.7, not "15.7%") and a "—" becomes an empty cell.
+  // stay as plain numbers (15.7, not "15.7%") and a "-" becomes an empty cell.
   const rawExportRow = (g, label) => {
     const o = { [grpByLabel]: label ?? g.label }
     displayCols.forEach(c => {
@@ -3678,7 +3677,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const daysDone = yesterdayDate.getDate()
     Promise.all([
       retryFetch(() => fetchOverallBqAggRows({ since: monthStart, until, sources: [] })),
-      fetchAppsCountSince(monthStart, until).catch(() => null),
+      Promise.resolve(null),
       fetchMonthlyQlsRowsSince(monthStart, until).catch(() => null),
       // Retried, and null (not an empty prefs object) on final failure so a failed lookup can be told
       // apart from "no exclusions configured" -- it also carries affiliate_spend_manual below.
@@ -3903,7 +3902,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const cell = (g, c) => {
       if (c.key !== '__spendShare') return summaryFmt(c.key, summaryValue(g, c.key))
       const v = Number(summaryValue(g, 'spend')) || 0
-      return totalSpend > 0 ? ((v / totalSpend) * 100).toFixed(1) + '%' : '\u2014'
+      return totalSpend > 0 ? ((v / totalSpend) * 100).toFixed(1) + '%' : '-'
     }
     const t = { columns: [grpByLabel, ...cols.map(c => c.label)], rows: [], strongRows: [] }
     const push = (label, g, strong) => {
@@ -4909,7 +4908,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       `}</style>
       <div style={{ margin:'12px 14px 0', borderRadius:14, border:'1px solid #EEF1F6', boxShadow:'0 1px 3px rgba(31,60,132,0.06)', flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
-        {/* HEADER — same structure/behavior as the Daily QLs header (QL Ops): inline filter
+        {/* HEADER - same structure/behavior as the Daily QLs header (QL Ops): inline filter
             label in the title, LD/L7D/MTD pill group, month Dropdown, Custom calendar range,
             Source dropdown, Synced, Refresh, Export, info popover. */}
         <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${C.border}`, padding:'10px 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible', flexWrap:'wrap' }}>
@@ -4994,7 +4993,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   {monthChangePending && (
                     <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:501, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:8, background:C.navyBg, color:C.navy, fontSize:12, fontWeight:700 }}>
                       <span className="skeleton" style={{ display:'inline-block', width:10, height:10, borderRadius:'50%' }} />
-                      Recalculating across the full date range — this can take a moment
+                      Recalculating across the full date range - this can take a moment
                     </div>
                   )}
                 </div>
@@ -5087,7 +5086,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 title={'Data source: BigQuery (beta) -- public.overall_bq_daily, dedicated page (see /dashboard/overall for the sheet)' + (bqSince ? ', ' + bqSince + ' to ' + bqUntil : '') + (bqRowCount != null ? ', ' + bqRowCount.toLocaleString('en-IN') + ' rows read' : '') + (bqError ? ' -- FAILED (' + bqError + '), showing the sheet instead' : '')}
                 style={{ fontSize:11.5, fontWeight:800, letterSpacing:.4, textTransform:'uppercase', fontFamily:FONT, whiteSpace:'nowrap', borderRadius:8, padding:'5px 9px', border:'0.5px solid ' + C.border, color: bqError ? C.muted : C.navy, background: bqError ? 'var(--card)' : C.navyBg }}
               >
-                {bqError ? 'BigQuery — fell back to sheet' : (bqBusy ? 'BigQuery — loading' : 'BigQuery (beta)')}
+                {bqError ? 'BigQuery - fell back to sheet' : (bqBusy ? 'BigQuery - loading' : 'BigQuery (beta)')}
               </span>
             )}
             {/* The always-visible "Synced HH:MM:SS" text is gone -- it's now the
@@ -5111,13 +5110,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               {showInfo && (
                 <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
                   <div style={{ fontSize:14, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
-                  {bqMode && <div style={{ fontSize:12.5, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'This page\u2019s BigQuery read failed, so these numbers are the sheet\u2019s for now.' : 'This is the BigQuery page: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only \u2014 same rows and same columns as the /dashboard/overall sheet page, just not downloaded whole.'}</div>}
-                  <div style={{ fontSize:12.5, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
+                  {bqMode && <div style={{ fontSize:12.5, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'This page\u2019s BigQuery read failed, so these numbers are the sheet\u2019s for now.' : 'This is the BigQuery page: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only - same rows and same columns as the /dashboard/overall sheet page, just not downloaded whole.'}</div>}
+                  <div style={{ fontSize:12.5, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) - one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:13, color:C.sub, lineHeight:1.7 }}>
-                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork Human + Futwork AI + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). Futwork itself splits into <b>Queued on Futwork Human</b> and <b>Queued on Futwork AI</b> (added 2026-08-19, replacing the old single "Queued on Futwork" column) — <b>Total Queued on Futwork</b> is those two combined, excluding Superbot. From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
-                    <b>Lead to QL %</b> (and its Human/AI variants) is Futwork's own queued-to-QL conversion, distinct from the whole-funnel <b>QL %</b> below: <b>Lead to QL %</b> = (Futwork Human QL + Futwork AI QL) ÷ Total Queued on Futwork, <b>Lead to QL % (Human)</b> = Futwork Human QL ÷ Queued on Futwork Human, <b>Lead to QL % (AI)</b> = Futwork AI QL ÷ Queued on Futwork AI. None of these three include Superbot. The Human/AI split on the <i>queued</i> side didn't exist before 2026-08-19 and was never backfilled, while the QL <i>outcome</i> side has always been split correctly — so a period predating that split divides a real QL count by a near-zero queued figure. <b>Lead to QL % (Human/AI)</b> shows "—" rather than a four-digit artefact when that happens; the underlying Queued/QL counts themselves are shown as-is either way.<br /><br />
-                    <b>Estimated RAU</b> = Deposits × {rauPct}% (a projection of how many current Deposits will go on to register — the {rauPct}% is set in Settings &gt; Data &gt; SR Revenue Assumptions). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
-                    <b>CPL, CPQL and CPA count paid channels only.</b> A row shows a cost figure only if it carried spend, divided by its own leads / QLs / applications. The <b>TOTAL</b> divides all spend by the leads from <i>sources that spent</i> — so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute the blended figure, which otherwise made paid acquisition look materially cheaper than it is. "Paid" is judged per source rather than per row, because spend and leads frequently sit on different rows: manual affiliate spend arrives on rows carrying no leads, while Affiliate's actual leads sit on rows with no spend. That keeps the blended figure identical on every grouping tab. A row with no spend of its own shows "—" rather than ₹0.<br /><br />
+                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork Human + Futwork AI + Superbot - sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). Futwork itself splits into <b>Queued on Futwork Human</b> and <b>Queued on Futwork AI</b> (added 2026-08-19, replacing the old single "Queued on Futwork" column) - <b>Total Queued on Futwork</b> is those two combined, excluding Superbot. From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
+                    <b>Lead to QL %</b> (and its Human/AI variants) is Futwork's own queued-to-QL conversion, distinct from the whole-funnel <b>QL %</b> below: <b>Lead to QL %</b> = (Futwork Human QL + Futwork AI QL) ÷ Total Queued on Futwork, <b>Lead to QL % (Human)</b> = Futwork Human QL ÷ Queued on Futwork Human, <b>Lead to QL % (AI)</b> = Futwork AI QL ÷ Queued on Futwork AI. None of these three include Superbot. The Human/AI split on the <i>queued</i> side didn't exist before 2026-08-19 and was never backfilled, while the QL <i>outcome</i> side has always been split correctly - so a period predating that split divides a real QL count by a near-zero queued figure. <b>Lead to QL % (Human/AI)</b> shows "-" rather than a four-digit artefact when that happens; the underlying Queued/QL counts themselves are shown as-is either way.<br /><br />
+                    <b>Estimated RAU</b> = Deposits × {rauPct}% (a projection of how many current Deposits will go on to register - the {rauPct}% is set in Settings &gt; Data &gt; SR Revenue Assumptions). <b>Actual RAUs</b> is the real, already-registered count - no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
+                    <b>CPL, CPQL and CPA count paid channels only.</b> A row shows a cost figure only if it carried spend, divided by its own leads / QLs / applications. The <b>TOTAL</b> divides all spend by the leads from <i>sources that spent</i> - so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute the blended figure, which otherwise made paid acquisition look materially cheaper than it is. "Paid" is judged per source rather than per row, because spend and leads frequently sit on different rows: manual affiliate spend arrives on rows carrying no leads, while Affiliate's actual leads sit on rows with no spend. That keeps the blended figure identical on every grouping tab. A row with no spend of its own shows "-" rather than ₹0.<br /><br />
                     In the summary table, the three whole-funnel conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
                     <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
                     Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source and campaign search filter everything below.
@@ -5144,9 +5143,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </div>
           )}
 
-          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas. Both rows carry
+          {/* KPI ROW 1 - funnel volume, with vs-previous-period deltas. Both rows carry
               exactly 10 cards each (rebalanced from an earlier 12/8 split that made an
-              auto-fit grid size cards differently row to row — "thick vs thin"), so an
+              auto-fit grid size cards differently row to row - "thick vs thin"), so an
               auto-fit grid is safe again: same item count -> same column count on both
               rows at any width. A fixed repeat(10, minmax(120px,1fr)) was tried instead
               and reliably overflowed the container by 300-900px at every width between
@@ -5178,7 +5177,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             {showSuperbot && <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />}
-            {/* Human/AI/Total QLs — same drill-down as the funnel bars below
+            {/* Human/AI/Total QLs - same drill-down as the funnel bars below
                 (setQlDrillOpen). Total QLs opens Daily QLs, the one page that
                 actually covers all three channels it sums (Human + AI + Superbot);
                 Human/AI QLs open their own channel-specific detail pages since
@@ -5226,7 +5225,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
           {/* FUNNEL + STAGE CONVERSION */}
           <Card>
-            {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source — click Futwork Human QL, Futwork AI QL, or Applications to see the underlying records')}
+            {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source - click Futwork Human QL, Futwork AI QL, or Applications to see the underlying records')}
             <ResponsiveContainer width="100%" height={460}>
               <BarChart data={funnel} layout="vertical" margin={{ left:20, right:50, top:4, bottom:4 }}>
                 <defs><BarGrad id="g-ov-funnel" color={C.navy} dir="h"/></defs>
@@ -5253,7 +5252,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </div>
           </Card>
 
-          {/* GROUPED SUMMARY TABLE — customizable: search, sortable columns, show/hide +
+          {/* GROUPED SUMMARY TABLE - customizable: search, sortable columns, show/hide +
               reorder columns (persisted), row limit, and a per-view export. */}
           <div style={{ marginTop:16 }}>
             <Card
@@ -5268,10 +5267,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), grpBy === 'month'
                 ? (bqActive
                     ? 'January ' + new Date().getFullYear() + ' onward, not scoped to the date filter above'
-                      + (summaryMonthBqBusy ? ' — fetching the full year, this can take a moment' : ' — search, sort, and customize the columns below')
+                      + (summaryMonthBqBusy ? ' - fetching the full year, this can take a moment' : ' - search, sort, and customize the columns below')
                       + (monthTabFiltersSkipped ? ' (Corridor / campaign search / Advanced filter are not applied to this tab)' : '')
-                    : 'every month present in the data, not scoped to the date filter above — search, sort, and customize the columns below')
-                : 'full-funnel totals and stage conversion rates — search, sort, and customize the columns below')}
+                    : 'every month present in the data, not scoped to the date filter above - search, sort, and customize the columns below')
+                : 'full-funnel totals and stage conversion rates - search, sort, and customize the columns below')}
 
               {/* TOOLBAR */}
               <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:14 }}>
@@ -5315,7 +5314,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   size="sm"
                   variant={pinCols ? 'primary' : 'secondary'}
                   aria-pressed={pinCols}
-                  title={pinCols ? `${grpByLabel} is pinned while scrolling — click to make the table scroll freely` : `Pin ${grpByLabel} so it stays visible while scrolling the table sideways`}
+                  title={pinCols ? `${grpByLabel} is pinned while scrolling - click to make the table scroll freely` : `Pin ${grpByLabel} so it stays visible while scrolling the table sideways`}
                   icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 17v5" /><path d="M9 3h6l1 6 3 2v2H5v-2l3-2z" /></svg>}
                 >
                   {pinCols ? 'Pinned' : 'Pin columns'}
@@ -5385,7 +5384,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           onDragLeave={() => setDragOverKey(k => (k === col.key ? null : k))}
                           onDrop={e => { e.preventDefault(); reorderColumns(dragKey, col.key); setDragKey(null); setDragOverKey(null) }}
                           onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
-                          title={col.label + ' — click to sort, drag to reorder'}
+                          title={col.label + ' - click to sort, drag to reorder'}
                           style={{
                             position:'relative', padding:'9px 6px', fontSize:11, lineHeight:1.2, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.02em',
                             color: sortKey === col.key ? C.navy : 'var(--text2)', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'pointer', userSelect:'none',
@@ -5538,7 +5537,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <div style={{ fontSize:12.5, color:C.muted, textAlign:'center', marginTop:10 }}>
                   {rowLimit === 'all' || summaryTotalPages <= 1
                     ? `Showing all ${sortedFilteredRows.length.toLocaleString('en-IN')} rows`
-                    : `Showing ${(summarySafePage * rowLimit + 1).toLocaleString('en-IN')}–${Math.min((summarySafePage + 1) * rowLimit, sortedFilteredRows.length).toLocaleString('en-IN')} of ${sortedFilteredRows.length.toLocaleString('en-IN')} — use the page arrows above to see more`}
+                    : `Showing ${(summarySafePage * rowLimit + 1).toLocaleString('en-IN')}–${Math.min((summarySafePage + 1) * rowLimit, sortedFilteredRows.length).toLocaleString('en-IN')} of ${sortedFilteredRows.length.toLocaleString('en-IN')} - use the page arrows above to see more`}
                 </div>
               )}
             </Card>
@@ -5571,7 +5570,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} showRank />
             </Card>
             <Card>
-              {sectionTitle('Source efficiency', 'queued → Total QL rate — where quality actually converts (min. 10 queued)')}
+              {sectionTitle('Source efficiency', 'queued → Total QL rate - where quality actually converts (min. 10 queued)')}
               <EfficiencyList data={bySourceEfficiency} labelKey="source" rateKey="qlRate" subKey="queued" />
             </Card>
           </div>
@@ -5589,10 +5588,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <div ref={monthTrendCardRef}>
             <Card>
               {sectionTitle('Month-on-month trend', bqActive && !monthTrendVisible
-                ? 'last 5 months, including the current month — will fetch from BigQuery once this card is actually in view'
+                ? 'last 5 months, including the current month - will fetch from BigQuery once this card is actually in view'
                 : bqActive && monthTrendBqBusy
-                ? 'last 5 months, including the current month — fetching the trailing months from BigQuery in the background, chart fills in as it lands'
-                : 'every month present in the data, including the current month — not affected by the date filter above')}
+                ? 'last 5 months, including the current month - fetching the trailing months from BigQuery in the background, chart fills in as it lands'
+                : 'every month present in the data, including the current month - not affected by the date filter above')}
               {/* Restyled from a flat 4-line chart to a bar+line combo (Leads as the volume
                   anchor, the funnel-stage metrics as lines over it), inspired by the Marketing
                   Performance agent's own chart treatment. Also fixes a real, pre-existing scaling
@@ -5621,7 +5620,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </Card>
             </div>
             <Card>
-              {sectionTitle('Daily pulse', 'last 30 days in the active selection — leads, total queued, and Total QL')}
+              {sectionTitle('Daily pulse', 'last 30 days in the active selection - leads, total queued, and Total QL')}
               {/* Same bar+line design language as Month-on-month trend, right next to it --
                   Leads as the volume anchor, Queued/Total QL as lines over it. All three sit
                   on one axis here (unlike the month card's Deposits) since day-level Queued/
@@ -5649,16 +5648,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <CostTrendDay data={costByDay} fmtINR={fmtINR} />
           </div>
 
-          {/* CPQL vs. VOLUME EFFICIENCY MAP — bubble size = spend. Median lines split the
+          {/* CPQL vs. VOLUME EFFICIENCY MAP - bubble size = spend. Median lines split the
               chart into the same quadrants as the campaign-performance heuristic: high CPQL
               is a red flag no matter the volume; low CPQL only counts as a proven best
               performer once QL volume clears the median. */}
           <div style={{ marginTop:16 }}>
             <Card>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:14 }}>
-                {sectionTitle('Campaign efficiency map', 'CPQL vs. Total QL volume — bubble size = spend, top 30 campaigns by volume')}
+                {sectionTitle('Campaign efficiency map', 'CPQL vs. Total QL volume - bubble size = spend, top 30 campaigns by volume')}
                 <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
-                  {[['best', 'Best — scale'], ['promising', 'Promising'], ['flag', 'High CPQL — flag']].map(([k, l]) => (
+                  {[['best', 'Best - scale'], ['promising', 'Promising'], ['flag', 'High CPQL - flag']].map(([k, l]) => (
                     <div key={k} style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ width:9, height:9, borderRadius:99, background:QUADRANT_COLOR[k], flexShrink:0 }} />
                       <span style={{ fontSize:12, fontWeight:600, color:C.muted, whiteSpace:'nowrap' }}>{l}</span>
@@ -5713,15 +5712,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>
                       {qlDrillOpen === 'apps'
                         ? (activeDrillDownRange
-                            ? `The real per-application records behind that number, scoped by application submission date to ${activeDrillDownRange.from} → ${activeDrillDownRange.to} — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure`
-                            : "The real per-application records behind that number — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure")
+                            ? `The real per-application records behind that number, scoped by application submission date to ${activeDrillDownRange.from} → ${activeDrillDownRange.to} - a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure`
+                            : "The real per-application records behind that number - a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure")
                         : qlDrillOpen === 'qls'
                           ? (activeDrillDownRange
-                              ? `Human + Futwork AI + Superbot combined, the real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
-                              : "Human + Futwork AI + Superbot combined, the real per-lead records behind that number — every control below is live, not a preview")
+                              ? `Human + Futwork AI + Superbot combined, the real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} - every control below is live, not a preview`
+                              : "Human + Futwork AI + Superbot combined, the real per-lead records behind that number - every control below is live, not a preview")
                           : (activeDrillDownRange
-                              ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
-                              : "The real per-lead records behind that number — every control below is live, not a preview")}
+                              ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} - every control below is live, not a preview`
+                              : "The real per-lead records behind that number - every control below is live, not a preview")}
                     </div>
                   </div>
                   <button onClick={() => setQlDrillOpen(null)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
@@ -5801,7 +5800,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                         {daysA != null && daysB != null && (
                           <div style={{ fontSize:14, color: mismatch ? C.navy : C.muted, fontWeight: mismatch ? 700 : 400 }}>
                             {daysA} day{daysA === 1 ? '' : 's'} vs {daysB} day{daysB === 1 ? '' : 's'}
-                            {mismatch && ' — different lengths, deltas may look larger/smaller than a like-for-like comparison'}
+                            {mismatch && ' - different lengths, deltas may look larger/smaller than a like-for-like comparison'}
                           </div>
                         )}
                       </div>
@@ -5944,11 +5943,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                                     return (
                                       <tr key={r.label + i} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
                                         <td style={{ padding:'6px 10px', fontWeight:600, color:C.text, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.label}</td>
-                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{r.a ? fmtINR(r.a.spend) : '—'}</td>
-                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{r.b ? fmtINR(r.b.spend) : '—'}</td>
-                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{av != null ? fmtN(av) : '—'}</td>
-                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{bv != null ? fmtN(bv) : '—'}</td>
-                                        <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color: d == null ? C.muted : d > 0 ? '#2F7A4B' : d < 0 ? C.navy : C.muted }}>{d == null ? '—' : (d > 0 ? '+' : '') + fmtN(d)}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{r.a ? fmtINR(r.a.spend) : '-'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{r.b ? fmtINR(r.b.spend) : '-'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{av != null ? fmtN(av) : '-'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{bv != null ? fmtN(bv) : '-'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color: d == null ? C.muted : d > 0 ? '#2F7A4B' : d < 0 ? C.navy : C.muted }}>{d == null ? '-' : (d > 0 ? '+' : '') + fmtN(d)}</td>
                                         <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{summaryFmt('cpql', summaryValue(r.a || {}, 'cpql'))}</td>
                                         <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{summaryFmt('cpql', summaryValue(r.b || {}, 'cpql'))}</td>
                                       </tr>

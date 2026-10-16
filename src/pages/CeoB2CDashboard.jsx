@@ -56,7 +56,7 @@ const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
 
 function inr(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   const a = Math.abs(n)
   const sg = n < 0 ? '-' : ''
   if (a >= 1e7) return sg + '\u20B9' + (a / 1e7).toFixed(2) + ' Cr'
@@ -64,7 +64,7 @@ function inr(n) {
   return sg + '\u20B9' + Math.round(a).toLocaleString('en-IN')
 }
 function full(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   return (n < 0 ? '-' : '') + '\u20B9' + Math.round(Math.abs(n)).toLocaleString('en-IN')
 }
 // null + null stays null so a blank sheet never shows a confident zero.
@@ -224,7 +224,7 @@ function monthDays(m) {
 function shortOf(m) { const p = String(m || '').split('-'); return p.length === 2 ? p[0].slice(0, 3) : m }
 // A signed, colour-coded change cell. Costs invert: spending more is not good news.
 function dcell(v, invert) {
-  if (v == null) return <td>{'\u2014'}</td>
+  if (v == null) return <td>{'-'}</td>
   const good = invert ? v <= 0 : v >= 0
   return <td className={good ? styles.pos : styles.neg}>{(v >= 0 ? '+' : '') + v.toFixed(1) + '%'}</td>
 }
@@ -816,7 +816,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       const dd = await r.json()
       if (!r.ok) throw new Error(dd.error || 'Failed')
       try { const m = readDailyLast(); m[dailyVersionId] = { at: new Date().toISOString() }; localStorage.setItem(DAILY_LAST_KEY, JSON.stringify(m)); setDailyLast(m) } catch (_) { /* private mode */ }
-      setDailyMsg('Posted to #dashboard-testing (through ' + dailyThroughDate + ') — check Slack to Approve/Disapprove')
+      setDailyMsg('Posted to #dashboard-testing (through ' + dailyThroughDate + ') - check Slack to Approve/Disapprove')
     } catch (e) { setDailyMsg('✕ ' + e.message) }
     finally { setDailySending(false); setTimeout(function () { setDailyMsg('') }, 12000) }
   }
@@ -900,7 +900,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         {
           id: 'src_prev', title: 'Like-for-like comparison', status: hasPrev ? 'complete' : 'error',
           details: hasPrev ? prevLab + ' read over the same ' + prevRows.length + ' day(s), never against its finished total.' : 'No earlier month in the sheet to read this one against.',
-          output: hasPrev ? 'Net ' + inr(prev.net) + ' \u00b7 margin ' + (prevMargin == null ? '\u2014' : prevMargin.toFixed(1) + '%') : 'Not available',
+          output: hasPrev ? 'Net ' + inr(prev.net) + ' \u00b7 margin ' + (prevMargin == null ? '-' : prevMargin.toFixed(1) + '%') : 'Not available',
         },
         {
           id: 'src_plan', title: 'Monthly cost plan', status: hasPlan ? 'complete' : 'error',
@@ -961,7 +961,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         <td>{full(mtd[r[0]])}</td>
         {hasPrev ? <td>{full(prev[r[0]])}</td> : null}
         {hasPrev ? dcell(chg(mtd[r[0]], prev[r[0]]), false) : null}
-        <td>{mtd.rev && mtd[r[0]] != null ? ((mtd[r[0]] / mtd.rev) * 100).toFixed(1) + '%' : '—'}</td>
+        <td>{mtd.rev && mtd[r[0]] != null ? ((mtd[r[0]] / mtd.rev) * 100).toFixed(1) + '%' : '-'}</td>
       </tr>
     )
   }
@@ -976,7 +976,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / B2C / {L.pageTitle}</p>
-            <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}<sup style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 2 }}>*</sup></h1>
+            <h1 className={styles.pageTitle}>{L.pageTitle} - {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}<sup style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 2 }}>*</sup></h1>
           </div>
           <div className={'lq-header-controls ' + styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
@@ -1110,7 +1110,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       </div>
                     </div>
                     <div style={{ fontSize: 10.5, color: 'var(--text3)' }}>
-                      Can't go later than {d1} &mdash; today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's own figures, which have no daily grain to cut off.
+                      Can't go later than {d1} - today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's own figures, which have no daily grain to cut off.
                     </div>
                   </div>
 
@@ -1226,7 +1226,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         <div className={styles.scroll}>
         <div className={styles.content}>
           <p className={styles.defNote}>
-            <b>* Revenue vs Cash Flow</b> &mdash; {revVsCashflowNote || DEFAULT_REV_VS_CASHFLOW_NOTE}
+            <b>* Revenue vs Cash Flow</b> - {revVsCashflowNote || DEFAULT_REV_VS_CASHFLOW_NOTE}
           </p>
           {loading ? <div className={styles.card}><div className={styles.empty}>Reading the finance sheet&hellip;</div></div> : null}
           {!loading && err ? (
@@ -1258,7 +1258,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               <KPICard label={periodLabel + ' ' + L.kpiNet} value={inr(mtd.net)}
                 sub={ctx(mtd.net, hasPrev ? prev.net : null) || (isCashFlow ? 'cash inflow less cash outflow' : 'revenue less cost')}
                 delta={hasPrev ? chg(mtd.net, prev.net) : null} />
-              <KPICard label="Net Margin" value={margin == null ? '\u2014' : margin.toFixed(1) + '%'}
+              <KPICard label="Net Margin" value={margin == null ? '-' : margin.toFixed(1) + '%'}
                 sub={prevMargin == null ? (L.net + ' over ' + L.totalRev) : prevLab + ' ' + prevMargin.toFixed(1) + '%'}
                 delta={mgDelta}
                 deltaLabel={mgDelta == null ? null : (mgDelta >= 0 ? '\u25B2 ' : '\u25BC ') + Math.abs(mgDelta).toFixed(1) + ' pp'} />
@@ -1314,7 +1314,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                         <td>{full(mtd[c[0]])}</td>
                         {hasPrev ? <td>{full(prev[c[0]])}</td> : null}
                         {hasPrev ? dcell(chg(mtd[c[0]], prev[c[0]]), true) : null}
-                        <td>{mtd.rev && mtd[c[0]] != null ? ((mtd[c[0]] / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
+                        <td>{mtd.rev && mtd[c[0]] != null ? ((mtd[c[0]] / mtd.rev) * 100).toFixed(1) + '%' : '-'}</td>
                       </tr>
                     )
                   })}
@@ -1324,7 +1324,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                     <td>{full(mtd.cost)}</td>
                     {hasPrev ? <td>{full(prev.cost)}</td> : null}
                     {hasPrev ? dcell(chg(mtd.cost, prev.cost), true) : null}
-                    <td>{mtd.rev && mtd.cost != null ? ((mtd.cost / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
+                    <td>{mtd.rev && mtd.cost != null ? ((mtd.cost / mtd.rev) * 100).toFixed(1) + '%' : '-'}</td>
                   </tr>
                   {!isCashFlow ? (
                     <tr className={styles.total}>
@@ -1333,7 +1333,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       <td className={mtd.ebitdaBeforeCorp != null && mtd.ebitdaBeforeCorp < 0 ? styles.neg : styles.pos}>{full(mtd.ebitdaBeforeCorp)}</td>
                       {hasPrev ? <td>{full(prev.ebitdaBeforeCorp)}</td> : null}
                       {hasPrev ? dcell(chg(mtd.ebitdaBeforeCorp, prev.ebitdaBeforeCorp), false) : null}
-                      <td>{mtd.rev && mtd.ebitdaBeforeCorp != null ? ((mtd.ebitdaBeforeCorp / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
+                      <td>{mtd.rev && mtd.ebitdaBeforeCorp != null ? ((mtd.ebitdaBeforeCorp / mtd.rev) * 100).toFixed(1) + '%' : '-'}</td>
                     </tr>
                   ) : null}
                   <tr className={styles.total}>
@@ -1342,14 +1342,14 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                     <td className={mtd.net != null && mtd.net < 0 ? styles.neg : styles.pos}>{full(mtd.net)}</td>
                     {hasPrev ? <td>{full(prev.net)}</td> : null}
                     {hasPrev ? dcell(chg(mtd.net, prev.net), false) : null}
-                    <td>{margin == null ? '\u2014' : margin.toFixed(1) + '%'}</td>
+                    <td>{margin == null ? '-' : margin.toFixed(1) + '%'}</td>
                   </tr>
                 </tbody>
               </table>
               {fy ? (
                 <>
                   <div style={{ marginTop: 20, marginBottom: 10 }}>
-                    <span className={styles.cardTitle}>{fy.label} view &mdash; YTD, H1, H2</span>
+                    <span className={styles.cardTitle}>{fy.label} view - YTD, H1, H2</span>
                   </div>
                   <table className={styles.table}>
                     <thead>
@@ -1369,7 +1369,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                         <td>{full(fy.rev)}</td>
                         <td>{full(fy.cost)}</td>
                         <td className={fy.net != null && fy.net < 0 ? styles.neg : styles.pos}>{full(fy.net)}</td>
-                        <td>{fyMargin == null ? '—' : fyMargin.toFixed(1) + '%'}</td>
+                        <td>{fyMargin == null ? '-' : fyMargin.toFixed(1) + '%'}</td>
                       </tr>
                       {h1 ? (
                         <tr>
@@ -1378,7 +1378,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                           <td>{full(h1.rev)}</td>
                           <td>{full(h1.cost)}</td>
                           <td className={h1.net != null && h1.net < 0 ? styles.neg : styles.pos}>{full(h1.net)}</td>
-                          <td>{h1Margin == null ? '—' : h1Margin.toFixed(1) + '%'}</td>
+                          <td>{h1Margin == null ? '-' : h1Margin.toFixed(1) + '%'}</td>
                         </tr>
                       ) : null}
                       {h2 ? (
@@ -1388,12 +1388,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                           <td>{full(h2.rev)}</td>
                           <td>{full(h2.cost)}</td>
                           <td className={h2.net != null && h2.net < 0 ? styles.neg : styles.pos}>{full(h2.net)}</td>
-                          <td>{h2Margin == null ? '—' : h2Margin.toFixed(1) + '%'}</td>
+                          <td>{h2Margin == null ? '-' : h2Margin.toFixed(1) + '%'}</td>
                         </tr>
                       ) : (
                         <tr>
                           <td>H2</td>
-                          <td colSpan={5} className={styles.empty} style={{ padding: '10px 14px', textAlign: 'left' }}>Not started yet &mdash; begins {fy.from.slice(0, 4)}-10-01</td>
+                          <td colSpan={5} className={styles.empty} style={{ padding: '10px 14px', textAlign: 'left' }}>Not started yet - begins {fy.from.slice(0, 4)}-10-01</td>
                         </tr>
                       )}
                     </tbody>
@@ -1402,7 +1402,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               ) : null}
               {isCashFlow ? (
                 <p className={styles.note}>
-                  This page is real cash moved &mdash; every line here is an actual, not an estimate or a monthly average. It will often differ from Daily P&amp;L, which mixes real actuals with a formula estimate for SR and monthly-smoothed figures for People, Offline and Corp. Overheads.
+                  This page is real cash moved - every line here is an actual, not an estimate or a monthly average. It will often differ from Daily P&amp;L, which mixes real actuals with a formula estimate for SR and monthly-smoothed figures for People, Offline and Corp. Overheads.
                 </p>
               ) : null}
             </div>
@@ -1481,7 +1481,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                         <td>{full(p.actual)}</td>
                         {hasPlan ? (
                           <td className={both ? (p.actual > p.forecast ? styles.neg : styles.pos) : undefined}>
-                            {both ? full(p.actual - p.forecast) : '\u2014'}
+                            {both ? full(p.actual - p.forecast) : '-'}
                           </td>
                         ) : null}
                       </tr>
@@ -1491,8 +1491,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               </table>
               <p className={styles.note}>
                 {hasPlan
-                  ? 'Performance marketing has no forecast line here \u2014 it comes from the ad platforms, not from a plan.'
-                  : 'No forecast has been entered for ' + shortMonth + ' yet, so only the actuals are shown. Performance marketing never carries a forecast here \u2014 it comes from the ad platforms.'}
+                  ? 'Performance marketing has no forecast line here - it comes from the ad platforms, not from a plan.'
+                  : 'No forecast has been entered for ' + shortMonth + ' yet, so only the actuals are shown. Performance marketing never carries a forecast here - it comes from the ad platforms.'}
               </p>
             </div>
           ) : null}

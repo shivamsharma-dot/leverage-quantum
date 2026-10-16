@@ -13,7 +13,7 @@
 // so it is complete days only and always reads to D-1.
 
 const DOT = ' \u00b7 '
-const DASH = '\u2014'
+const DASH = '-'
 
 const kpiLine = pairs => pairs
   .filter(p => p && p.value !== null && p.value !== '')

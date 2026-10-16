@@ -97,7 +97,7 @@ async function askClaude(messages, metaToken, memories, onChunk, signal, platfor
 
 /* ─── markdown ────────────────────────────────────────────────── */
 function ih(t){return t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{20D0}-\u{20FF}]/gu,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,`<code style="background:#F1F5F9;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)}
-/* string-returning sibling of Markdown() below, for the "email this answer" export —
+/* string-returning sibling of Markdown() below, for the "email this answer" export -
    reuses ih() for inline escaping/bold/italic/code so the two never drift on that logic,
    but builds an HTML string (for Resend) instead of JSX. */
 function mdToEmailHtml(text){
@@ -193,7 +193,7 @@ function Ico({n,s=16,c='currentColor',sw=2}){
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
 
-/* Quantum mark with each bar breathing on its own stagger — used inside .qOrb instead of a flattened white silhouette */
+/* Quantum mark with each bar breathing on its own stagger - used inside .qOrb instead of a flattened white silhouette */
 function AnimatedLogo({size=20}){return <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
   <rect className="qBar" style={{animationDelay:'0s'}}   x="1"  y="12" width="4" height="9"  rx="1.5" fill={GREEN}/>
   <rect className="qBar" style={{animationDelay:'.22s'}} x="7"  y="7"  width="4" height="14" rx="1.5" fill={CYAN}/>
@@ -241,7 +241,7 @@ function buildLoaderPhases(question,scope){
   phases.push('Composing your answer...')
   return Array.from(new Set(phases)).slice(0,4)
 }
-/* follow-up suggestion chips — heuristic v1 (frontend-only, no extra model call).
+/* follow-up suggestion chips - heuristic v1 (frontend-only, no extra model call).
    Looks at what was just asked/answered and offers 2-3 natural next questions,
    the same "keep the conversation moving" pattern Perplexity/Moby/Hex all use. */
 function buildFollowUps(question,answer){
@@ -307,11 +307,11 @@ export default function AskAI() {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
-  const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' — always one active (Claude-style unified sidebar)
-  const [railOpen, setRailOpen]   = useState(() => typeof window !== 'undefined' ? window.innerWidth > 768 : true) // unified floating-rail visibility — open by default on desktop; on mobile it defaulted open too and covered the whole chat with History before the user asked for it, so it now starts closed there (still reachable via the reopen strip or the Prompts/Memories composer buttons)
-  const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' — scopes which tools the model can call
+  const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' - always one active (Claude-style unified sidebar)
+  const [railOpen, setRailOpen]   = useState(() => typeof window !== 'undefined' ? window.innerWidth > 768 : true) // unified floating-rail visibility - open by default on desktop; on mobile it defaulted open too and covered the whole chat with History before the user asked for it, so it now starts closed there (still reachable via the reopen strip or the Prompts/Memories composer buttons)
+  const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' - scopes which tools the model can call
   const [scopeOpen, setScopeOpen] = useState(false)
-  const [listening, setListening] = useState(false) // dictation mic — Web Speech API, browser-native, no backend
+  const [listening, setListening] = useState(false) // dictation mic - Web Speech API, browser-native, no backend
   const [composerFocused, setComposerFocused] = useState(false) // composer expands while actively typing, settles back when idle
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
@@ -319,7 +319,7 @@ export default function AskAI() {
   const [newMem, setNewMem]       = useState('')
   const [savingMem, setSavingMem] = useState(false)
   const [memLoading, setMemLoading]= useState(false)
-  const [autoMemory, setAutoMemory] = useState('') // auto-synthesized "project memory" — regenerated on demand from recent chats, shared team-wide like the conversations themselves
+  const [autoMemory, setAutoMemory] = useState('') // auto-synthesized "project memory" - regenerated on demand from recent chats, shared team-wide like the conversations themselves
   const [autoMemoryUpdatedAt, setAutoMemoryUpdatedAt] = useState(null)
   const [regenLoading, setRegenLoading] = useState(false)
   const [promptCat, setPromptCat] = useState('All')
@@ -355,7 +355,7 @@ export default function AskAI() {
   const recognitionRef = useRef(null)
   const scopeRef = useRef(null)
 
-  // close the scope dropdown on any click outside it — previously only closed via its own toggle or picking an option, so clicking anywhere else on the page left it open indefinitely
+  // close the scope dropdown on any click outside it - previously only closed via its own toggle or picking an option, so clicking anywhere else on the page left it open indefinitely
   useEffect(()=>{
     if(!scopeOpen) return
     const onDocClick = e=>{ if(scopeRef.current && !scopeRef.current.contains(e.target)) setScopeOpen(false) }
@@ -363,11 +363,11 @@ export default function AskAI() {
     return ()=>document.removeEventListener('mousedown', onDocClick)
   },[scopeOpen])
 
-  /* dictation mic — Web Speech API. Feature-detected; button only renders where supported.
+  /* dictation mic - Web Speech API. Feature-detected; button only renders where supported.
      iOS blocks getUserMedia (and therefore SpeechRecognition, which needs mic access) inside
-     a home-screen "Add to Home Screen" standalone PWA — a long-standing WebKit limitation,
+     a home-screen "Add to Home Screen" standalone PWA - a long-standing WebKit limitation,
      not something fixable in JS. This app IS installed that way on iOS (see PWA section above),
-     so on iOS+standalone we skip attempting rec.start() (it silently fails/aborts instantly —
+     so on iOS+standalone we skip attempting rec.start() (it silently fails/aborts instantly -
      the "mic does nothing" symptom) and tell the user to use Safari directly instead. */
   const isIOS = typeof navigator!=='undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
   const isStandalonePWA = typeof window!=='undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches)
@@ -376,7 +376,7 @@ export default function AskAI() {
   const toggleMic = useCallback(()=>{
     if (!micSupported) return
     if (listening) { recognitionRef.current?.stop(); return }
-    if (micBlockedByIOSPwa) { toast('Dictation needs Safari directly — iOS blocks microphone access inside an installed home-screen app. Open Quantum in Safari to use the mic, or just type.', {type:'muted', duration:5500}); return }
+    if (micBlockedByIOSPwa) { toast('Dictation needs Safari directly - iOS blocks microphone access inside an installed home-screen app. Open Quantum in Safari to use the mic, or just type.', {type:'muted', duration:5500}); return }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SR()
     rec.lang = 'en-IN'
@@ -389,10 +389,10 @@ export default function AskAI() {
     }
     rec.onerror = e => {
       setListening(false)
-      const reason = e?.error==='not-allowed'||e?.error==='service-not-allowed' ? 'Microphone permission was denied — check Settings > Safari > Microphone.'
-        : e?.error==='no-speech' ? "Didn't catch that — try again."
+      const reason = e?.error==='not-allowed'||e?.error==='service-not-allowed' ? 'Microphone permission was denied - check Settings > Safari > Microphone.'
+        : e?.error==='no-speech' ? "Didn't catch that - try again."
         : e?.error==='network' ? 'Dictation needs an internet connection.'
-        : 'Dictation failed — try again or type your question.'
+        : 'Dictation failed - try again or type your question.'
       toast(reason, {type:'muted', duration:4200})
     }
     rec.onend = () => setListening(false)
@@ -476,7 +476,7 @@ export default function AskAI() {
   const selectConv = useCallback(async c=>{
     setActiveId(c.id)
     setShowWelcomeAnim(false)
-    // Show cached instantly, then refresh from Supabase (authoritative — survives localStorage clears / other devices)
+    // Show cached instantly, then refresh from Supabase (authoritative - survives localStorage clears / other devices)
     try{ setMessages(JSON.parse(localStorage.getItem(`ch_${c.id}`)||'[]')) }catch{ setMessages([]) }
     try {
       const rows = await sbGet('ask_ai_messages',`?conv_id=eq.${c.id}&order=updated_at.desc&limit=1`)
@@ -499,7 +499,7 @@ export default function AskAI() {
     } catch(e){ console.warn('SB delete failed',e) }
   },[activeId, uid])
 
-  /* pin / unpin — persists to ask_ai_conversations.pinned */
+  /* pin / unpin - persists to ask_ai_conversations.pinned */
   const togglePin = useCallback(async (id, current)=>{
     const next=!current
     setConvs(cs=>cs.map(c=>c.id===id?{...c,pinned:next}:c))
@@ -511,7 +511,7 @@ export default function AskAI() {
     } catch(e){ console.warn('pin failed',e) }
   },[])
 
-  /* rename — persists title to ask_ai_conversations */
+  /* rename - persists title to ask_ai_conversations */
   const startRename = useCallback((id, title)=>{ setEditingId(id); setEditTitle(title||'') },[])
   const commitRename = useCallback(async ()=>{
     const id=editingId, t=editTitle.trim()
@@ -561,7 +561,7 @@ export default function AskAI() {
     }finally{setLoading(false)}
   },[input,loading,messages,activeId,metaToken,combinedMemories,saveMessages,platformScope])
 
-  /* regenerate — truncates to just before the assistant reply at idx and resends the preceding user turn */
+  /* regenerate - truncates to just before the assistant reply at idx and resends the preceding user turn */
   const regenerate = useCallback(async(idx)=>{
     if(loading) return
     const priorUser = messages.slice(0,idx).reverse().find(m=>m.role==='user')
@@ -587,7 +587,7 @@ export default function AskAI() {
     }finally{setLoading(false)}
   },[messages,loading,metaToken,combinedMemories,platformScope,activeId,saveMessages])
 
-  /* edit-and-resend — replaces the user turn at idx with newText, truncates everything after it (including
+  /* edit-and-resend - replaces the user turn at idx with newText, truncates everything after it (including
      the old assistant reply), and re-asks. Same shape as regenerate, but forking from an edited USER message
      rather than just re-running the existing one. */
   const editAndResend = useCallback(async(idx,newText)=>{
@@ -621,7 +621,7 @@ export default function AskAI() {
     }finally{setLoading(false)}
   },[messages,loading,activeId,metaToken,combinedMemories,saveMessages,platformScope])
 
-  /* email an answer — wires into the existing Reports send infrastructure (/api/send-report),
+  /* email an answer - wires into the existing Reports send infrastructure (/api/send-report),
      explicit-confirm gated since sending mail is an audience-expanding action. */
   const sendAnswerEmail = useCallback(async()=>{
     const idx=emailModalIdx; if(idx==null) return
@@ -642,7 +642,7 @@ export default function AskAI() {
     }finally{setEmailSending(false)}
   },[emailModalIdx,messages,emailRecipients])
 
-  /* post an answer to Slack — same explicit-confirm pattern as email, no recipient field
+  /* post an answer to Slack - same explicit-confirm pattern as email, no recipient field
      since it always goes to the one configured team channel (Settings > Reports). */
   const sendAnswerSlack = useCallback(async()=>{
     const idx=slackModalIdx; if(idx==null) return
@@ -677,7 +677,7 @@ export default function AskAI() {
     return Array.from(set).sort()
   },[convs])
 
-  /* grouped convs — Pinned first, then Today/Yesterday/Earlier; respects search + person filter */
+  /* grouped convs - Pinned first, then Today/Yesterday/Earlier; respects search + person filter */
   const now0=new Date(); now0.setHours(0,0,0,0)
   const grouped=useMemo(()=>{
     const q=convSearch.toLowerCase()
@@ -715,13 +715,13 @@ export default function AskAI() {
   const inputBg='#fff'
   const borderColor='#E5E7EB'
 
-  /* composer — shared between the centered landing state and the docked-to-bottom conversation state */
+  /* composer - shared between the centered landing state and the docked-to-bottom conversation state */
   const composerActive = composerFocused || !!input
   const composerRadius = isMobile ? 22 : 14
   const composer = (
     <div style={{maxWidth: composerActive ? 'min(920px, 96%)' : 'min(880px, 94%)',margin:'0 auto',width:'100%',transition:'max-width .28s cubic-bezier(.4,0,.2,1)'}}>
       <div style={{position:'relative',background:'#fff',border:'none',borderRadius:composerRadius, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding: isMobile ? '16px 18px 14px' : (composerActive ? '12px 16px 11px' : '8px 14px 9px'),transform: composerActive?'scale(1.008)':'scale(1)',transition:'padding .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), box-shadow .28s ease',boxShadow:composerActive?'0 10px 32px -8px rgba(28,159,212,0.32), 0 2px 6px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
-        {/* brand gradient top accent bar — clipped by a full-size overlay (not the bar's own radius, which can't express a 16px arc at 3px tall) so its corners follow the container's actual curve; the overlay is a sibling of the dropdown-bearing content, not an ancestor, so dropdowns still render unclipped */}
+        {/* brand gradient top accent bar - clipped by a full-size overlay (not the bar's own radius, which can't express a 16px arc at 3px tall) so its corners follow the container's actual curve; the overlay is a sibling of the dropdown-bearing content, not an ancestor, so dropdowns still render unclipped */}
         <div style={{position:'absolute',inset:0,borderRadius:composerRadius,overflow:'hidden',pointerEvents:'none'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:composerActive?4:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:composerActive?1:0.85,transition:'opacity .25s ease, height .25s ease'}}/>
         </div>
@@ -777,7 +777,7 @@ export default function AskAI() {
           </div>
         </div>
       </div>
-      <div className="askai-caption" style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Powered by Claude Sonnet 4.5 — can make mistakes, always verify important numbers.</div>
+      <div className="askai-caption" style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Powered by Claude Sonnet 4.5 - can make mistakes, always verify important numbers.</div>
     </div>
   )
 
@@ -857,7 +857,7 @@ export default function AskAI() {
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
-        {/* Reopen strip — with no dedicated toggle button, this is what brings the rail back once it's auto-hidden. Only present while closed; the rail itself covers this same edge once open. */}
+        {/* Reopen strip - with no dedicated toggle button, this is what brings the rail back once it's auto-hidden. Only present while closed; the rail itself covers this same edge once open. */}
         {!railOpen&&(
           <div className="askai-reopen-strip" onClick={e=>{e.stopPropagation();setRailOpen(true)}} title="Show sidebar"
             style={{position:'absolute',left:0,top:0,bottom:0,width:20,zIndex:54,cursor:'pointer'}}/>
@@ -870,7 +870,7 @@ export default function AskAI() {
         }}>
           {panelOpen&&(
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-              {/* Unified sidebar header — flat underline tabs, no cards/pills, minimal chrome */}
+              {/* Unified sidebar header - flat underline tabs, no cards/pills, minimal chrome */}
               <div style={{padding:'14px 14px 0',flexShrink:0,background:'#fff',display:'flex',alignItems:'center',gap:18,borderBottom:'0.5px solid #EEF1F6'}}>
                 {[
                   {id:'history', label:'History'},
@@ -902,7 +902,7 @@ export default function AskAI() {
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
                         style={{width:'100%',background:'transparent',border:'none',borderBottom:'0.5px solid #EEF1F6',borderRadius:0,padding:'6px 4px 6px 22px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
-                    {/* Everyone / Just me — plain text toggle, no track/pill */}
+                    {/* Everyone / Just me - plain text toggle, no track/pill */}
                     {people.length>0&&(
                       <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:0,fontSize:12}}>
                         {[['all','Everyone'],['mine','Just me']].map(([val,lbl],i)=>{
@@ -977,7 +977,7 @@ export default function AskAI() {
                       <div style={{padding:'44px 20px',textAlign:'center'}}>
                         <div style={{width:48,height:48,margin:'0 auto 14px',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(41,185,195,0.08))',border:'1px solid #EDF0F5'}}><Ico n="history" s={22} c={BLUE}/></div>
                         <div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No conversations yet</div>
-                        <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Start a chat below — it's saved and shared with your team.</div>
+                        <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Start a chat below - it's saved and shared with your team.</div>
                       </div>
                     )}
                   </div>
@@ -1028,7 +1028,7 @@ export default function AskAI() {
               {rail==='memories'&&(
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div className="cs" style={{flex:1,overflowY:'auto',padding:'12px 14px 8px'}}>
-                    {/* Auto-synthesized project memory — regenerated on demand from recent chats, shared team-wide */}
+                    {/* Auto-synthesized project memory - regenerated on demand from recent chats, shared team-wide */}
                     <div style={{marginBottom:16}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
                         <span style={{fontSize:11,fontWeight:700,color:'#1F3C84',letterSpacing:'0.02em'}}>Project memory</span>
@@ -1040,7 +1040,7 @@ export default function AskAI() {
                       {autoMemory?(
                         <div style={{fontSize:12,color:'#374151',lineHeight:1.65,whiteSpace:'pre-wrap',padding:'11px 12px',background:'#F8FAFC',borderRadius:9,border:'0.5px solid #EEF1F6'}}>{autoMemory}</div>
                       ):(
-                        <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5,padding:'2px 0'}}>No project memory yet — click Regenerate to build one from recent chats.</div>
+                        <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5,padding:'2px 0'}}>No project memory yet - click Regenerate to build one from recent chats.</div>
                       )}
                       {autoMemoryUpdatedAt&&<div style={{fontSize:10,color:'#CBD5E1',marginTop:6}}>Updated {new Date(autoMemoryUpdatedAt).toLocaleString()}</div>}
                     </div>
@@ -1055,7 +1055,7 @@ export default function AskAI() {
                       </button>
                     </div>
                     {memLoading&&<div style={{padding:20,textAlign:'center',color:'#CBD5E1',fontSize:12}}>Loading…</div>}
-                    {!memLoading&&memories.length===0&&<div style={{padding:'34px 16px',textAlign:'center'}}><div style={{width:44,height:44,margin:'0 auto 12px',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(28,159,212,0.08))',border:`1px solid ${borderColor}`}}><Ico n='brain' s={20} c={BLUE}/></div><div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No memories yet</div><div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Add a fact above — it stays with the assistant across every conversation.</div></div>}
+                    {!memLoading&&memories.length===0&&<div style={{padding:'34px 16px',textAlign:'center'}}><div style={{width:44,height:44,margin:'0 auto 12px',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(28,159,212,0.08))',border:`1px solid ${borderColor}`}}><Ico n='brain' s={20} c={BLUE}/></div><div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No memories yet</div><div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Add a fact above - it stays with the assistant across every conversation.</div></div>}
                     {memories.map((m,i)=>(
                       <div key={m.id||i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'8px 0',borderTop:i>0?'0.5px solid #F1F4F8':'none'}}>
                         <div style={{width:5,height:5,borderRadius:'50%',background:BLUE,flexShrink:0,marginTop:6}}/>
@@ -1092,7 +1092,7 @@ export default function AskAI() {
                 <div className="qHeroSub" style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:isMobile?0:28,animation:'fadeUp .5s ease .15s both'}}>
                   Your marketing intelligence layer. Ask anything, from a quick number to a full performance report.
                 </div>
-                {/* quick prompts — dropped entirely on mobile (Gemini-style: just the greeting + a big bottom-docked composer, no chip clutter) */}
+                {/* quick prompts - dropped entirely on mobile (Gemini-style: just the greeting + a big bottom-docked composer, no chip clutter) */}
                 {!isMobile&&(
                   <div className="qChipsRow" style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
                     {QUICK.map((q,i)=>(
@@ -1103,7 +1103,7 @@ export default function AskAI() {
                     ))}
                   </div>
                 )}
-                {/* composer lives here on the landing state on desktop — centered as one unit with the greeting, Claude.ai/ChatGPT-style. On mobile it's docked to the bottom of the screen instead (below, outside this centered block) so it reads as an anchored bar, not a small box floating mid-screen with empty space under it. */}
+                {/* composer lives here on the landing state on desktop - centered as one unit with the greeting, Claude.ai/ChatGPT-style. On mobile it's docked to the bottom of the screen instead (below, outside this centered block) so it reads as an anchored bar, not a small box floating mid-screen with empty space under it. */}
                 {!isMobile&&<div style={{width:'100%',maxWidth:'min(880px, 94%)',marginTop:28,animation:'fadeUp .5s ease .25s both'}}>{composer}</div>}
               </div>
             ):(
@@ -1189,7 +1189,7 @@ export default function AskAI() {
                               )}
                             </>
                           ):(
-                            /* magic loader — liners are derived from the question just asked, not static */
+                            /* magic loader - liners are derived from the question just asked, not static */
                             <MagicLoader question={messages[k-1]?.content||''} platformScope={platformScope}/>
                           )}
                         </div>
@@ -1203,7 +1203,7 @@ export default function AskAI() {
             )}
           </div>
 
-          {/* Input — docked to the bottom once a conversation has started, OR always on mobile (where the composer is never centered inline with the greeting — see the empty-state block above) */}
+          {/* Input - docked to the bottom once a conversation has started, OR always on mobile (where the composer is never centered inline with the greeting - see the empty-state block above) */}
           {(messages.length>0||isMobile)&&(
             <div style={{padding:isMobile?'10px 14px calc(14px + env(safe-area-inset-bottom))':'12px 20px 16px',flexShrink:0}}>
               {composer}
@@ -1212,7 +1212,7 @@ export default function AskAI() {
         </div>
       </div>
 
-      {/* Email-this-answer confirm modal — sending mail is audience-expanding, so it's always an explicit confirm, never a silent send */}
+      {/* Email-this-answer confirm modal - sending mail is audience-expanding, so it's always an explicit confirm, never a silent send */}
       {emailModalIdx!=null&&(
         <div onClick={e=>{if(e.target===e.currentTarget&&!emailSending)setEmailModalIdx(null)}} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(15,23,42,0.45)',display:'flex',alignItems:'center',justifyContent:'center'}}>
           <div style={{width:420,maxWidth:'calc(100vw - 32px)',background:'#fff',borderRadius:16,padding:'22px 22px 20px',boxShadow:'0 20px 60px -12px rgba(15,23,42,0.35)'}}>
@@ -1237,7 +1237,7 @@ export default function AskAI() {
         </div>
       )}
 
-      {/* Send-to-Slack confirm modal — posts to the one team channel configured in Settings > Reports */}
+      {/* Send-to-Slack confirm modal - posts to the one team channel configured in Settings > Reports */}
       {slackModalIdx!=null&&(
         <div onClick={e=>{if(e.target===e.currentTarget&&!slackSending)setSlackModalIdx(null)}} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(15,23,42,0.45)',display:'flex',alignItems:'center',justifyContent:'center'}}>
           <div style={{width:420,maxWidth:'calc(100vw - 32px)',background:'#fff',borderRadius:16,padding:'22px 22px 20px',boxShadow:'0 20px 60px -12px rgba(15,23,42,0.35)'}}>

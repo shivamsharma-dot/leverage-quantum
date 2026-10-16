@@ -534,7 +534,7 @@ function AmbientBackground({ variant = 'cover' }) {
   )
 }
 
-const noDash = t => String(t == null ? '' : t).replace(/\s*[\u2014\u2013]\s*/g, ', ')
+const noDash = t => String(t == null ? '' : t).replace(/\s*[-\u2013]\s*/g, ', ')
 
 function PeriodBadge({ period, live }) {
   return (

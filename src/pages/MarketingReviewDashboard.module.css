@@ -1,4 +1,4 @@
-/* Marketing Monthly Review — a dedicated presentation surface.
+/* Marketing Monthly Review - a dedicated presentation surface.
    Keyframes / print rules / scrollbar-hiding live here because inline style
    objects can't express @keyframes, @media print, or ::-webkit-scrollbar. */
 

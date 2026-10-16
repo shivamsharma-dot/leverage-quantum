@@ -549,12 +549,12 @@ export default function OrganicSocialDashboard() {
 
           <Card title="Growth at a glance" sub={`Every connected channel \u00B7 ${compareLabel}`}>
             <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-              <PremKPI label="Website Organic Users" value={ga4 ? fmtN(ga4.cur.organicUsers) : '\u2014'} delta={ga4 && ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={ga4 ? `vs ${period.priorLabel}` : 'pending access'} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
+              <PremKPI label="Website Organic Users" value={ga4 ? fmtN(ga4.cur.organicUsers) : '-'} delta={ga4 && ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={ga4 ? `vs ${period.priorLabel}` : 'pending access'} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
               <PremKPI label="Instagram Reach" value={fmtN(igTotal.reach)} delta={pctDelta(igTotal.reach, igTotal.reachPrior)} sub={`${igLive.length} account${igLive.length === 1 ? '' : 's'} combined`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
               <PremKPI label="Instagram Interactions" value={fmtN(igTotal.interactions)} delta={pctDelta(igTotal.interactions, igTotal.interactionsPrior)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
               <PremKPI label="Instagram Followers" value={fmtN(igTotal.followers)} sub="all accounts, lifetime" icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
               <PremKPI label="Net Follower Growth" value={(igTotal.growth >= 0 ? '+' : '') + fmtN(igTotal.growth)} delta={pctDelta(igTotal.growth, igTotal.growthPrior)} sub={`vs ${period.priorLabel}`} icon={ICONS.trendUp} accent={C.green} accentBg={C.greenBg} />
-              <PremKPI label="YouTube Subscribers" value={yt ? fmtN(yt.subscriberCount) : '\u2014'} sub={yt ? 'lifetime' : 'not connected'} icon={ICONS.play} accent={C.blue} accentBg={C.blueBg} />
+              <PremKPI label="YouTube Subscribers" value={yt ? fmtN(yt.subscriberCount) : '-'} sub={yt ? 'lifetime' : 'not connected'} icon={ICONS.play} accent={C.blue} accentBg={C.blueBg} />
             </div>
           </Card>
 
@@ -614,7 +614,7 @@ export default function OrganicSocialDashboard() {
                   </>
                 ) : (
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <PendingNote title="Views &amp; watch time &mdash; pending" detail="Blocked on a Google Workspace admin trust grant for the Analytics API scope." />
+                    <PendingNote title="Views &amp; watch time - pending" detail="Blocked on a Google Workspace admin trust grant for the Analytics API scope." />
                   </div>
                 )}
               </div>
@@ -1207,11 +1207,11 @@ function ManualPlatform({ name, hue, week, reachLabel }) {
           <Row label="Impressions" value={fmtN(week.views)} />
           <Row label={reachLabel} value={fmtN(week.reach)} />
           <Row label="Interactions" value={fmtN(week.interactions)} />
-          <Row label="Engagement rate" value={week.engagementRate != null ? week.engagementRate + '%' : '\u2014'} />
+          <Row label="Engagement rate" value={week.engagementRate != null ? week.engagementRate + '%' : '-'} />
         </div>
       ) : (
         <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, lineHeight: 1.5 }}>
-          No entry for this week yet &mdash; add it in Settings &gt; Data.
+          No entry for this week yet - add it in Settings &gt; Data.
         </div>
       )}
     </div>

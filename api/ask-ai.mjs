@@ -64,7 +64,7 @@ async function logToolCall({ convId, userId, toolName, params, rowCount, latency
 }
 
 // Plain-English one-liner for the "what I checked" trace shown above an answer
-// (collapsed by default in the UI) — ThoughtSpot Spotter and Perplexity both treat
+// (collapsed by default in the UI) - ThoughtSpot Spotter and Perplexity both treat
 // this kind of verifiability as a trust feature, not clutter, for a numbers tool.
 function buildToolSummary(name, input) {
   input = input || {}
@@ -931,7 +931,7 @@ async function getMetaData(token) {
 }
 
 // -- SYSTEM PROMPT -------------------------------------------------------------
-// Baseline Meta/Google/CRM data changes slowly — cache it in-memory for a short
+// Baseline Meta/Google/CRM data changes slowly - cache it in-memory for a short
 // window so back-to-back messages in the same warm serverless instance don't
 // re-fetch all 4 sources on every single message (was adding several seconds
 // of pure fetch latency before the model even started thinking).
@@ -1519,9 +1519,9 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
   const minQL = Math.min(...m.daySeries.map(d => d.totalQL))
   const chartA = T.dayBarChart(m.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.totalQL, flag: d.totalQL === minQL, tip: d.date + ': ' + fmtN(d.totalQL) + ' QL, ' + fmtINR(d.spend).replace(/&#8377;/, '₹') + ' spend' })))
   const chHeaders = [{ label: 'Channel' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL Δ', align: 'right' }]
-  const chRow = c => ({ cells: [{ text: c.source }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '&mdash;', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
+  const chRow = c => ({ cells: [{ text: c.source }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '-', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
   const tableChannels = T.sectionTitle('Channels', 'paid then free traffic') + T.dataTable(chHeaders, [...m.channels.paid, ...m.channels.free].map(chRow))
-  const corRow = c => ({ cells: [{ text: c.corridor }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '&mdash;', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
+  const corRow = c => ({ cells: [{ text: c.corridor }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '-', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
   const tableCorridors = T.sectionTitle('Corridors', 'by spend, descending') + T.dataTable([{ label: 'Corridor' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL Δ', align: 'right' }], m.corridors.map(corRow))
   const ranked = m.ledger.ranked
   const ledgerCard = c => ({ name: c.campaign, meta: c.source + ' · ' + c.corridor, priceHtml: fmtINR(c.cpql) + ' <span style="font-size:12px;font-weight:400;color:#666666">/ QL</span>' })
@@ -1550,7 +1550,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
       { label: 'Total Revenue', value: fmtINR(b2c.pnl.now.totalRev), delta: { pct: gazDeltaPct(b2c.pnl.now.totalRev, b2c.pnl.prev.totalRev), goodIfUp: true }, compareLabel: 'vs prior period' },
       { label: 'Total Cost', value: fmtINR(b2c.pnl.now.totalCost), delta: { pct: gazDeltaPct(b2c.pnl.now.totalCost, b2c.pnl.prev.totalCost), goodIfUp: false }, compareLabel: 'vs prior period' },
       { label: 'Net', value: fmtINR(b2c.pnl.now.net), delta: { pct: gazDeltaPct(b2c.pnl.now.net, b2c.pnl.prev.net), goodIfUp: true }, compareLabel: 'vs prior period' },
-      { label: 'Net Margin', value: marginNow == null ? '&mdash;' : fmtPct(marginNow), sub: marginPrev == null ? '' : 'prior ' + fmtPct(marginPrev) },
+      { label: 'Net Margin', value: marginNow == null ? '-' : fmtPct(marginNow), sub: marginPrev == null ? '' : 'prior ' + fmtPct(marginPrev) },
     ], 'P&amp;L revenue is recognised on the date a sale is recorded; Cash Flow (shown in the YTD box below) records actual cash moved. This period ' + since + ' to ' + until + ' &middot; prior period ' + prevSince + ' to ' + prevUntil + '.')
     const lineRow = r => ({ cells: [{ text: r.label || 'Total', bold: !!r.isTotal }, { html: fmtINR(r.value), align: 'right', bold: !!r.isTotal }, { html: fmtPct(r.share), align: 'right', bold: !!r.isTotal }] })
     const lineHeaders = [{ label: 'Line Item' }, { label: 'Value', align: 'right' }, { label: 'Share', align: 'right' }]
@@ -1558,7 +1558,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
       + T.sectionTitle('Cost by Line') + T.dataTable(lineHeaders, b2c.pnl.costLines.map(lineRow))
     const chartB = T.sectionTitle('Revenue vs. Cost, Daily') + T.dualDayBarChart(b2c.pnl.daySeries.map(d => ({ label: gazDayLabel(d.date), a: d.totalRev || 0, b: d.totalCost || 0, tip: d.date + ': rev ' + fmtINR(d.totalRev).replace(/&#8377;/, '₹') + ', cost ' + fmtINR(d.totalCost).replace(/&#8377;/, '₹') })))
     const ebitdaNote = (b2c.pnl.ytd.ebitdaBeforeCorp >= 0 && b2c.pnl.now.ebitdaBeforeCorp < 0)
-      ? ('YTD Contribution Profit is positive at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ', even though this period alone is negative at ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' &mdash; the earlier months carried the year.')
+      ? ('YTD Contribution Profit is positive at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ', even though this period alone is negative at ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' - the earlier months carried the year.')
       : ('Contribution Profit stands at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ' year-to-date, versus ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' for this period alone.')
     const ytdB = T.ytdBox({
       label: b2c.fyLabel + ', Year to Date', dateRange: b2c.fyStart + ' to ' + until,
@@ -1579,7 +1579,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
     { label: 'CRM Leads', value: fmtN(careers.now.leads), delta: { pct: gazDeltaPct(careers.now.leads, careers.prev.leads), goodIfUp: true }, compareLabel: 'vs prior period' },
     { label: 'Interested', value: fmtN(careers.now.interested), delta: { pct: gazDeltaPct(careers.now.interested, careers.prev.interested), goodIfUp: true }, compareLabel: 'vs prior period' },
     { label: 'Won', value: fmtN(careers.now.won), delta: { pct: gazDeltaPct(careers.now.won, careers.prev.won), goodIfUp: true }, compareLabel: 'vs prior period' },
-    { label: 'Won Rate', value: wonRateNow == null ? '&mdash;' : fmtPct(wonRateNow), sub: wonRatePrev == null ? '' : 'prior ' + fmtPct(wonRatePrev) },
+    { label: 'Won Rate', value: wonRateNow == null ? '-' : fmtPct(wonRateNow), sub: wonRatePrev == null ? '' : 'prior ' + fmtPct(wonRatePrev) },
   ], 'This period ' + since + ' to ' + until + ' &middot; prior period ' + prevSince + ' to ' + prevUntil + '. Ranked by CRM leads, not spend -- Leverage Careers spend is not attributed at the campaign level in this cache.')
   const funnelC = T.funnelViz('Funnel, This Period', [{ label: 'CRM Leads', value: careers.now.leads, color: T.NAVY }, { label: 'Interested', value: careers.now.interested, color: T.BLUE }, { label: 'Won', value: careers.now.won, color: T.GREEN }])
   const chartC = T.dayBarChart(careers.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.leads, tip: d.date + ': ' + fmtN(d.leads) + ' leads, ' + fmtN(d.won) + ' won' })))
@@ -1604,7 +1604,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
       { letter: 'F', label: 'Finance:', detail: 'the Daily P&L / Daily Cash Flow finance sheet, same as the CEO B2C dashboards.' },
       { letter: 'T', label: 'Talent:', detail: 'leverage_careers_daily cache, synced from BigQuery three times a day.' },
     ],
-    notice: 'Regenerated fresh every edition from live data — never a re-run of a stale one. Compiled by the Quantum Gazette agent.',
+    notice: 'Regenerated fresh every edition from live data - never a re-run of a stale one. Compiled by the Quantum Gazette agent.',
   })
   return { html, usage }
 }
@@ -1618,7 +1618,7 @@ async function handleAgentRun(req, res, me) {
   // Blocks BOTH the scheduled cron run and a manual "Run now" click -- when off,
   // nobody can trigger this agent until it's switched back on in Settings/Agents.
   if (!(await isAgentEnabled(agentId))) {
-    await logAgentRun({ agentId, title: `${agent.label} — disabled`, summary: 'This agent is turned off.', content: '', status: 'skipped', toolCallsCount: 0, startedAt, finishedAt: startedAt, triggeredBy })
+    await logAgentRun({ agentId, title: `${agent.label} - disabled`, summary: 'This agent is turned off.', content: '', status: 'skipped', toolCallsCount: 0, startedAt, finishedAt: startedAt, triggeredBy })
     return res.status(200).json({ ok: false, skipped: true, reason: 'This agent is turned off in Settings/Agents.' })
   }
   try {
@@ -1629,7 +1629,7 @@ async function handleAgentRun(req, res, me) {
       const { since, until, prevSince, prevUntil } = agent.buildRange()
       const { html, usage } = await buildQuantumGazetteEdition({ since, until, prevSince, prevUntil })
       const finishedAt = new Date().toISOString()
-      const title = `${agent.label} — ${since} to ${until}`
+      const title = `${agent.label} - ${since} to ${until}`
       let gazetteSaveError = null
       try { await saveGazetteHtml(html) } catch (e) { gazetteSaveError = e.message }
       const summaryLine = `${since} to ${until} vs ${prevSince} to ${prevUntil} · Marketing, Corporate Finance, Talent Mobility.`
@@ -1644,13 +1644,13 @@ async function handleAgentRun(req, res, me) {
       system: [{ type: 'text', text: systemText }], userText, tools, agentId,
     })
     const finishedAt = new Date().toISOString()
-    const title = `${agent.label} — ${since} to ${until}`
+    const title = `${agent.label} - ${since} to ${until}`
     const summaryLine = (text.split('\n').find(l => l.trim() && !l.trim().startsWith('#')) || '').replace(/[*_`]/g, '').slice(0, 200)
     const runId = await logAgentRun({ agentId, title, summary: summaryLine, content: text, status: 'ok', toolCallsCount, startedAt, finishedAt, triggeredBy })
     await logUsage({ convId: null, userId: 'agent:' + agentId, model: MODEL, inputTokens: totalInputTokens, outputTokens: totalOutputTokens })
     return res.status(200).json({ ok: true, runId, title })
   } catch (e) {
-    await logAgentRun({ agentId, title: `${agent.label} — failed`, summary: e.message, content: '', status: 'error', error: e.message, toolCallsCount: 0, startedAt, finishedAt: new Date().toISOString(), triggeredBy })
+    await logAgentRun({ agentId, title: `${agent.label} - failed`, summary: e.message, content: '', status: 'error', error: e.message, toolCallsCount: 0, startedAt, finishedAt: new Date().toISOString(), triggeredBy })
     return res.status(500).json({ error: e.message })
   }
 }
@@ -1749,7 +1749,7 @@ export default async function handler(req, res) {
     let currentMessages = [...merged]
     let totalInputTokens = 0, totalOutputTokens = 0
     const MAX_TOOL_ROUNDS = 5
-    // User can scope the platform via the composer dropdown — restrict which
+    // User can scope the platform via the composer dropdown - restrict which
     // tools the model even sees, instead of relying on it to infer scope from
     // the question text (faster + more accurate tool decisions).
     const ALL_TOOLS = platformScope === 'meta' ? [META_TOOL, META_CRM_TOOL, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL]

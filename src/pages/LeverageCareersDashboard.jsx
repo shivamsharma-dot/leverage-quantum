@@ -126,7 +126,7 @@ function sumTotals(rows) {
     cps: won > 0 && spend > 0 ? spend / won : null,
   }
 }
-const fmtINR = n => n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN')
+const fmtINR = n => n == null ? '-' : '₹' + Math.round(n).toLocaleString('en-IN')
 const deltaPct = (cur, prev) => (prev == null || prev === 0) ? (cur > 0 ? 100 : null) : ((cur - prev) / prev) * 100
 
 // Charts on this page mix units in one tooltip (rupees, counts, percentages), so
@@ -134,7 +134,7 @@ const deltaPct = (cur, prev) => (prev == null || prev === 0) ? (cur > 0 ? 100 : 
 const tipFmt = (name, value) => {
   const n = String(name || '')
   if (/spend|cpl|cps|cpi|cost/i.test(n)) return fmtINR(value)
-  if (/rate|ctr|%/i.test(n)) return value == null ? '\u2014' : Number(value).toFixed(2) + '%'
+  if (/rate|ctr|%/i.test(n)) return value == null ? '-' : Number(value).toFixed(2) + '%'
   return fmtN(value)
 }
 
@@ -159,7 +159,7 @@ const sectionTitle = (t, s) => (
   </div>
 )
 const axis = { fontSize: 11, fill: C.muted, fontFamily: FONT }
-const fmtPct1 = v => v == null ? '\u2014' : v.toFixed(1) + '%'
+const fmtPct1 = v => v == null ? '-' : v.toFixed(1) + '%'
 // hex -> rgba. Used for the cohort heat cells and the funnel bar gradients, so the
 // hue stays a brand hue and only its opacity carries the value.
 function tint(hex, a) {
@@ -368,7 +368,7 @@ function ProgramEfficiencyTooltip({ active, payload }) {
       <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{d.name}</div>
       <div style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
         Paid spend {fmtINR(d.spend)}<br />Won (Funnel) {fmtN(d.won)}<br />Cost per won {fmtINR(d.cps)}<br />Cost per lead {fmtINR(d.cpl)}
-        {d.lowVolume ? <><br /><span style={{ color: C.muted }}>low volume — read with care</span></> : null}
+        {d.lowVolume ? <><br /><span style={{ color: C.muted }}>low volume - read with care</span></> : null}
       </div>
     </div>
   )
@@ -903,7 +903,7 @@ export default function LeverageCareersDashboard() {
     const wonDelta = deltaPct(a.won, b.won)
     const cpsDelta = (a.cps != null && b.cps != null) ? deltaPct(a.cps, b.cps) : null
     const verdict = a.won === 0 && b.won === 0
-      ? `No Won leads in either period — comparing on Leads instead: ${deltaPct(a.leads, b.leads) == null ? '—' : (deltaPct(a.leads, b.leads) >= 0 ? 'up' : 'down') + ' ' + Math.abs(deltaPct(a.leads, b.leads)).toFixed(1) + '%'}.`
+      ? `No Won leads in either period - comparing on Leads instead: ${deltaPct(a.leads, b.leads) == null ? '-' : (deltaPct(a.leads, b.leads) >= 0 ? 'up' : 'down') + ' ' + Math.abs(deltaPct(a.leads, b.leads)).toFixed(1) + '%'}.`
       : `Won is ${wonDelta == null ? 'flat' : (wonDelta >= 0 ? 'up' : 'down') + ' ' + Math.abs(wonDelta).toFixed(1) + '%'}${cpsDelta == null ? '' : `, and cost per Won is ${cpsDelta >= 0 ? 'up' : 'down'} ${Math.abs(cpsDelta).toFixed(1)}%`}.`
     return { a, b, rows, verdict }
   }, [compareRowsA, compareRowsB, filters, programs])
@@ -922,13 +922,13 @@ export default function LeverageCareersDashboard() {
       <Sidebar />
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid var(--card-border)', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-        {/* HEADER — same structure/behavior as Overall's own header (floating card, pill
+        {/* HEADER - same structure/behavior as Overall's own header (floating card, pill
             date group, Compare button, Synced/Refreshing tag, spin-on-refresh). */}
         <div style={{ background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`, padding: '10px 28px', minHeight: 56, height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, overflow: 'visible', flexWrap: 'wrap' }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Marketing / Leverage Careers</p>
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
-              Leverage Careers{' — '}<span style={{ fontSize: 13, fontWeight: 600, color: C.blue }}>{windowLabel}</span>
+              Leverage Careers{' - '}<span style={{ fontSize: 13, fontWeight: 600, color: C.blue }}>{windowLabel}</span>
             </h1>
           </div>
           <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflow: 'visible', flexShrink: 1, minWidth: 0 }}>
@@ -1020,7 +1020,7 @@ export default function LeverageCareersDashboard() {
               {/* FUNNEL VIEW */}
               <Card
                 title="Conversion funnel"
-                sub={windowLabel + ' \u2014 leads \u2192 Interested \u2192 Won'}
+                sub={windowLabel + ' - leads \u2192 Interested \u2192 Won'}
               >
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 14 }}>
                   <FunnelColumn title="Pipeline" note="what LeadSquared did with the leads" stages={pipelineStages} accent={C.green} />
@@ -1035,7 +1035,7 @@ export default function LeverageCareersDashboard() {
               {/* CHARTS -- Marketing Performance agent chart treatment: one hue per series,
                   gradient bar fill, hairline horizontal-only grid, circle legend, no flat fills. */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 14 }}>
-                <Card title="Spend and leads" sub={windowLabel + ' \u2014 by day'} noPad>
+                <Card title="Spend and leads" sub={windowLabel + ' - by day'} noPad>
                   <div style={{ padding: '12px 16px 6px' }}>
                     <ResponsiveContainer width="100%" height={230}>
                       <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
@@ -1053,7 +1053,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 </Card>
 
-                <Card title="Cost and conversion" sub={windowLabel + ' \u2014 ' + (costBasis === 'Funnel' ? 'CPL against Won rate (Won (Funnel) / Interested)' : 'CPL against Won (Snapshot) as a count. It is not tied to the same day\u2019s leads, so no rate is shown')} noPad
+                <Card title="Cost and conversion" sub={windowLabel + ' - ' + (costBasis === 'Funnel' ? 'CPL against Won rate (Won (Funnel) / Interested)' : 'CPL against Won (Snapshot) as a count. It is not tied to the same day\u2019s leads, so no rate is shown')} noPad
                   action={(
                     <div style={{ display: 'inline-flex', padding: 2, borderRadius: 9, border: '0.5px solid var(--card-border)' }}>
                       {['Funnel', 'Snapshot'].map(b => (
@@ -1078,7 +1078,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 </Card>
 
-                <Card title="Interested and Won" sub={windowLabel + ' \u2014 by day. Won (Snapshot) is the navy line, separate from the funnel'} noPad>
+                <Card title="Interested and Won" sub={windowLabel + ' - by day. Won (Snapshot) is the navy line, separate from the funnel'} noPad>
                   <div style={{ padding: '12px 16px 6px' }}>
                     <ResponsiveContainer width="100%" height={230}>
                       <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
@@ -1099,7 +1099,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 </Card>
 
-                <Card title="Where the leads come from" sub={windowLabel + ' \u2014 top ' + sourceRanked.length + ' sources by lead volume'}>
+                <Card title="Where the leads come from" sub={windowLabel + ' - top ' + sourceRanked.length + ' sources by lead volume'}>
                   {sourceRanked.length === 0 ? (
                     <div className={styles.empty}>No leads in this window.</div>
                   ) : (
@@ -1113,7 +1113,7 @@ export default function LeverageCareersDashboard() {
               </div>
 
               <div style={{ height: 16 }} />
-              <Card title="Program efficiency" sub={windowLabel + ' \u2014 paid only. Right = more Won, lower = cheaper per Won, bubble = spend. Faded = low volume'}>
+              <Card title="Program efficiency" sub={windowLabel + ' - paid only. Right = more Won, lower = cheaper per Won, bubble = spend. Faded = low volume'}>
                 {programEfficiency.length === 0 ? (
                   <div className={styles.empty}>No paid program has both spend and a Won in this window.</div>
                 ) : (
@@ -1139,7 +1139,7 @@ export default function LeverageCareersDashboard() {
               {/* COHORT VIEW -- lead arrival cohorts, followed through to Won. */}
               <Card
                 title="Cohort view"
-                sub={windowLabel + ' \u2014 every lead grouped by when it arrived, followed to Won'}
+                sub={windowLabel + ' - every lead grouped by when it arrived, followed to Won'}
                 action={<Dropdown label="Cohort" options={['Month', 'Week']} value={cohortBy} onChange={setCohortBy} minWidth={110} />}
               >
                 {cohortRows.length === 0 ? (
@@ -1210,7 +1210,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 }
               >
-                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + (tableDim === 'source' ? ' \u2014 click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'program' ? ' \u2014 campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
+                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + (tableDim === 'source' ? ' - click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'program' ? ' - campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                     <Button
@@ -1280,7 +1280,7 @@ export default function LeverageCareersDashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>Compare periods</div>
-                <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Leverage Careers — breakdown by campaign (Month/Day aren't meaningful when the comparison itself is across time)</div>
+                <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Leverage Careers - breakdown by campaign (Month/Day aren't meaningful when the comparison itself is across time)</div>
               </div>
               <button onClick={() => setCompareOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 20, lineHeight: 1 }}>×</button>
             </div>
@@ -1312,7 +1312,7 @@ export default function LeverageCareersDashboard() {
                   <PremKPI label="WON" value={fmtN(compareResult.a.won)} sub={'vs ' + fmtN(compareResult.b.won)} delta={deltaPct(compareResult.a.won, compareResult.b.won)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 </div>
 
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>What's driving it — by campaign, ranked by |Δ Won|</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>What's driving it - by campaign, ranked by |Δ Won|</div>
                 <div style={{ overflowX: 'auto', marginBottom: 16 }}>
                   <table className={styles.table}>
                     <thead>
@@ -1336,7 +1336,7 @@ export default function LeverageCareersDashboard() {
                   </table>
                 </div>
                 {compareResult.rows.length > 30 && (
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>Showing top 30 of {compareResult.rows.length} campaigns by |Δ Won| — every one is in the export below.</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>Showing top 30 of {compareResult.rows.length} campaigns by |Δ Won| - every one is in the export below.</div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <ExportButton data={compareExportRows} filename="leverage_careers_compare" dashboardId="leverage_careers" />

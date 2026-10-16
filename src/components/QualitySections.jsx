@@ -22,7 +22,7 @@ import { C, FONT, fmtN, Card } from '../ui/dashboardKit'
 const axis = { fontSize: 11, fill: C.muted, fontFamily: FONT }
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }
 const nums = { fontVariantNumeric: 'tabular-nums' }
-const DASH = '\u2014'
+const DASH = '-'
 const MID = '\u00b7'
 const UP = '\u25b2'
 const DOWN = '\u25bc'

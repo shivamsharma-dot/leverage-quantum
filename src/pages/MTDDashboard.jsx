@@ -22,12 +22,12 @@ function parseINR(v){ if(!v)return 0; return parseFloat(String(v).replace(/[^0-9
 function parsePct(v){ if(!v)return 0; return parseFloat(String(v).replace('%',''))||0 }
 function parseNum(v){ if(!v)return 0; return parseInt(String(v).replace(/[^0-9]/g,''))||0 }
 function fmtINR(n){
-  if(!n||n===0)return '\u2014'
+  if(!n||n===0)return '-'
   if(n>=1e7)return '\u20B9'+(n/1e7).toFixed(2)+' Cr'
   return '\u20B9'+Math.round(n).toLocaleString('en-IN')
 }
 function fmtNum(n){
-  if(!n||n===0)return '\u2014'
+  if(!n||n===0)return '-'
   if(n>=1e5)return (n/1e5).toFixed(1)+'L'
   if(n>=1e3)return (n/1e3).toFixed(1)+'K'
   return Math.round(n).toLocaleString('en-IN')
@@ -318,7 +318,7 @@ export default function MTDDashboard(){
               <KPI icon={KPI_ICONS.leads} label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
               <KPI icon={KPI_ICONS.cpl} label='CPL' value={fmtINR(total.cpl)} accent='#1C9FD4' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
               <KPI icon={KPI_ICONS.revenue} label='Total Revenue' value={fmtINR(total.totalRev)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
-              <KPI icon={KPI_ICONS.roas} label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
+              <KPI icon={KPI_ICONS.roas} label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'-'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
 
             <div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>
@@ -326,7 +326,7 @@ export default function MTDDashboard(){
               <KPI icon={KPI_ICONS.pct} label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
               <KPI icon={KPI_ICONS.qual} label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
               <KPI icon={KPI_ICONS.apps} label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps} prorate={prorate}/>
-              <KPI icon={KPI_ICONS.revenue} label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#29B9C3' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
+              <KPI icon={KPI_ICONS.revenue} label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'-'} accent='#29B9C3' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
               <KPI icon={KPI_ICONS.cpl} label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
             </div>
 
@@ -334,17 +334,17 @@ export default function MTDDashboard(){
               const meta=srcs.find(s=>s.source==='Facebook')||srcs.find(s=>/meta|facebook/i.test(s.source))
               const goog=srcs.find(s=>s.source==='Google')||srcs.find(s=>/google/i.test(s.source))
               const pct=v=>(v||0).toFixed(2)+'%'
-              const xx=v=>v>0?v.toFixed(2)+'x':'\u2014'
+              const xx=v=>v>0?v.toFixed(2)+'x':'-'
               const rows=[
-                ['Spend',meta?fmtINR(meta.spend):'\u2014',goog?fmtINR(goog.spend):'\u2014'],
-                ['Leads',meta?fmtNum(meta.leads):'\u2014',goog?fmtNum(goog.leads):'\u2014'],
-                ['CPL',meta?fmtINR(meta.cpl):'\u2014',goog?fmtINR(goog.cpl):'\u2014'],
-                ['FW Qualified',meta?fmtNum(meta.fwQual):'\u2014',goog?fmtNum(goog.fwQual):'\u2014'],
-                ['FW QL%',meta?pct(meta.fwQL):'\u2014',goog?pct(goog.fwQL):'\u2014'],
-                ['Applications',meta?fmtNum(meta.apps):'\u2014',goog?fmtNum(goog.apps):'\u2014'],
-                ['CPQL',meta?fmtINR(meta.cpql):'\u2014',goog?fmtINR(goog.cpql):'\u2014'],
-                ['Revenue',meta?fmtINR(meta.totalRev):'\u2014',goog?fmtINR(goog.totalRev):'\u2014'],
-                ['ROAS',meta?xx(meta.roas):'\u2014',goog?xx(goog.roas):'\u2014'],
+                ['Spend',meta?fmtINR(meta.spend):'-',goog?fmtINR(goog.spend):'-'],
+                ['Leads',meta?fmtNum(meta.leads):'-',goog?fmtNum(goog.leads):'-'],
+                ['CPL',meta?fmtINR(meta.cpl):'-',goog?fmtINR(goog.cpl):'-'],
+                ['FW Qualified',meta?fmtNum(meta.fwQual):'-',goog?fmtNum(goog.fwQual):'-'],
+                ['FW QL%',meta?pct(meta.fwQL):'-',goog?pct(goog.fwQL):'-'],
+                ['Applications',meta?fmtNum(meta.apps):'-',goog?fmtNum(goog.apps):'-'],
+                ['CPQL',meta?fmtINR(meta.cpql):'-',goog?fmtINR(goog.cpql):'-'],
+                ['Revenue',meta?fmtINR(meta.totalRev):'-',goog?fmtINR(goog.totalRev):'-'],
+                ['ROAS',meta?xx(meta.roas):'-',goog?xx(goog.roas):'-'],
               ]
               return <div style={{marginBottom:14}}><Card title='Meta vs Google \u00B7 source split' sub='Side-by-side comparison for the selected month'>
                 <div style={{padding:'6px 14px 14px'}}>
@@ -519,7 +519,7 @@ export default function MTDDashboard(){
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.apps)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.cpql)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',fontWeight:700,color:'#4CAE6F',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.totalRev)}</td>
-                        <td style={{padding:'9px 10px',textAlign:'right',fontWeight:700,color:roasColor(s.roas),fontSize:12.5}}>{s.roas>0?s.roas.toFixed(2)+'x':'—'}</td>
+                        <td style={{padding:'9px 10px',textAlign:'right',fontWeight:700,color:roasColor(s.roas),fontSize:12.5}}>{s.roas>0?s.roas.toFixed(2)+'x':'-'}</td>
                       </tr>
                     })}
                   </tbody>

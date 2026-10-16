@@ -29,7 +29,7 @@ const WIDTH = 30
 export const DEFAULT_REV_VS_CASHFLOW_NOTE = 'P&L revenue is recognised on the date a sale is recorded: AC and Leverage One (E2E) net of 10% and 5% deduction respectively for expected future refunds, SR estimated as Deposits × 75% × ₹3.5L. Cash Flow records actual cash moved, whenever it happens, after verification by the finance team.'
 
 function noteMrkdwn(ctx) {
-  return ':information_source: *Revenue vs Cash Flow* — ' + ((ctx && ctx.revVsCashflowNote) || DEFAULT_REV_VS_CASHFLOW_NOTE)
+  return ':information_source: *Revenue vs Cash Flow* - ' + ((ctx && ctx.revVsCashflowNote) || DEFAULT_REV_VS_CASHFLOW_NOTE)
 }
 
 // Full name for prose, short name for the tables, key into the context.
@@ -52,7 +52,7 @@ const HEADS = [
 
 // With the rupee sign. Prose only.
 function money(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   const a = Math.abs(n)
   const sg = n < 0 ? '-' : ''
   if (a >= CR) return sg + '\u20B9' + (a / CR).toFixed(2) + ' Cr'
@@ -62,7 +62,7 @@ function money(n) {
 
 // A movement, where the sign is the whole point.
 function signed(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   return (n > 0 ? '+' : '') + money(n)
 }
 
@@ -100,7 +100,7 @@ function pct(part, whole) {
 }
 
 function margin(net, rev) {
-  if (net == null || !rev) return '\u2014'
+  if (net == null || !rev) return '-'
   return (net / rev * 100).toFixed(1) + '%'
 }
 
@@ -213,7 +213,7 @@ function buildB2C(ctx) {
   const day = c.day
   const ytd = c.ytd
   const L = []
-  L.push(':bar_chart: *B2C \u2014 cost, revenue and net inflow*')
+  L.push(':bar_chart: *B2C - cost, revenue and net inflow*')
   L.push('_Every figure stops at ' + (c.through || 'the last completed day') + '. The day in progress is never counted._')
 
   // Five money columns will not fit a phone, and a wrapped table is no table
@@ -269,7 +269,7 @@ function buildB2C(ctx) {
     L.push('')
     L.push('_Test send._')
   }
-  return [{ key: 'b2c', label: 'B2C \u2014 cost, revenue and net inflow', text: L.join('\n'), attach: true }]
+  return [{ key: 'b2c', label: 'B2C - cost, revenue and net inflow', text: L.join('\n'), attach: true }]
 }
 
 // -- native full-particulars table ------------------------------------------
@@ -278,8 +278,8 @@ function buildB2C(ctx) {
 // exactly as the Daily P&L page shows it, Last Day / MTD / YTD columns.
 // The page's own Online/Offline subgroup headers are left out here on
 // purpose (Slack asked for one continuous list, the page keeps the headers).
-const cellText = function (v) { return { type: 'raw_text', text: v == null || v === '' ? '—' : String(v) } }
-const cellBold = function (v) { return { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] } }
+const cellText = function (v) { return { type: 'raw_text', text: v == null || v === '' ? '-' : String(v) } }
+const cellBold = function (v) { return { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '-' : String(v), style: { bold: true } }] }] } }
 // Plain string back out of a native-table cell, for the Quantum in-app
 // preview -- TablePreview renders {columns,rows,strongRows} of plain values,
 // it does not know about Slack's raw_text/rich_text cell shapes. A cell built
@@ -332,7 +332,7 @@ function buildB2CFullTable(ctx) {
   L.push(':bar_chart: *B2C - Daily P & L*')
   L.push('_Last completed day, month to date, H1 (Apr-Sep), H2 (Oct-Mar) and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
   return [{
-    key: 'b2c_full', label: 'B2C — full particulars', attach: true,
+    key: 'b2c_full', label: 'B2C - full particulars', attach: true,
     text: L.join('\n'),
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
@@ -403,7 +403,7 @@ function buildB2CFullTableV2(ctx) {
   L.push(':bar_chart: *B2C - Daily P & L*')
   L.push('_Last completed day, month to date, H2 (Oct-Mar), year to date and H1 (Apr-Sep). ' + (c.through ? 'Through ' + c.through + '.' : '') + (partial.length ? ' ' + partial.join('; ') + '.' : '') + '_')
   return [{
-    key: 'b2c_full_v2', label: 'B2C — full particulars', attach: true,
+    key: 'b2c_full_v2', label: 'B2C - full particulars', attach: true,
     text: L.join('\n'),
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
@@ -424,7 +424,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   id: 'b2c_full_v2',
   code: 'B2C-FULL-2',
   msgKeys: ['b2c_full_v2'],
-  name: 'B2C — full particulars V2 (native table)',
+  name: 'B2C - full particulars V2 (native table)',
   tagline: 'Last Day / MTD / H2 / YTD / H1, one revenue row each for SR, AC and Leverage One (Online + Offline).',
   what: [
     'Five columns in this order: Last Day, MTD, H2 (Oct-Mar), year to date, H1 (Apr-Sep)',
@@ -438,7 +438,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   id: 'b2c_full',
   code: 'B2C-FULL',
   msgKeys: ['b2c_full'],
-  name: 'B2C — full particulars (native table)',
+  name: 'B2C - full particulars (native table)',
   tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / H1 / H2 / YTD.',
   what: [
     'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, Contribution Profit, then EBITDA After Corp. Overheads',
@@ -459,7 +459,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
 // Day/MTD/FY split (the source has no daily granularity at all, so there is
 // no 'Last Day' column here, unlike buildB2CFullTable's P&L table above).
 function crAmt(n) {
-  if (n == null || !isFinite(n)) return '—'
+  if (n == null || !isFinite(n)) return '-'
   const sg = n < 0 ? '-' : ''
   return sg + '₹' + Math.abs(n).toFixed(2) + ' Cr'
 }
@@ -635,7 +635,7 @@ function buildB2CCashflowImage(ctx) {
   const c = ctx || {}
   const cf = c.cfStatement || {}
   const L = []
-  L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' — Cash Flow*')
+  L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' - Cash Flow*')
   L.push(noteMrkdwn(c))
   return [{
     key: 'b2c_cashflow_image', label: 'B2C - Daily Cashflow (sheet image)', attach: true, imageIsMessage: true,
@@ -653,7 +653,7 @@ function buildB2CCashflowImageV2(ctx) {
   const c = ctx || {}
   const cf = c.cfStatementV2 || c.cfStatement || {}
   const L = []
-  L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' — Cash Flow*')
+  L.push(':bar_chart: *' + (cf.title || 'B2C Student Mobility') + ' - Cash Flow*')
   L.push(noteMrkdwn(c))
   return [{
     key: 'b2c_cashflow_image_v2', label: 'B2C - Daily Cashflow V2 (sheet image)', attach: true, imageIsMessage: true,
@@ -725,7 +725,7 @@ export const B2C_REPORT_VERSIONS = [{
   id: 'b2c',
   code: 'B2C',
   msgKeys: ['b2c'],
-  name: 'B2C \u2014 cost, revenue and net inflow',
+  name: 'B2C - cost, revenue and net inflow',
   tagline: 'Day, month and financial year in phone sized tables, then what went wrong and what would close it.',
   what: [
     'The three periods across two narrow tables: revenue and cost, then net inflow and margin',

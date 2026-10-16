@@ -1,4 +1,4 @@
-/* Leverage Quantum — Service Worker
+/* Leverage Quantum - Service Worker
  * Network-first strategy: ALWAYS prefer fresh content, fall back to cache only when offline.
  * This deliberately avoids cache-first to prevent stale JS/CSS chunks after Vercel redeploys
  * (see CLAUDE.md: React.lazy stale-chunk learning). Safe for an internal dashboard.

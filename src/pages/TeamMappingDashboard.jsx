@@ -517,7 +517,7 @@ function ClockIcon() {
 function GroupsButton({ groups }) {
   const [open, setOpen] = useState(false)
   const n = (groups || []).length
-  if (!n) return <span style={{ fontSize: 11.5, color: C.muted }}>—</span>
+  if (!n) return <span style={{ fontSize: 11.5, color: C.muted }}>-</span>
   return (
     <>
       <button
@@ -664,7 +664,7 @@ function LiveDetailStrip({ userId }) {
         { label: 'Virtual DID', get: dt => dt?.airtelNumber },
         { label: 'Reporting Manager', get: dt => dt?.managerName, sub: dt => dt?.managerEmail },
       ].map(({ label, get, sub: getSub }) => {
-        const val = loading ? '…' : (get(detail) || '—')
+        const val = loading ? '…' : (get(detail) || '-')
         const sub = getSub && !loading ? getSub(detail) : null
         return (
           <div key={label}>
@@ -716,12 +716,12 @@ function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, acCou
   }
 
   return (
-    <Modal onClose={onClose} title={'Manual mapping — ' + user.name}>
+    <Modal onClose={onClose} title={'Manual mapping - ' + user.name}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <Avatar name={user.name} size={34} />
         <div>
           <div style={{ fontSize: 12.5, color: C.muted }}>{user.email} · {(user.role || '').replace(/_/g, ' ')} (LS Role) · <StatusBadge status={user.status} /></div>
-          {staleD != null && staleD >= STALE_DAYS && <div style={{ fontSize: 11, color: C.navy, fontWeight: 700, marginTop: 2 }}>Last touched {staleD} days ago — worth confirming this is still right</div>}
+          {staleD != null && staleD >= STALE_DAYS && <div style={{ fontSize: 11, color: C.navy, fontWeight: 700, marginTop: 2 }}>Last touched {staleD} days ago - worth confirming this is still right</div>}
         </div>
       </div>
       <LiveDetailStrip userId={user.id} />
@@ -811,7 +811,7 @@ function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, acCoun
   }
 
   return (
-    <Modal onClose={onClose} title={`Bulk edit — ${users.length} selected`} width={640}>
+    <Modal onClose={onClose} title={`Bulk edit - ${users.length} selected`} width={640}>
       <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
         Tick a field to apply ONE value to all {users.length} people. Anything left unticked keeps each
         person's own existing value. Keep this tab open until it finishes -- each save is logged and
@@ -1149,7 +1149,7 @@ function FileOrPasteInput({ onParsed, parseFn, accept = '.csv,.tsv,.txt', fileHi
           }}
         >
           <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
-          <div style={{ fontSize: 11.5, color: C.muted }}>{fileHint || '.csv, .tsv or .txt — first row must be real column headers'}</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>{fileHint || '.csv, .tsv or .txt - first row must be real column headers'}</div>
           <input ref={fileRef} type="file" accept={accept} onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
         </div>
       ) : (
@@ -1194,7 +1194,7 @@ function BulkImportModal({ onClose, onStarted }) {
 
       {parsed && parsed.binary && (
         <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
-          "{label}" doesn't look like a text CSV — if this is an Excel file, use File → Save As → CSV (Comma delimited) first, then upload that.
+          "{label}" doesn't look like a text CSV - if this is an Excel file, use File → Save As → CSV (Comma delimited) first, then upload that.
           <div style={{ marginTop: 8 }}><Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Try another file</Button></div>
         </div>
       )}
@@ -1229,7 +1229,7 @@ function BulkImportModal({ onClose, onStarted }) {
                     {parsed.rows.slice(0, 3).map((row, i) => (
                       <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
                         {Object.keys(parsed.rows[0]).map(k => (
-                          <td key={k} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{row[k] || '—'}</td>
+                          <td key={k} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{row[k] || '-'}</td>
                         ))}
                       </tr>
                     ))}
@@ -1289,20 +1289,20 @@ function MappingStep({ table, fieldMap, setFieldMap }) {
             return (
               <tr key={f.key} style={{ borderTop: '0.5px solid ' + C.border }}>
                 <td style={{ padding: '9px 12px', width: 30 }}>
-                  {mapped ? <CheckGlyph color={C.green} /> : f.required ? <AlertGlyph color={C.navy} /> : <span style={{ color: C.muted }}>—</span>}
+                  {mapped ? <CheckGlyph color={C.green} /> : f.required ? <AlertGlyph color={C.navy} /> : <span style={{ color: C.muted }}>-</span>}
                 </td>
                 <td style={{ padding: '9px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
                   {f.label}{f.required && <span style={{ color: C.navy }}> *</span>}
                 </td>
                 <td style={{ padding: '9px 12px' }}>
                   <Dropdown
-                    options={['— Not mapped —', ...table.headers]}
-                    value={mapped || '— Not mapped —'}
-                    onChange={v => setFieldMap(m => ({ ...m, [f.key]: v === '— Not mapped —' ? '' : v }))}
+                    options={['- Not mapped -', ...table.headers]}
+                    value={mapped || '- Not mapped -'}
+                    onChange={v => setFieldMap(m => ({ ...m, [f.key]: v === '- Not mapped -' ? '' : v }))}
                     minWidth={220}
                   />
                 </td>
-                <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11.5 }}>{samples.length ? samples.join('  ·  ') : '—'}</td>
+                <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11.5 }}>{samples.length ? samples.join('  ·  ') : '-'}</td>
               </tr>
             )
           })}
@@ -1319,7 +1319,7 @@ function MappingStep({ table, fieldMap, setFieldMap }) {
 // LeadSquared write happens rather than only discovered afterward.
 function DataImportStep({ resolved, lookups }) {
   const { rows, skipped } = resolved
-  const cell = (v, ok) => <span style={{ color: !v ? C.muted : (ok ? C.text : C.navy), fontWeight: (v && !ok) ? 700 : 400 }}>{v || '—'}</span>
+  const cell = (v, ok) => <span style={{ color: !v ? C.muted : (ok ? C.text : C.navy), fontWeight: (v && !ok) ? 700 : 400 }}>{v || '-'}</span>
   return (
     <div>
       <div style={{ fontSize: 12.5, color: C.text, marginBottom: 10 }}>
@@ -1342,13 +1342,13 @@ function DataImportStep({ resolved, lookups }) {
               return (
                 <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.first_name}</td>
-                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.last_name || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.last_name || '-'}</td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.email}</td>
-                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.role || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.role || '-'}</td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{cell(row.team_name, teamOk)}</td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{cell(row.manager_email, mgrOk)}</td>
-                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.phone || '—'}</td>
-                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.virtual_did || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.phone || '-'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.virtual_did || '-'}</td>
                   <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{cell(row.permission_template, tplOk)}</td>
                 </tr>
               )
@@ -1358,7 +1358,7 @@ function DataImportStep({ resolved, lookups }) {
         {rows.length > 25 && <div style={{ padding: '6px 10px', fontSize: 11, color: C.muted }}>+ {fmtN(rows.length - 25)} more row(s)</div>}
       </div>
       <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>
-        <span style={{ color: C.navy, fontWeight: 700 }}>Navy</span> means that value doesn't match anyone in the roster / any available template — the person will still be created, just without that field set (fix it in LeadSquared afterward, or go back and remap).
+        <span style={{ color: C.navy, fontWeight: 700 }}>Navy</span> means that value doesn't match anyone in the roster / any available template - the person will still be created, just without that field set (fix it in LeadSquared afterward, or go back and remap).
       </div>
     </div>
   )
@@ -1506,7 +1506,7 @@ function AddUserPage({ onBack, onBulkStarted, rows, rosterEmails, onCreated }) {
               {form.permissionTemplateId && (
                 createResult.templateApplied
                   ? <div style={{ marginTop: 4 }}>Permission template applied.</div>
-                  : <div style={{ marginTop: 4, color: C.navy }}>User created, but the permission template failed to apply{createResult.templateError ? `: ${createResult.templateError}` : ''} — apply it manually in LeadSquared.</div>
+                  : <div style={{ marginTop: 4, color: C.navy }}>User created, but the permission template failed to apply{createResult.templateError ? `: ${createResult.templateError}` : ''} - apply it manually in LeadSquared.</div>
               )}
               <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                 <Button size="sm" variant="ghost" onClick={() => { setCreateResult(null); setForm(blankForm) }}>Create another</Button>
@@ -1554,7 +1554,7 @@ function AddUserPage({ onBack, onBulkStarted, rows, rosterEmails, onCreated }) {
               <div style={{ marginBottom: 12 }}>
                 <span style={smallLabelStyle}>Permission Template</span>
                 {templatesError ? (
-                  <div style={{ fontSize: 11.5, color: C.muted }}>Couldn't load templates ({templatesError}) — user can still be created without one.</div>
+                  <div style={{ fontSize: 11.5, color: C.muted }}>Couldn't load templates ({templatesError}) - user can still be created without one.</div>
                 ) : (
                   <Dropdown
                     options={['None', ...(templates || []).map(t => t.name)]}
@@ -1584,12 +1584,12 @@ function AddUserPage({ onBack, onBulkStarted, rows, rosterEmails, onCreated }) {
               <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                 <Button variant="ghost" size="sm" onClick={downloadCreateUsersTemplate}>Download template (CSV)</Button>
               </div>
-              <FileOrPasteInput onParsed={onParsedTable} parseFn={parseRawTable} fileHint=".csv, .tsv or .txt — first row must be real column headers" />
+              <FileOrPasteInput onParsed={onParsedTable} parseFn={parseRawTable} fileHint=".csv, .tsv or .txt - first row must be real column headers" />
             </Card>
           )}
 
           {step === 2 && table && (
-            <Card title="2. Mapping" sub={`${srcLabel} — ${fmtN(table.rows.length)} row(s). Match each field to a column from your file.`}
+            <Card title="2. Mapping" sub={`${srcLabel} - ${fmtN(table.rows.length)} row(s). Match each field to a column from your file.`}
               action={<Button variant="ghost" size="sm" onClick={resetBulk}>Choose a different file</Button>}>
               <MappingStep table={table} fieldMap={fieldMap} setFieldMap={setFieldMap} />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
@@ -1727,7 +1727,7 @@ function ActivityDetail({ row }) {
     return (
       <div style={{ fontSize: 11.5, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
         {detail.added == null ? (
-          <div style={{ color: C.muted }}>First push logged — nothing to compare against yet.</div>
+          <div style={{ color: C.muted }}>First push logged - nothing to compare against yet.</div>
         ) : (
           <>
             {detail.added.length > 0 && <div><span style={{ color: C.green, fontWeight: 700 }}>+{detail.added.length} added:</span> <span style={{ color: C.muted }}>{detail.added.slice(0, 6).join(', ')}{detail.added.length > 6 ? '…' : ''}</span></div>}
@@ -1875,7 +1875,7 @@ function HistoryTab({ onBack }) {
           <div style={{ fontSize: 13.5, fontWeight: 800, color: C.navy, marginBottom: 4 }}>History isn't set up yet</div>
           <div style={{ fontSize: 12.5, color: C.text }}>
             Run <code style={{ background: 'var(--bg3)', padding: '1px 6px', borderRadius: 5 }}>supabase/sql/team_mapping_activity_setup.sql</code> once
-            in the Supabase SQL editor. Imports, exports and edits already happen normally either way — this only affects whether they're logged here.
+            in the Supabase SQL editor. Imports, exports and edits already happen normally either way - this only affects whether they're logged here.
           </div>
         </div>
       ) : (
@@ -1883,15 +1883,15 @@ function HistoryTab({ onBack }) {
           { label: 'Total Imports', value: fmtN(stats.totalImports), sub: 'all-time runs' },
           { label: 'Rows Mapped', value: fmtN(stats.rowsMapped), sub: 'across every import' },
           { label: 'Edits & Deletes', value: fmtN(stats.totalEdits), sub: 'manual changes, all-time' },
-          { label: 'Last Activity', value: stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '—', sub: stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet' },
+          { label: 'Last Activity', value: stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '-', sub: stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet' },
         ]} />
       )}
 
       {running && progress && <LiveImportCard progress={progress} />}
 
-      <Card title="All activity" sub="Imports, exports, edits, deletes and restores — most recent first" noPad>
+      <Card title="All activity" sub="Imports, exports, edits, deletes and restores - most recent first" noPad>
         {!rows && !notSetUp ? <div style={{ padding: 32 }}><InlineLoader label="Loading history" height={140} /></div> : notSetUp ? null : rows.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet — imports, exports and edits will show up here.</div>
+          <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet - imports, exports and edits will show up here.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {rows.map((r, i) => {
@@ -1911,7 +1911,7 @@ function HistoryTab({ onBack }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{r.type}</span>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label || '—'}</span>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label || '-'}</span>
                       <span style={{ fontSize: 10, fontWeight: 800, color: statusColor(status), background: statusBg(status), padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>{status}</span>
                     </div>
                     {(r.type === 'import' || r.type === 'create_users') && (
@@ -2378,7 +2378,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
       {importRunning && importProgress && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: C.blueBg, marginBottom: 12, fontSize: 12.5, color: C.navy, fontWeight: 700 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.blue, flexShrink: 0 }} />
-          Importing "{importProgress.label}" in background — {importProgress.done} of {importProgress.total}
+          Importing "{importProgress.label}" in background - {importProgress.done} of {importProgress.total}
           <span onClick={onOpenHistory} style={{ marginLeft: 'auto', cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>View progress</span>
         </div>
       )}
@@ -2386,7 +2386,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
       {createUsersRunning && createUsersProgress && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: C.greenBg, marginBottom: 12, fontSize: 12.5, color: C.text, fontWeight: 700 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
-          Creating users "{createUsersProgress.label}" in background — {createUsersProgress.done} of {createUsersProgress.total}
+          Creating users "{createUsersProgress.label}" in background - {createUsersProgress.done} of {createUsersProgress.total}
           <span onClick={onOpenHistory} style={{ marginLeft: 'auto', cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>View progress</span>
         </div>
       )}
@@ -2457,15 +2457,15 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
               <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 360, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: C.text, lineHeight: 1.55 }}>
                 <div style={{ fontWeight: 800, color: C.navy, marginBottom: 8 }}>How this roster works</div>
                 <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <li>Name/Email/LS Role/Status/Groups/Team/Phone/Reporting Manager — live from LeadSquared, one bulk call for the whole roster.</li>
-                  <li>Virtual DID — the one field with no bulk source; loads per page, briefly shows "…" on a page you haven't opened yet.</li>
-                  <li>ASM/SM, SSM, Role, Country, Centre Name — the only manually entered fields.</li>
-                  <li>Region — computed. "Indian"/"International" from Virtual DID, only on "University Admission Opportunity"; "—" elsewhere. Only "Indian" is ever pushed to Futwork (blocked server-side too).</li>
-                  <li>No Virtual DID on that team? A muted "Main: Indian/International" hint from the Main Phone shows instead — informational only.</li>
-                  <li>Futwork Project — every Sales Group this person is in that maps to a bucket, shown exactly: "Admission Consulting", "Student Recruitment", "Online Team MBBS", "Online Team Dubai", "Online Team Canada", or an Offline centre name (e.g. "Assam Guwahati"). In more than one at once — all of them, joined.</li>
-                  <li>Call Transfer — "Yes" whenever Futwork Project resolves to anything above; "—" otherwise.</li>
-                  <li>Country — live by default, same as Group/Team: Dubai → "DUBAI", MBBS → "MBBS", Canada → "Canada", Offline → the exact group name, Admission Consulting/Student Recruitment → that label. Shown in italic muted text until someone manually picks a real one from the dropdown (which still shows the full country list — "Edit country lists" on Sales Groups changes what that list contains). A manual pick always wins over the live default.</li>
-                  <li>+ Filter — filter by any column, including Futwork Project. Region there reads the same coach-directory cache the Frapp push uses{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''} — resync via Connectors → "Sync coach directory" if it looks stale. Futwork Project/Call Transfer are instant, no cache needed.</li>
+                  <li>Name/Email/LS Role/Status/Groups/Team/Phone/Reporting Manager - live from LeadSquared, one bulk call for the whole roster.</li>
+                  <li>Virtual DID - the one field with no bulk source; loads per page, briefly shows "…" on a page you haven't opened yet.</li>
+                  <li>ASM/SM, SSM, Role, Country, Centre Name - the only manually entered fields.</li>
+                  <li>Region - computed. "Indian"/"International" from Virtual DID, only on "University Admission Opportunity"; "-" elsewhere. Only "Indian" is ever pushed to Futwork (blocked server-side too).</li>
+                  <li>No Virtual DID on that team? A muted "Main: Indian/International" hint from the Main Phone shows instead - informational only.</li>
+                  <li>Futwork Project - every Sales Group this person is in that maps to a bucket, shown exactly: "Admission Consulting", "Student Recruitment", "Online Team MBBS", "Online Team Dubai", "Online Team Canada", or an Offline centre name (e.g. "Assam Guwahati"). In more than one at once - all of them, joined.</li>
+                  <li>Call Transfer - "Yes" whenever Futwork Project resolves to anything above; "-" otherwise.</li>
+                  <li>Country - live by default, same as Group/Team: Dubai → "DUBAI", MBBS → "MBBS", Canada → "Canada", Offline → the exact group name, Admission Consulting/Student Recruitment → that label. Shown in italic muted text until someone manually picks a real one from the dropdown (which still shows the full country list - "Edit country lists" on Sales Groups changes what that list contains). A manual pick always wins over the live default.</li>
+                  <li>+ Filter - filter by any column, including Futwork Project. Region there reads the same coach-directory cache the Frapp push uses{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''} - resync via Connectors → "Sync coach directory" if it looks stale. Futwork Project/Call Transfer are instant, no cache needed.</li>
                 </ul>
               </div>
             </>
@@ -2551,13 +2551,13 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                         <span style={{ fontWeight: 700, color: C.text }}>{r.name}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '9px 12px', color: C.muted, whiteSpace: 'nowrap' }}>{r.email || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.muted, whiteSpace: 'nowrap' }}>{r.email || '-'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{(r.role || '').replace(/_/g, ' ')}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status} /></td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><GroupsButton groups={r.groups} /></td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.teamName || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.phoneMain || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pendingDid ? '…' : (d.airtelNumber || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.teamName || '-'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.phoneMain || '-'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pendingDid ? '…' : (d.airtelNumber || '-')}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       {(onFrappTeam && pendingDid) ? '…' : (() => {
                         const region = classifyDidRegion(r.teamName, d?.airtelNumber)
@@ -2566,32 +2566,32 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                         // there's still a Main Phone on file, show what IT suggests as a muted,
                         // clearly-secondary hint, never as if it were the real/enforced value.
                         const hint = onFrappTeam ? mainPhoneRegionHint(r.phoneMain) : null
-                        if (!hint) return <span style={{ color: C.muted }}>—</span>
+                        if (!hint) return <span style={{ color: C.muted }}>-</span>
                         return <span style={{ color: C.muted, fontSize: 11.5 }} title="No Virtual DID on file -- this reflects the Main Phone number instead, not the enforced Frapp region">Main: {hint}</span>
                       })()}
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Every Sales Group this person is actually in that maps to a bucket: Admission Consulting / Student Recruitment / Online Team MBBS / Online Team Dubai / Online Team Canada / an Offline centre name -- joined if more than one matches.">
                       {r._futworkProject
                         ? <span style={{ color: C.text }}>{r._futworkProject}</span>
-                        : <span style={{ color: C.muted }}>—</span>}
+                        : <span style={{ color: C.muted }}>-</span>}
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Yes whenever Futwork Project resolves to one bucket above -- no Team, Role, or phone check anymore">
                       {r._callTransfer === 'Yes'
                         ? <span style={{ fontWeight: 700, color: C.green }}>Yes</span>
-                        : <span style={{ color: C.muted }}>—</span>}
+                        : <span style={{ color: C.muted }}>-</span>}
                     </td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={r.managerEmail || ''}>{r.managerName || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.ssm || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.role || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={r.managerEmail || ''}>{r.managerName || '-'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '-'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.ssm || '-'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.role || '-'}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       {r.manual?.country
                         ? <span style={{ color: C.text }}>{r.manual.country}</span>
                         : r._liveCountry
                           ? <span style={{ color: C.muted, fontStyle: 'italic' }} title="Live default from Sales Group -- nobody's picked one manually">{r._liveCountry}</span>
-                          : <span style={{ color: C.muted }}>—</span>}
+                          : <span style={{ color: C.muted }}>-</span>}
                     </td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.centre_name || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.centre_name || '-'}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Button size="sm" variant={r.manual ? 'secondary' : 'primary'} onClick={() => setEditUser(r)}>{r.manual ? 'Edit' : 'Map'}</Button>
@@ -2710,7 +2710,7 @@ function CountryListsModal({ onClose }) {
       <p style={{ fontSize: 12, color: C.muted, marginTop: 0, marginBottom: 14 }}>
         Comma-separated. These are what the Country dropdown offers for Admission Consulting and
         Student Recruitment on the Roster's Edit modal. Dubai/MBBS/Canada/Offline aren't listed
-        here — those always resolve to one exact value on their own, nothing to pick.
+        here - those always resolve to one exact value on their own, nothing to pick.
       </p>
       {loading ? <InlineLoader label="Loading" /> : (
         <>
@@ -2770,7 +2770,7 @@ function GroupsTab({ isAdmin, registerRefresh }) {
     <div>
       <p style={{ fontSize: 12, color: C.muted, marginTop: 0, marginBottom: 14 }}>
         LeadSquared has no dedicated API for Sales Groups on this account, so this list is
-        reconstructed by grouping every user's live <code>MemberOfGroups</code> membership —
+        reconstructed by grouping every user's live <code>MemberOfGroups</code> membership -
         the group count matches LeadSquared's own Manage Sales Groups screen exactly. Per-group
         metadata that screen shows (Managers, Modified On) has no live-API source and isn't shown here.
       </p>
@@ -2945,7 +2945,7 @@ function ConnectorsTab() {
         <Card title="Read-only API" sub="An external script pulls this on its own schedule">
           <label style={enableRowStyle}>
             <input type="checkbox" checked={!!form.api_enabled} onChange={e => save('api', { api_enabled: e.target.checked })} style={{ width: 15, height: 15 }} disabled={!form.api_key} />
-            Enabled{!form.api_key && <span style={{ fontWeight: 500, color: C.muted, textTransform: 'none' }}> — generate a key first</span>}
+            Enabled{!form.api_key && <span style={{ fontWeight: 500, color: C.muted, textTransform: 'none' }}> - generate a key first</span>}
           </label>
           {form.api_key ? (
             <>
@@ -3303,7 +3303,7 @@ function WatcherModal({ node, watchers, onClose, onChanged }) {
   }
 
   return (
-    <Modal onClose={onClose} title={'Watchers — ' + node.label} width={480}>
+    <Modal onClose={onClose} title={'Watchers - ' + node.label} width={480}>
       <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
         Anyone added here gets a Slack DM whenever someone joins, leaves, or moves out of this team.
         Needs a real @leverageedu.com Slack account -- not a Quantum login.

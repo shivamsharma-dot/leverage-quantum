@@ -1654,7 +1654,7 @@ export default function LeadQualificationDashboard({ forcedView, embedded, initi
               </div>
               {verticalFocus && (
                 <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
-                  Scoped to <b>{verticalFocus}</b> — click the card again to clear.
+                  Scoped to <b>{verticalFocus}</b> - click the card again to clear.
                 </div>
               )}
 

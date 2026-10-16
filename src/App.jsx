@@ -42,9 +42,9 @@ const CeoB2CDashboard = lazy(COMPONENT_IMPORTS.CeoB2CDashboard)
 const MarketingReviewDashboard = lazy(COMPONENT_IMPORTS.MarketingReviewDashboard)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
-// Suspense fallback — slim skeleton shown while lazy chunk loads
+// Suspense fallback - slim skeleton shown while lazy chunk loads
 
-// Page title map — dynamic titles per route
+// Page title map - dynamic titles per route
 const PAGE_TITLES = {
   '/': 'Summary',
   '/dashboard/overall': 'Overall',
@@ -128,7 +128,7 @@ function PageLoader() {
 // direct URL access in the client.
 const canAccess = canAccessDashboard
 
-// Ordered fallback for a denied route — first entry the role can actually access.
+// Ordered fallback for a denied route - first entry the role can actually access.
 // Preferred picks first (the app's most common landing pages), then EVERY other
 // real page from PAGE_LIST as a safety net. The old 3-entry list (home/roas/
 // meta_ads only) meant a custom-role account whose grants sit entirely outside
@@ -182,7 +182,7 @@ function ProtectedRoute({ children, dashboardId }) {
     document.title = base ? `${base} | Leverage Quantum` : 'Leverage Quantum'
   }, [location.pathname])
 
-  // Activity logging — page view + dwell time on leave
+  // Activity logging - page view + dwell time on leave
   useEffect(() => {
     if (user?.email && dashboardId) {
       logActivity(user.email, 'view', location.pathname, 'Viewed ' + pageLabel(location.pathname))
@@ -247,7 +247,7 @@ function ProtectedRoute({ children, dashboardId }) {
   )
 }
 
-// Error boundary — catches React render crashes, shows clean fallback
+// Error boundary - catches React render crashes, shows clean fallback
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null } }
   static getDerivedStateFromError(error) { return { hasError: true, error } }

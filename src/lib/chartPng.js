@@ -199,7 +199,7 @@ function barPngTall(spec) {
     g.fillStyle = SUB
     g.font = '500 14px ' + FONT
     g.textAlign = 'right'
-    g.fillText('Striped bars run past the axis \u2014 the real figure is written above', x1, ly)
+    g.fillText('Striped bars run past the axis - the real figure is written above', x1, ly)
   }
 
   return cv.toDataURL('image/png').split(',')[1]

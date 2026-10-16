@@ -1,5 +1,5 @@
 /* ============================================================
-   SETTINGS — clean / minimal (Apple · Linear)
+   SETTINGS - clean / minimal (Apple · Linear)
    Matched pair with SettingsPage.jsx. All class names used by
    the JSX live here; no inline styles in the component.
    ============================================================ */
@@ -324,7 +324,7 @@
 }
 
 /* ============================================================
-   USER ACCESS — SingleInterface-style layout · Quantum brand
+   USER ACCESS - SingleInterface-style layout · Quantum brand
    ============================================================ */
 .uaHeader { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 16px; }
 .uaTitle { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin: 0 0 4px; }
@@ -549,7 +549,7 @@
 .rtChip.rtChipOn { background:linear-gradient(135deg, #1F3C84, #1C9FD4); border-color:transparent; color:#fff; }
 
 /* ============================================================
-   Report email preview (rp*) — live Gmail-style preview
+   Report email preview (rp*) - live Gmail-style preview
 ============================================================ */
 .rpModalCard { width:760px; max-width:calc(100vw - 32px); max-height:calc(100vh - 64px); overflow-y:auto;
                 background:var(--card); border-radius:18px; padding:22px 24px 20px; box-shadow:0 30px 60px -20px rgba(0,0,0,.35);
@@ -643,7 +643,7 @@
 
 
 /* ============================================================
-   Activity Log — user search bar
+   Activity Log - user search bar
    ============================================================ */
 .alSearch { display:flex; align-items:center; gap:8px; margin-top:14px; margin-bottom:10px; padding:8px 12px; max-width:320px; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--text-3); transition:border-color .15s ease, box-shadow .15s ease; }
 .alSearch:focus-within { border-color:var(--border); box-shadow:none; }
@@ -663,7 +663,7 @@
 .bqClear:hover { color: var(--brand-ink); }
 
 /* ============================================================
-   AUG 2026 — SETTINGS DESIGN-CONSISTENCY PASS
+   AUG 2026 - SETTINGS DESIGN-CONSISTENCY PASS
    Appended last on purpose. Settings grew feature-by-feature and
    the control metrics / radii / focus states drifted apart; this
    block normalises them without rewriting the per-feature

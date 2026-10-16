@@ -65,7 +65,7 @@
 // sheet-derived Overall Total QL entirely (confirmed directly), unlike the
 // broader "Total QLs" definition used everywhere else in this app.
 
-const DASH = '—'
+const DASH = '-'
 const pctText = n => (n == null ? DASH : n.toFixed(1) + '%')
 
 // Marketing Spend reads as crores/lakhs at exec scale (2026-09-10, asked for
@@ -127,8 +127,8 @@ function outcomesTable(s, fmtN) {
     ['Total QL', fmtN(s.totalQL)],
   ]
   if (s.qlSplitAvailable) {
-    rows.push(['— SR', s.srQl == null ? DASH : fmtN(s.srQl)], ['— AC', s.acQl == null ? DASH : fmtN(s.acQl)])
-    if (s.superbotQl) rows.push(['— Superbot (not split by vertical)', fmtN(s.superbotQl)])
+    rows.push(['- SR', s.srQl == null ? DASH : fmtN(s.srQl)], ['- AC', s.acQl == null ? DASH : fmtN(s.acQl)])
+    if (s.superbotQl) rows.push(['- Superbot (not split by vertical)', fmtN(s.superbotQl)])
   }
   rows.push(
     ['Applications', s.totalApps == null ? DASH : fmtN(s.totalApps)],
@@ -145,13 +145,13 @@ export function buildV8(ctx) {
   const fmtN = ctx.fmtN || (v => String(Math.round(v || 0)))
 
   if (!s) {
-    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency*', 'Still building this report — reopen the panel in a moment.'].filter(Boolean).join('\n') }]
+    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency*', 'Still building this report - reopen the panel in a moment.'].filter(Boolean).join('\n') }]
   }
   if (s.ready === false) {
     return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency*', 'Could not build this report: ' + (s.error || 'unknown error') + '. Try reopening the panel.'].filter(Boolean).join('\n') }]
   }
   if (s.noCompleteDays) {
-    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*', 'No complete day has happened yet this month — check back tomorrow.'].filter(Boolean).join('\n') }]
+    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency - ' + s.monthLabel + '*', 'No complete day has happened yet this month - check back tomorrow.'].filter(Boolean).join('\n') }]
   }
 
   const msgs = []
@@ -159,13 +159,13 @@ export function buildV8(ctx) {
   const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
   // CPL / CPQL need the Settings cost-metric exclusions; if they could not be loaded the table above shows
   // the plain spend / leads figures and says so (the panel retries once each time it is opened).
-  const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions — they could not be loaded just now; reopen the panel._' : null
+  const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions - they could not be loaded just now; reopen the panel._' : null
   // The QL Split sheet is the source for the Overall row's Total QL / SR / AC; when it is not filled
   // through yesterday yet the BigQuery count is used instead and the reader is told (2026-10-05).
-  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts — the Monthly QLs data could not be loaded just now._' : null
+  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts - the Monthly QLs data could not be loaded just now._' : null
   const one = [
     testLine(ctx),
-    '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
+    '*:bar_chart: Marketing Efficiency - ' + s.monthLabel + '*',
     dateLine,
     exclNote,
   ]

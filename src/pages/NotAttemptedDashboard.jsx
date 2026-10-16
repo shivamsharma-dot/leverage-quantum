@@ -57,7 +57,7 @@ const VIEWS = [
     mode: 'not_attempted_opportunities',
     label: 'Not Attempted',
     title: 'Not Attempted',
-    subtitle: 'Opportunities queued to Futwork or Futwork AI whose Last Disposition is still a "call queued" placeholder — the first call has never actually gone out.',
+    subtitle: 'Opportunities queued to Futwork or Futwork AI whose Last Disposition is still a "call queued" placeholder - the first call has never actually gone out.',
     kpiLabel: 'Not Attempted',
     kpiSub: 'Queued, no call yet',
     emptyMessage: 'No not-attempted opportunities in this window.',
@@ -66,7 +66,7 @@ const VIEWS = [
       <>
         <div><b>Human:</b> Last Disposition from Futwork = "Call queued successfully at Futwork".</div>
         <div><b>AI:</b> Last Disposition from Futwork AI = "Call queued successfully at Futwork AI" or "Call queued successfully at AI Futwork".</div>
-        <div style={{ marginTop: 6 }}>Either value means the lead was routed but no call has come back with a real disposition yet — not a QL, not a non-QL, just untouched.</div>
+        <div style={{ marginTop: 6 }}>Either value means the lead was routed but no call has come back with a real disposition yet - not a QL, not a non-QL, just untouched.</div>
       </>
     ),
   },
@@ -75,20 +75,20 @@ const VIEWS = [
     mode: 'attempted_not_closed_opportunities',
     label: 'Attempted, Not Closed',
     title: 'Attempted, Not Closed',
-    subtitle: 'A real call was made and a real disposition recorded (Not Connected, Disqualified, Schedule Call Back, etc.) — but the Opportunity was never closed out. Status is still Open when it should be Lost.',
+    subtitle: 'A real call was made and a real disposition recorded (Not Connected, Disqualified, Schedule Call Back, etc.) - but the Opportunity was never closed out. Status is still Open when it should be Lost.',
     kpiLabel: 'Attempted, Not Closed',
     kpiSub: 'Real disposition, still Open',
     emptyMessage: 'No attempted-but-unclosed opportunities in this window.',
     infoTitle: 'What "Attempted, Not Closed" means',
     infoBody: (
       <>
-        <div>A real, terminal disposition (Not Connected, Not Interested, Disqualified, Schedule Call Back, Busy or Improper Response, Voicemail, Wrong Number, Language Barrier, and similar) is present on the Human or AI disposition field — the call genuinely happened.</div>
-        <div style={{ marginTop: 6 }}>But the Opportunity's own Status is still "Open" — the agent never moved it to "Lost" after the call. QL dispositions and the "still queued, never attempted" placeholder values are excluded from this view.</div>
-        <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account — a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
-        <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) — fetched lazily per page, may show "…" briefly while loading.</div>
-        <div style={{ marginTop: 6 }}><b>Call Window</b> is the Opportunity's own creation time bucketed into <b>9 AM – 9 PM</b> (green) or <b>9 PM – 9 AM</b> (red) — the window TRAI's National DND rules block unsolicited commercial calls in. The lead still gets called either way, just not in real time if it lands in the red window.</div>
-        <div style={{ marginTop: 6 }}>The <b>Call Window — Last 3 Months</b> card above the table is a fixed, independent 3-month window (not tied to the date range picker) — it exists to show a real split across enough volume to be meaningful, since the table's own range can be as narrow as a single day.</div>
-        <div style={{ marginTop: 6 }}><b>Attempt Status</b> compares real attempts made (Human/AI, sourced from actual Futwork call-response activity) against the target for this row's current channel — Human 6, AI 8, Human + AI 14. <b>Attempts Complete</b> (green) means the target's been hit. <b>Stalled</b> (red) means the target isn't met AND no real call has happened since yesterday — a full day with zero calls. Otherwise it's <b>In Progress</b> (normal, still being worked).</div>
+        <div>A real, terminal disposition (Not Connected, Not Interested, Disqualified, Schedule Call Back, Busy or Improper Response, Voicemail, Wrong Number, Language Barrier, and similar) is present on the Human or AI disposition field - the call genuinely happened.</div>
+        <div style={{ marginTop: 6 }}>But the Opportunity's own Status is still "Open" - the agent never moved it to "Lost" after the call. QL dispositions and the "still queued, never attempted" placeholder values are excluded from this view.</div>
+        <div style={{ marginTop: 6 }}>This list is built from the real disposition values already observed on this account - a brand-new disposition string LeadSquared hasn't used before wouldn't show up here until added.</div>
+        <div style={{ marginTop: 6 }}><b>Disposition Status</b> is a separate, Activity-level field (not the Opportunity's own disposition) - fetched lazily per page, may show "…" briefly while loading.</div>
+        <div style={{ marginTop: 6 }}><b>Call Window</b> is the Opportunity's own creation time bucketed into <b>9 AM – 9 PM</b> (green) or <b>9 PM – 9 AM</b> (red) - the window TRAI's National DND rules block unsolicited commercial calls in. The lead still gets called either way, just not in real time if it lands in the red window.</div>
+        <div style={{ marginTop: 6 }}>The <b>Call Window - Last 3 Months</b> card above the table is a fixed, independent 3-month window (not tied to the date range picker) - it exists to show a real split across enough volume to be meaningful, since the table's own range can be as narrow as a single day.</div>
+        <div style={{ marginTop: 6 }}><b>Attempt Status</b> compares real attempts made (Human/AI, sourced from actual Futwork call-response activity) against the target for this row's current channel - Human 6, AI 8, Human + AI 14. <b>Attempts Complete</b> (green) means the target's been hit. <b>Stalled</b> (red) means the target isn't met AND no real call has happened since yesterday - a full day with zero calls. Otherwise it's <b>In Progress</b> (normal, still being worked).</div>
       </>
     ),
   },
@@ -139,7 +139,7 @@ function callWindowBucket(createdOn) {
 // Scoped to Attempted-Not-Closed's own display only (see the Call Window column
 // above) -- Not Attempted keeps the raw "YYYY-MM-DD HH:mm:ss" string untouched.
 function formatCreatedOnDisplay(createdOn) {
-  if (!createdOn) return '—'
+  if (!createdOn) return '-'
   const m = String(createdOn).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/)
   if (!m) return createdOn
   const [, y, mo, d, h, mi] = m
@@ -529,9 +529,9 @@ function PaginationControl({ page, totalPages, onPrev, onNext }) {
 
 function renderCell(colKey, r, viewKey) {
   switch (colKey) {
-    case 'createdOn': return viewKey === 'attempted_not_closed' ? formatCreatedOnDisplay(r.createdOn) : (r.createdOn || '—')
+    case 'createdOn': return viewKey === 'attempted_not_closed' ? formatCreatedOnDisplay(r.createdOn) : (r.createdOn || '-')
     case 'callWindow': {
-      if (!r.callWindow) return '—'
+      if (!r.callWindow) return '-'
       const isDaytime = r.callWindow === '9 AM – 9 PM'
       // A deliberate, narrow exception to the brand-colors-only rule (same
       // precedent as the Opportunity Owner misassignment flag elsewhere on this
@@ -542,22 +542,22 @@ function renderCell(colKey, r, viewKey) {
     case 'opportunityId':
       return <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
     case 'contactName':
-      return r.prospectId ? <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.contactName || r.prospectId}</a> : (r.contactName || '—')
+      return r.prospectId ? <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none' }}>{r.contactName || r.prospectId}</a> : (r.contactName || '-')
     case 'channel': return <span style={{ fontWeight: 700, color: r.channel === 'Human + AI' ? C.navy : C.text }}>{r.channel}</span>
-    case 'humanDisposition': return r.humanDisposition || '—'
-    case 'aiDisposition': return r.aiDisposition || '—'
-    case 'dispositionStatus': return r.dispositionStatus === 'loading' ? '…' : (r.dispositionStatus || '—')
-    case 'humanAttempts': return r.humanAttempts === 'loading' ? '…' : (r.humanAttempts == null ? '—' : r.humanAttempts.count)
-    case 'aiAttempts': return r.aiAttempts === 'loading' ? '…' : (r.aiAttempts == null ? '—' : r.aiAttempts.count)
+    case 'humanDisposition': return r.humanDisposition || '-'
+    case 'aiDisposition': return r.aiDisposition || '-'
+    case 'dispositionStatus': return r.dispositionStatus === 'loading' ? '…' : (r.dispositionStatus || '-')
+    case 'humanAttempts': return r.humanAttempts === 'loading' ? '…' : (r.humanAttempts == null ? '-' : r.humanAttempts.count)
+    case 'aiAttempts': return r.aiAttempts === 'loading' ? '…' : (r.aiAttempts == null ? '-' : r.aiAttempts.count)
     case 'attemptStatus': {
       if (r.attemptStatus === 'loading') return '…'
-      if (!r.attemptStatus) return '—'
+      if (!r.attemptStatus) return '-'
       const color = r.attemptStatus === 'Attempts Complete' ? C.green : r.attemptStatus === 'Stalled' ? '#DC2626' : C.navy
       return <span style={{ fontWeight: 700, color }}>{r.attemptStatus}</span>
     }
-    case 'ownerName': return r.ownerName || '—'
-    case 'status': return r.status || '—'
-    default: return r[colKey] || '—'
+    case 'ownerName': return r.ownerName || '-'
+    case 'status': return r.status || '-'
+    default: return r[colKey] || '-'
   }
 }
 
@@ -935,7 +935,7 @@ export default function NotAttemptedDashboard() {
         )}
         {data && data.truncated && (
           <div style={{ margin: '16px 28px 0', padding: '10px 14px', borderRadius: 10, background: 'var(--navy-tint)', border: `0.5px solid ${C.navy}`, color: C.navy, fontSize: 13, fontFamily: FONT }}>
-            More opportunities exist than this page could fetch in full ({fmtN(data.totalFetched)} fetched) — numbers below reflect only what was retrieved, surfaced honestly rather than silently capped.
+            More opportunities exist than this page could fetch in full ({fmtN(data.totalFetched)} fetched) - numbers below reflect only what was retrieved, surfaced honestly rather than silently capped.
           </div>
         )}
         </div>
@@ -953,8 +953,8 @@ export default function NotAttemptedDashboard() {
 
             {viewKey === 'attempted_not_closed' && (
               <div style={{ padding: '20px 28px 0' }}>
-                <Card title="Call Window — Last 3 Months"
-                  sub={callWindowTrend ? `${callWindowTrend.since} → ${callWindowTrend.until} — a fixed window, independent of the date range above` : 'Fixed window, independent of the date range above'}
+                <Card title="Call Window - Last 3 Months"
+                  sub={callWindowTrend ? `${callWindowTrend.since} → ${callWindowTrend.until} - a fixed window, independent of the date range above` : 'Fixed window, independent of the date range above'}
                   action={
                     <button type="button" onClick={() => loadCallWindowTrend(true)} disabled={callWindowTrendLoading}
                       style={{ display: 'flex', alignItems: 'center', gap: 5, border: `0.5px solid ${C.border}`, background: 'var(--card)', borderRadius: 8, padding: '5px 10px', cursor: callWindowTrendLoading ? 'default' : 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, color: C.muted }}>
@@ -967,7 +967,7 @@ export default function NotAttemptedDashboard() {
                   {callWindowTrendError ? (
                     <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>{callWindowTrendError}</div>
                   ) : !callWindowTrend ? (
-                    <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>{callWindowTrendLoading ? 'Loading…' : '—'}</div>
+                    <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>{callWindowTrendLoading ? 'Loading…' : '-'}</div>
                   ) : (
                     <>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, opacity: callWindowTrendLoading ? 0.5 : 1 }}>
@@ -984,7 +984,7 @@ export default function NotAttemptedDashboard() {
                       </div>
                       {callWindowTrend.truncated && (
                         <div style={{ marginTop: 10, fontSize: 12, color: C.muted, fontFamily: FONT }}>
-                          More opportunities exist in this 3-month window than could be fetched in full — these counts reflect only what was retrieved.
+                          More opportunities exist in this 3-month window than could be fetched in full - these counts reflect only what was retrieved.
                         </div>
                       )}
                     </>
@@ -994,7 +994,7 @@ export default function NotAttemptedDashboard() {
             )}
 
             <div style={{ padding: '20px 28px 0' }}>
-              <Card title="Records" sub={`${filteredRows.length} rows — ${columns.length} columns`}
+              <Card title="Records" sub={`${filteredRows.length} rows - ${columns.length} columns`}
                 action={totalPages > 1 ? <PaginationControl page={safePage} totalPages={totalPages} onPrev={() => setPage(safePage - 1)} onNext={() => setPage(safePage + 1)} /> : null}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, fontFamily: FONT }}>

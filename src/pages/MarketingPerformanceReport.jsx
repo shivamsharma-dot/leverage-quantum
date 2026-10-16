@@ -58,7 +58,7 @@ function KpiCard({ label, value, changePct, comparisonLabel, sparkValues, accent
       <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
       <div style={{ fontSize: 19, fontWeight: 800, marginTop: 5, letterSpacing: '-0.4px', color: C.text }}>{value}</div>
       <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 3, color: up ? '#1F8F5B' : down ? C.navy : C.muted }}>
-        {up ? '▲' : down ? '▼' : '—'} {Math.abs(changePct).toFixed(1)}%
+        {up ? '▲' : down ? '▼' : '-'} {Math.abs(changePct).toFixed(1)}%
       </div>
       <div style={{ fontSize: 9.5, color: C.muted, marginTop: 1 }}>{comparisonLabel}</div>
       <div style={{ position: 'absolute', bottom: 8, right: 10, opacity: 0.55 }}><Sparkline values={sparkValues} color={accent} /></div>
@@ -310,8 +310,8 @@ export default function MarketingPerformanceReport() {
                               <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>{r.currentQL}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right', color: r.deltaQL >= 0 ? '#1F8F5B' : C.navy, fontWeight: 700 }}>{r.deltaQL >= 0 ? '+' : ''}{r.deltaQL}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>{r.shareOfChangePct}%</td>
-                              <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>{r.qlRate != null ? r.qlRate + '%' : '—'}</td>
-                              <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>{r.cpql != null ? fmtINR(r.cpql) : '—'}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>{r.qlRate != null ? r.qlRate + '%' : '-'}</td>
+                              <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>{r.cpql != null ? fmtINR(r.cpql) : '-'}</td>
                               <td style={{ padding: 10, borderBottom: '1px solid ' + C.border }}><ActionPill action={r.action} /></td>
                               <td style={{ padding: 10, borderBottom: '1px solid ' + C.border, fontSize: 11, color: C.muted }}>{r.evidence}</td>
                             </tr>
@@ -323,9 +323,9 @@ export default function MarketingPerformanceReport() {
 
                   <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8 }}>Which destinations convert best?</div>
                   <div style={{ padding: '22px', textAlign: 'center', border: '1.5px dashed ' + C.border, borderRadius: 12, background: 'var(--card)', marginBottom: 8 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 6 }}>Component gap &mdash; not yet available</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 6 }}>Component gap - not yet available</div>
                     <p style={{ fontSize: 12, color: C.muted, maxWidth: 560, margin: '0 auto', lineHeight: 1.7 }}>
-                      This needs Opportunity-level Won/Lost outcome data (distinct opportunity, status, and intended destination) for acquisition cohorts at least 3 months mature. Confirmed via a codebase-wide audit: no sheet or table connected to Quantum tracks a real Won/Lost opportunity status today &mdash; the closest available fields are Deposits/RAUs (funnel-stage counts, not per-opportunity outcomes) and a per-lead destination field that lives on a different sheet with no join to those outcomes. Disclosing the gap rather than approximating it with a different metric under the "Won rate" label.
+                      This needs Opportunity-level Won/Lost outcome data (distinct opportunity, status, and intended destination) for acquisition cohorts at least 3 months mature. Confirmed via a codebase-wide audit: no sheet or table connected to Quantum tracks a real Won/Lost opportunity status today - the closest available fields are Deposits/RAUs (funnel-stage counts, not per-opportunity outcomes) and a per-lead destination field that lives on a different sheet with no join to those outcomes. Disclosing the gap rather than approximating it with a different metric under the "Won rate" label.
                     </p>
                   </div>
                 </>
@@ -348,9 +348,9 @@ export default function MarketingPerformanceReport() {
                   </ul>
                   <div style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.muted, margin: '10px 0 6px' }}>Material limitations</div>
                   <ul style={{ margin: 0, paddingLeft: 16 }}>
-                    <li>Destinations/Won-rate &mdash; no Opportunity-level Won data exists in Quantum yet; disclosed as a gap, not approximated.</li>
+                    <li>Destinations/Won-rate - no Opportunity-level Won data exists in Quantum yet; disclosed as a gap, not approximated.</li>
                     <li>Applications/Offers/Deposits/RAU stand in for the reference report's EC/STUS stages, which this schema does not track separately.</li>
-                    <li>"Campaign" in the contribution table is really ad-level granularity in this sheet (hundreds of distinct entities per week), so QL-rate medians often land near 0% &mdash; CPQL does most of the real discriminating in the Action logic.</li>
+                    <li>"Campaign" in the contribution table is really ad-level granularity in this sheet (hundreds of distinct entities per week), so QL-rate medians often land near 0% - CPQL does most of the real discriminating in the Action logic.</li>
                   </ul>
                 </div>
               </details>

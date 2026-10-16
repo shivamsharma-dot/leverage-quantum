@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { usePresentation } from '../lib/presentationContext.jsx'
 
 /*
-  SnapshotTool — panel-wide screenshot capture.
+  SnapshotTool - panel-wide screenshot capture.
   Self-contained floating control rendered from the shared Sidebar so it
   appears on every page. Three modes:
     - Full page      : the entire scrollable dashboard

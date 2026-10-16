@@ -105,7 +105,7 @@ function magicLinkEmailHtml(link, email) {
     </td></tr>
 
     <tr><td style="padding:18px 36px 32px;text-align:center">
-      <p style="margin:0;font-size:12px;line-height:1.6;color:#94A3B8">Didn't request this? You can safely ignore this email &mdash; nobody can sign in without clicking this exact link.</p>
+      <p style="margin:0;font-size:12px;line-height:1.6;color:#94A3B8">Didn't request this? You can safely ignore this email - nobody can sign in without clicking this exact link.</p>
     </td></tr>
   </table>
 

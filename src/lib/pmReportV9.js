@@ -13,7 +13,7 @@
 // panel -- is unchanged from V8. See pmReportV8.js's own header comment for
 // the full history of how those were arrived at; not repeated here.
 
-const DASH = '—'
+const DASH = '-'
 const pctText = n => (n == null ? DASH : n.toFixed(1) + '%')
 
 // Marketing Spend reads as crores/lakhs at exec scale (2026-09-10, asked for
@@ -96,12 +96,12 @@ function outcomesTable(s, fmtN) {
   // otherwise misleadingly read as "zero SR/AC QLs" rather than "unknown".
   const srQl = s.qlSplitAvailable ? s.srQl : null
   const acQl = s.qlSplitAvailable ? s.acQl : null
-  t.rows.push(['— SR', srQl == null ? DASH : fmtN(srQl), s.totalApps == null ? DASH : fmtN(s.totalApps), pctWhole(s.totalApps, srQl), runRate(srQl)])
-  t.rows.push(['— AC', acQl == null ? DASH : fmtN(acQl), s.acSales == null ? DASH : fmtN(s.acSales), pctWhole(s.acSales, acQl), runRate(acQl)])
+  t.rows.push(['- SR', srQl == null ? DASH : fmtN(srQl), s.totalApps == null ? DASH : fmtN(s.totalApps), pctWhole(s.totalApps, srQl), runRate(srQl)])
+  t.rows.push(['- AC', acQl == null ? DASH : fmtN(acQl), s.acSales == null ? DASH : fmtN(s.acSales), pctWhole(s.acSales, acQl), runRate(acQl)])
 
   // Superbot isn't split by vertical at all -- its own row only when it's
   // actually non-zero, dashed on the two columns that don't apply to it.
-  if (s.superbotQl) t.rows.push(['— Superbot', fmtN(s.superbotQl), DASH, DASH, runRate(s.superbotQl)])
+  if (s.superbotQl) t.rows.push(['- Superbot', fmtN(s.superbotQl), DASH, DASH, runRate(s.superbotQl)])
 
   return t
 }
@@ -112,13 +112,13 @@ export function buildV9(ctx) {
   const fmtN = ctx.fmtN || (v => String(Math.round(v || 0)))
 
   if (!s) {
-    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency*', 'Still building this report — reopen the panel in a moment.'].filter(Boolean).join('\n') }]
+    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency*', 'Still building this report - reopen the panel in a moment.'].filter(Boolean).join('\n') }]
   }
   if (s.ready === false) {
     return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency*', 'Could not build this report: ' + (s.error || 'unknown error') + '. Try reopening the panel.'].filter(Boolean).join('\n') }]
   }
   if (s.noCompleteDays) {
-    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*', 'No complete day has happened yet this month — check back tomorrow.'].filter(Boolean).join('\n') }]
+    return [{ key: 'scorecard', label: 'Marketing Efficiency', text: [testLine(ctx), '*:bar_chart: Marketing Efficiency - ' + s.monthLabel + '*', 'No complete day has happened yet this month - check back tomorrow.'].filter(Boolean).join('\n') }]
   }
 
   const msgs = []
@@ -126,13 +126,13 @@ export function buildV9(ctx) {
   const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
   // CPL / CPQL need the Settings cost-metric exclusions; if they could not be loaded the table above shows
   // the plain spend / leads figures and says so (the panel retries once each time it is opened).
-  const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions — they could not be loaded just now; reopen the panel._' : null
+  const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions - they could not be loaded just now; reopen the panel._' : null
   // Overall row's Total QL / SR / AC come from the QL Split sheet only once it is filled through the
   // whole window; otherwise BigQuery counts are used and the reader is told (2026-10-05).
-  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts — the Monthly QLs data could not be loaded just now._' : null
+  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts - the Monthly QLs data could not be loaded just now._' : null
   const one = [
     testLine(ctx),
-    '*:bar_chart: Marketing Efficiency — ' + s.monthLabel + '*',
+    '*:bar_chart: Marketing Efficiency - ' + s.monthLabel + '*',
     dateLine,
     exclNote,
   ]

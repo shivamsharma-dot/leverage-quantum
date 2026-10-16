@@ -372,7 +372,7 @@
       <p class="sub" id="pageSub">Post-call ratings students give their coach (0&ndash;10), rolled up day by day and by reporting line.</p>
     </div>
     <div class="head-meta">
-      <span>Generated <b id="genDate">&mdash;</b></span>
+      <span>Generated <b id="genDate">-</b></span>
     </div>
   </header>
 
@@ -389,7 +389,7 @@
     <input type="date" class="tb-date" id="toDate">
     <button class="tb-reset" id="resetBtn">Reset</button>
     <div class="tb-right">
-      <span class="tb-range-note" id="rangeNote">&mdash;</span>
+      <span class="tb-range-note" id="rangeNote">-</span>
       <button type="button" class="tb-reset" id="copyLinkBtn" title="Copy a link to this exact filtered view">Copy link</button>
     </div>
   </div>
@@ -398,7 +398,7 @@
     <div class="card">
       <div class="kpi-label">Overall NPS<button class="info-btn" data-tip="NPS = % Promoters (ratings 9–10) minus % Detractors (ratings 0–6), weighted by how many students gave each score. Passives (7–8) don’t count for or against the score, but do count toward Ratings Collected. Recalculated live for whichever date range is selected above.">i</button></div>
       <div class="kpi-hero">
-        <span class="num" id="ovNps">&mdash;</span>
+        <span class="num" id="ovNps">-</span>
         <span class="delta" id="ovDelta"></span>
       </div>
       <div class="mix-bar" id="ovMixBar"></div>
@@ -409,28 +409,28 @@
       </div>
     </div>
     <div class="card">
-      <div class="kpi-label">Ratings Collected<button class="info-btn" data-tip="Total individual ratings in the selected range — each rating counted once, however many a coach received. The small arrow compares average ratings/day in the earlier half of the range vs. the later half. This is response VOLUME, not a true response rate — the sheet doesn’t record how many students were asked to rate, only how many actually did.">i</button></div>
+      <div class="kpi-label">Ratings Collected<button class="info-btn" data-tip="Total individual ratings in the selected range - each rating counted once, however many a coach received. The small arrow compares average ratings/day in the earlier half of the range vs. the later half. This is response VOLUME, not a true response rate - the sheet doesn’t record how many students were asked to rate, only how many actually did.">i</button></div>
       <div class="kpi-hero">
-        <span class="kpi-num" id="ovTotal">&mdash;</span>
+        <span class="kpi-num" id="ovTotal">-</span>
         <span class="delta" id="volDelta"></span>
       </div>
-      <div class="kpi-foot" id="ovTotalFoot">&mdash;</div>
+      <div class="kpi-foot" id="ovTotalFoot">-</div>
     </div>
     <div class="card">
-      <div class="kpi-label">Average Rating<button class="info-btn" data-tip="Straight mean of every individual rating (0–10) in the selected range — sum of all ratings divided by the number of ratings. Not coach-weighted: a coach with 20 ratings influences this more than one with 2.">i</button></div>
-      <div class="kpi-num" id="ovAvg">&mdash;</div>
+      <div class="kpi-label">Average Rating<button class="info-btn" data-tip="Straight mean of every individual rating (0–10) in the selected range - sum of all ratings divided by the number of ratings. Not coach-weighted: a coach with 20 ratings influences this more than one with 2.">i</button></div>
+      <div class="kpi-num" id="ovAvg">-</div>
       <div class="kpi-foot">out of 10</div>
     </div>
     <div class="card">
-      <div class="kpi-label">Reporting-Line Coverage<button class="info-btn" data-tip="Share of coaches rated in this range whose email address was found in the TeamMapping sheet tab. A coach shows as “Unmapped” when their email isn’t listed there, or their manager/SSM cell is blank or #N/A — fix it in TeamMapping to have them roll up correctly.">i</button></div>
-      <div class="kpi-num" id="ovCoverage">&mdash;</div>
+      <div class="kpi-label">Reporting-Line Coverage<button class="info-btn" data-tip="Share of coaches rated in this range whose email address was found in the TeamMapping sheet tab. A coach shows as “Unmapped” when their email isn’t listed there, or their manager/SSM cell is blank or #N/A - fix it in TeamMapping to have them roll up correctly.">i</button></div>
+      <div class="kpi-num" id="ovCoverage">-</div>
       <div class="kpi-foot" id="ovCoverageFoot">coaches matched to team mapping tab</div>
     </div>
   </section>
 
   <section class="charts">
     <div class="card chart-holder">
-      <h2>Day-on-day NPS<button class="info-btn" data-tip="Each point is that single calendar day’s own NPS — computed only from ratings received on that date, same formula as the headline NPS. Bars underneath show how many ratings came in that day, so a big swing on a low-volume day means less than one on a busy day. Click any point to zoom the whole dashboard to just that day.">i</button></h2>
+      <h2>Day-on-day NPS<button class="info-btn" data-tip="Each point is that single calendar day’s own NPS - computed only from ratings received on that date, same formula as the headline NPS. Bars underneath show how many ratings came in that day, so a big swing on a low-volume day means less than one on a busy day. Click any point to zoom the whole dashboard to just that day.">i</button></h2>
       <p class="hint">Hover a point for that day&rsquo;s breakdown &middot; click to zoom into that day &middot; bars beneath show response volume</p>
       <div id="trendHolder">
         <svg id="trendChart" viewBox="0 0 640 260" preserveAspectRatio="xMidYMid meet"></svg>
@@ -438,7 +438,7 @@
       </div>
     </div>
     <div class="card">
-      <h2>Rating distribution<button class="info-btn" data-tip="Count of individual ratings at each score, 0–10, across the selected range. Green = promoter range (9–10), teal = passive (7–8), navy = detractor (0–6) — the same buckets used everywhere on this page. Hover a bar for its exact count and share of all ratings.">i</button></h2>
+      <h2>Rating distribution<button class="info-btn" data-tip="Count of individual ratings at each score, 0–10, across the selected range. Green = promoter range (9–10), teal = passive (7–8), navy = detractor (0–6) - the same buckets used everywhere on this page. Hover a bar for its exact count and share of all ratings.">i</button></h2>
       <p class="hint">All ratings in the selected range, 0&ndash;10 &middot; hover a bar for details</p>
       <div id="distHolder" style="position:relative;">
         <svg id="distChart" viewBox="0 0 380 260" preserveAspectRatio="xMidYMid meet"></svg>
@@ -449,14 +449,14 @@
 
   <section class="panels">
     <div class="panel">
-      <h2>By senior manager<button class="info-btn" data-tip="Coaches rolled up to their SSM (from the TeamMapping tab) — NPS computed the same formula as the headline number, just scoped to that SSM’s coaches. Sorted by response volume, highest first. Click a row to filter the coach leaderboard below to just that SSM.
+      <h2>By senior manager<button class="info-btn" data-tip="Coaches rolled up to their SSM (from the TeamMapping tab) - NPS computed the same formula as the headline number, just scoped to that SSM’s coaches. Sorted by response volume, highest first. Click a row to filter the coach leaderboard below to just that SSM.
 
-P / Pa / D = Promoters (rated 9–10) / Passives (rated 7–8) / Detractors (rated 0–6) — the three buckets every rating falls into. The pill on the right is that SSM’s NPS: (% Promoters) minus (% Detractors).">i</button></h2>
+P / Pa / D = Promoters (rated 9–10) / Passives (rated 7–8) / Detractors (rated 0–6) - the three buckets every rating falls into. The pill on the right is that SSM’s NPS: (% Promoters) minus (% Detractors).">i</button></h2>
       <p class="hint">NPS rolled up to SSM level &middot; click a row to filter the leaderboard</p>
       <div class="ssm-list" id="ssmList"></div>
     </div>
     <div class="panel">
-      <h2>By manager<button class="info-btn" data-tip="Same rollup, one level down — by direct manager instead of SSM. The bar shows where that manager’s NPS falls on the full −100 to +100 scale. Click a row to filter the coach leaderboard below to just that manager.">i</button></h2>
+      <h2>By manager<button class="info-btn" data-tip="Same rollup, one level down - by direct manager instead of SSM. The bar shows where that manager’s NPS falls on the full −100 to +100 scale. Click a row to filter the coach leaderboard below to just that manager.">i</button></h2>
       <p class="hint">Sorted by response volume &middot; click a row to filter the leaderboard &middot; <button type="button" id="exportMgrCsv" class="tb-reset" style="padding:0;">Export CSV</button></p>
       <div class="mgr-scroll scroll-x">
         <table class="mgr-table">
@@ -470,7 +470,7 @@ P / Pa / D = Promoters (rated 9–10) / Passives (rated 7–8) / Detractors (rat
   <section class="table-panel">
     <div class="table-head">
       <div>
-        <h2 style="margin-bottom:2px;">Coach leaderboard<button class="info-btn" data-tip="Every coach with at least one rating in the selected range. NPS, Avg, Min/Max and the promoter/passive/detractor mix are all computed only from ratings in this window — change the date range above and every row recalculates. Min/Max turn navy when a coach’s lowest and highest rating differ by 7 points or more — a sign of inconsistent service, not just one bad day. Click any row to see that coach’s day-by-day ratings.">i</button></h2>
+        <h2 style="margin-bottom:2px;">Coach leaderboard<button class="info-btn" data-tip="Every coach with at least one rating in the selected range. NPS, Avg, Min/Max and the promoter/passive/detractor mix are all computed only from ratings in this window - change the date range above and every row recalculates. Min/Max turn navy when a coach’s lowest and highest rating differ by 7 points or more - a sign of inconsistent service, not just one bad day. Click any row to see that coach’s day-by-day ratings.">i</button></h2>
         <p class="hint" style="margin-bottom:0;">Every coach rated in the selected range &middot; click a row for day-by-day detail</p>
       </div>
       <div class="controls">
@@ -801,18 +801,18 @@ function initFromUrl(){
 function renderKpis(rows){
   const ov = npsStats(rows.map(r=>[r[3],r[4]]));
   const npsEl = document.getElementById('ovNps');
-  npsEl.textContent = ov.nps===null ? '—' : ov.nps;
+  npsEl.textContent = ov.nps===null ? '-' : ov.nps;
   npsEl.style.color = npsColor(ov.nps);
 
   document.getElementById('ovTotal').textContent = ov.total;
   const days = [...new Set(rows.map(r=>r[0]))].sort();
   const coachCount = new Set(rows.map(r=>r[2])).size;
   const avgPerDay = days.length ? ov.total/days.length : 0;
-  document.getElementById('ovTotalFoot').textContent = days.length + ' day' + (days.length===1?'':'s') + ' of responses across ' + coachCount + ' coaches' + (days.length ? ` — ${avgPerDay.toFixed(1)}/day avg` : '');
-  document.getElementById('ovAvg').textContent = ov.avg===null ? '—' : ov.avg.toFixed(2);
+  document.getElementById('ovTotalFoot').textContent = days.length + ' day' + (days.length===1?'':'s') + ' of responses across ' + coachCount + ' coaches' + (days.length ? ` - ${avgPerDay.toFixed(1)}/day avg` : '');
+  document.getElementById('ovAvg').textContent = ov.avg===null ? '-' : ov.avg.toFixed(2);
 
   // response-volume trend: avg ratings/day, earlier half of range vs later half
-  // (this is VOLUME, not a true response rate — we don't have an "invites sent" count to divide by)
+  // (this is VOLUME, not a true response rate - we don't have an "invites sent" count to divide by)
   const volDeltaEl = document.getElementById('volDelta');
   volDeltaEl.className = 'delta'; volDeltaEl.innerHTML = '';
   if(days.length>=4){
@@ -829,7 +829,7 @@ function renderKpis(rows){
   }
 
   const mappedCoaches = new Set(rows.filter(r=>r[5]!=='Unmapped').map(r=>r[2])).size;
-  document.getElementById('ovCoverage').textContent = coachCount ? Math.round(pct(mappedCoaches,coachCount))+'%' : '—';
+  document.getElementById('ovCoverage').textContent = coachCount ? Math.round(pct(mappedCoaches,coachCount))+'%' : '-';
   document.getElementById('ovCoverageFoot').textContent = coachCount ? `${mappedCoaches} of ${coachCount} coaches matched to team mapping tab` : 'no coaches in range';
 
   // delta: split range in half by day, compare first half vs second half NPS
@@ -1119,8 +1119,8 @@ function renderCoachTable(rows){
         <td title="${c.ssm}"><span class="ellipsis-cell${c.ssm==='Unmapped'?' unmapped-tag':''}">${c.ssm}</span></td>
         <td class="num-right">${c.total}</td>
         <td class="num-right">${c.avg.toFixed(2)}</td>
-        <td class="num-right" ${c.spread>=7?'style="color:var(--navy);font-weight:700;" title="Wide spread — inconsistent ratings"':''}>${c.min}</td>
-        <td class="num-right" ${c.spread>=7?'style="color:var(--navy);font-weight:700;" title="Wide spread — inconsistent ratings"':''}>${c.max}</td>
+        <td class="num-right" ${c.spread>=7?'style="color:var(--navy);font-weight:700;" title="Wide spread - inconsistent ratings"':''}>${c.min}</td>
+        <td class="num-right" ${c.spread>=7?'style="color:var(--navy);font-weight:700;" title="Wide spread - inconsistent ratings"':''}>${c.max}</td>
         <td class="num-right"><span class="pill ${npsClass(c.nps)}">${c.nps>0?'+':''}${c.nps}</span></td>
         <td><div class="mini-mix">
           <span style="width:${pct(c.promoters,c.total)}%;background:var(--good)"></span>
@@ -1198,20 +1198,20 @@ async function loadLiveData(){
     if(d.coach){
       const name = d.coach.name || d.coach.email || 'you';
       document.getElementById('pageTitle').textContent = name + '’s NPS Ratings';
-      document.getElementById('pageSub').textContent = 'Your own post-call ratings from students (0–10), private to you — not visible to anyone else with this link format.';
-      document.title = name + ' — NPS Ratings';
+      document.getElementById('pageSub').textContent = 'Your own post-call ratings from students (0–10), private to you - not visible to anyone else with this link format.';
+      document.title = name + ' - NPS Ratings';
       if(ROWS.length === 0){
         document.querySelector('.wrap').innerHTML =
           '<div style="max-width:520px;margin:80px auto;text-align:center;font-family:inherit">'
           + '<div style="font-size:15px;font-weight:800;color:var(--text-1);margin-bottom:8px">No ratings yet for ' + name + '</div>'
-          + '<div style="font-size:13px;color:var(--text-2)">Nothing has come in yet — check back after a few coaching calls.</div>'
+          + '<div style="font-size:13px;color:var(--text-2)">Nothing has come in yet - check back after a few coaching calls.</div>'
           + '</div>';
         return;
       }
     }
   } catch(e){
-    document.getElementById('genDate').textContent = '—';
-    document.getElementById('rangeNote').innerHTML = '<b style="color:var(--bad)">Could not load live data<\/b> — ' + (e && e.message || 'unknown error');
+    document.getElementById('genDate').textContent = '-';
+    document.getElementById('rangeNote').innerHTML = '<b style="color:var(--bad)">Could not load live data<\/b> - ' + (e && e.message || 'unknown error');
     return;
   }
 

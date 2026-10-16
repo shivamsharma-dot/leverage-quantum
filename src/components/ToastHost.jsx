@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 // module can fire a toast without prop drilling or context:
 //   import { toast } from './components/ToastHost'
 //   toast('Saved', { type: 'success' })
-// Presentational only — no data or backend changes. Brand palette only
+// Presentational only - no data or backend changes. Brand palette only
 // (navy/blue/cyan/green); slate for neutral/negative. Never amber/red.
 
 const NAVY = '#1F3C84'

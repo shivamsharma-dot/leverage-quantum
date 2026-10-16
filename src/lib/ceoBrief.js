@@ -23,7 +23,7 @@ const LAKH = 1e5
 // -- formatting ---------------------------------------------------------------
 
 function money(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   const a = Math.abs(n)
   const sg = n < 0 ? '-' : ''
   if (a >= CR) return sg + '\u20B9' + (a / CR).toFixed(2) + ' Cr'
@@ -32,11 +32,11 @@ function money(n) {
 }
 
 const shareOf = (part, whole) => (part == null || !whole ? null : (part / whole) * 100)
-const pct1 = n => (n == null ? '\u2014' : n.toFixed(1) + '%')
+const pct1 = n => (n == null ? '-' : n.toFixed(1) + '%')
 const move = n => (n == null ? null : (n >= 0 ? '\u25b2 ' : '\u25bc ') + Math.abs(n).toFixed(1) + '%')
 
 // A movement, where the sign is the whole point.
-const signed = n => (n == null || !isFinite(n) ? '\u2014' : (n > 0 ? '+' : '') + money(n))
+const signed = n => (n == null || !isFinite(n) ? '-' : (n > 0 ? '+' : '') + money(n))
 
 // tag is the only Block Kit element that carries a real colour, so every verdict
 // in this file is expressed as one. Costs invert: spending more is not good news.
@@ -56,15 +56,15 @@ const EMOJI = name => ({ type: 'emoji', name })
 
 // data_table cells. A rich_text cell is the only way to get a colour into a
 // table, so every figure that carries a verdict is rendered as a tag.
-const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '\u2014' : String(v) })
+const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '-' : String(v) })
 // A raw_number cell renders empty inside a table block, so every figure is
 // written as text. Nothing here is sorted, so the numeric type buys nothing.
-const cellNum = (value, text) => ({ type: 'raw_text', text: text || '\u2014' })
-const cellBold = v => RICH([SEC([T(v == null || v === '' ? '\u2014' : String(v), { bold: true })])])
+const cellNum = (value, text) => ({ type: 'raw_text', text: text || '-' })
+const cellBold = v => RICH([SEC([T(v == null || v === '' ? '-' : String(v), { bold: true })])])
 const cellTag = (text, color) => RICH([SEC([TAG(text, color)])])
-const cellMoney = (o, k) => (o && o[k] != null ? cellNum(o[k], money(o[k])) : cellText('\u2014'))
-const cellMoneyTone = (o, k) => (o && o[k] != null ? cellTag(money(o[k]), tone(o[k])) : cellText('\u2014'))
-const cellPctTone = n => (n == null ? cellText('\u2014') : cellTag(pct1(n), tone(n)))
+const cellMoney = (o, k) => (o && o[k] != null ? cellNum(o[k], money(o[k])) : cellText('-'))
+const cellMoneyTone = (o, k) => (o && o[k] != null ? cellTag(money(o[k]), tone(o[k])) : cellText('-'))
+const cellPctTone = n => (n == null ? cellText('-') : cellTag(pct1(n), tone(n)))
 
 // hero_image is attached only when the caller has a real hosted URL: Slack
 // rejects data: URLs, so chartPng output has to be uploaded first and the
@@ -114,7 +114,7 @@ function bars(title, cats, aName, aVals, bName, bVals, note, layout) {
 // A figure that is judged against the same days of the month before: the colour
 // is the comparison, so the phone does not need a fourth column to carry it.
 const cellMoneyVs = (o, p, k, invert) => {
-  if (!o || o[k] == null) return cellText('\u2014')
+  if (!o || o[k] == null) return cellText('-')
   if (!p || p[k] == null) return cellNum(o[k], money(o[k]))
   return cellTag(money(o[k]), tone(o[k] - p[k], invert))
 }
@@ -216,7 +216,7 @@ function insights(c, w, p, margin, ym) {
   const gap = w.rev != null && w.cost != null ? w.cost - w.rev : null
   if (gap != null && gap > 0) {
     fix.push('Break-even needs revenue of ' + money(w.cost) + ', ' + money(gap) + ' more than booked'
-      + (c.days ? ' \u2014 about ' + money(gap / c.days) + ' a day' : '') + '.')
+      + (c.days ? ' - about ' + money(gap / c.days) + ' a day' : '') + '.')
     fix.push('Or cost down ' + money(gap) + ', ' + pct1(shareOf(gap, w.cost)) + ' of the month spend.')
   }
   if (up.length && w.net != null) {
@@ -275,7 +275,7 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
     card('net', dotFor(tone(w.net)) + ' Net inflow',
       money(w.net) + (move(d.net) ? ' \u00b7 ' + move(d.net) : ''),
       'Revenue ' + money(w.rev) + '\nless cost ' + money(w.cost) + '\nMargin ' + pct1(margin),
-      { image: charts.net, subtext: peopleOutside ? 'Excludes People cost \u2014 booked monthly, ' + money(c.peopleMonthly) + '.' : null }),
+      { image: charts.net, subtext: peopleOutside ? 'Excludes People cost - booked monthly, ' + money(c.peopleMonthly) + '.' : null }),
     card('revenue', dotFor(d.rev != null ? tone(d.rev) : 'green') + ' Revenue',
       money(w.rev) + (move(d.rev) ? ' \u00b7 ' + move(d.rev) : ''),
       'SR (Online + Offline) ' + money(w.sr) + '\nAC Online ' + money(w.ac)
@@ -473,7 +473,7 @@ function buildQuantumBrief(ctx, opts) {
 
   // Both charts read one period against the same stretch of the month before,
   // so the chart says so on its own face.
-  const sameSpan = 'Like for like \u2014 both bars cover the same '
+  const sameSpan = 'Like for like - both bars cover the same '
     + (c.prev && c.prev.days ? (c.prev.days === 1 ? 'single day' : c.prev.days + ' days') : 'number of days')
     + ' of each month.'
 
@@ -514,7 +514,7 @@ function buildQuantumBrief(ctx, opts) {
   // these, and they are built from the same numbers, so nothing can drift
   // between what was previewed and what was posted.
   const fb = []
-  fb.push(':bar_chart: *B2C Performance Brief \u2014 ' + (c.monthLabel || '') + ', through ' + (c.through || '') + '*')
+  fb.push(':bar_chart: *B2C Performance Brief - ' + (c.monthLabel || '') + ', through ' + (c.through || '') + '*')
   if (c.isTest) fb.push('_Test post._')
   fb.push('')
   fb.push('*Revenue* ' + money(mtd.rev) + '  *Cost* ' + money(mtd.cost) + '  *Net inflow* ' + money(mtd.net)
@@ -566,7 +566,7 @@ function buildQuantumBrief(ctx, opts) {
     {
       key: 'ledger',
       id: 'QB-2',
-      label: 'Split totals \u2014 last day, MTD, YTD',
+      label: 'Split totals - last day, MTD, YTD',
       text: lb.join('\n'),
       blocks: ledgerBlocks(last, mtd, ytd, prevW, lastLab, ytdLab, prevLab, wide),
       chart: chartHeads,
@@ -588,7 +588,7 @@ export const CEO_BRIEF_VERSIONS = [{
   'A total row on the revenue lines and on the cost heads',
   'Brand-ramp charts drawn from the same numbers, one on each message',
     'The read, open by default: where the month stands, what went wrong, what would close the gap',
-    'No links back into the dashboard \u2014 every number is read inside Slack',
+    'No links back into the dashboard - every number is read inside Slack',
   'Built for a phone: nothing scrolls sideways, nothing needs a laptop',
   ],
   build: buildQuantumBrief,
@@ -596,14 +596,14 @@ export const CEO_BRIEF_VERSIONS = [{
   id: 'quantum-brief-wide',
   code: 'QBW',
   msgKeys: ['brief', 'ledger'],
-  name: 'Performance Brief \u2014 wide tables',
+  name: 'Performance Brief - wide tables',
   tagline: 'The same two messages in the earlier reading: native tables the CEO can sort, search and open full screen, and standing-bar charts.',
   what: [
     'The same numbers, the same read and the same red and green rules as the Performance Brief',
-    'Tables as native data tables \u2014 sortable, searchable, openable full screen',
+    'Tables as native data tables - sortable, searchable, openable full screen',
     'Charts drawn as standing bars, two to a category, the figure written above each bar',
     'Every line and head carries its full definition, and the like-for-like note sits on both charts',
-    'The wide tables can scroll sideways on a phone \u2014 that is the trade for the extra controls',
+    'The wide tables can scroll sideways on a phone - that is the trade for the extra controls',
   ],
   build: function (ctx) { return buildQuantumBrief(ctx, { wide: true }) },
 }]

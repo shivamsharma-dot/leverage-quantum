@@ -11,7 +11,7 @@
 import { money } from './pmReport'
 import { comparableSpan, isPaidSource } from './careersReportV2'
 
-const DASH = '—'
+const DASH = '-'
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const dayLabelOf = iso => { const [, m, d] = iso.split('-'); return Number(d) + ' ' + MN[Number(m) - 1] }
 const nfmt = n => Number(n || 0).toLocaleString('en-IN')
@@ -94,11 +94,11 @@ export const CAREERS_V3 = {
   id: 'careers_v3',
   code: 'V3',
   msgKeys: ['mtd_program', 'yday_program'],
-  name: 'Programs — MTD and Last Day',
+  name: 'Programs - MTD and Last Day',
   tagline: 'Two messages: month to date by program, and yesterday by program.',
   what: [
-    'Message 1 — MTD by program: Spend, Leads, Interested, CPL, CPI',
-    'Message 2 — Last Day by program: the same five figures for yesterday',
+    'Message 1 - MTD by program: Spend, Leads, Interested, CPL, CPI',
+    'Message 2 - Last Day by program: the same five figures for yesterday',
     'Paid sources only, no channel split, no deltas, no Won or CPS',
     'Ignores any filter set on the page',
   ],

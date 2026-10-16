@@ -72,7 +72,7 @@ function parseTimestamp(raw) {
   return isNaN(d.getTime()) ? null : d
 }
 function fmtTime(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -100,7 +100,7 @@ function categorize(row) {
     const fieldLabel = dd[1].trim() || dd[2]
     return { cat: 'invalid_dropdown', field: dd[2], fieldLabel, value: dd[3], detail: fieldLabel + ': "' + dd[3] + '"' }
   }
-  if (!fr.trim() && !lr.trim()) return { cat: 'unknown', detail: '—' }
+  if (!fr.trim() && !lr.trim()) return { cat: 'unknown', detail: '-' }
   return { cat: 'other', detail: (fr || lr).slice(0, 140) }
 }
 
@@ -144,7 +144,7 @@ function copyText(e, text) { e.stopPropagation(); navigator.clipboard?.writeText
 
 function RawModal({ row, onClose }) {
   if (!row) return null
-  const pretty = s => { try { return JSON.stringify(JSON.parse(s), null, 2) } catch (_) { return s || '—' } }
+  const pretty = s => { try { return JSON.stringify(JSON.parse(s), null, 2) } catch (_) { return s || '-' } }
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 900 }} />
@@ -159,7 +159,7 @@ function RawModal({ row, onClose }) {
         {[['Failure Reason', row.failureReason], ['LS Response', pretty(row.lsResponse)], ['Requested Payload', pretty(row.requestedPayload)]].map(([label, val]) => (
           <div key={label} style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>{label}</div>
-            <pre style={{ margin: 0, padding: 12, background: 'var(--bg3)', borderRadius: 10, fontSize: 11.5, lineHeight: 1.55, color: C.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace', maxHeight: 220, overflowY: 'auto' }}>{val || '—'}</pre>
+            <pre style={{ margin: 0, padding: 12, background: 'var(--bg3)', borderRadius: 10, fontSize: 11.5, lineHeight: 1.55, color: C.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace', maxHeight: 220, overflowY: 'auto' }}>{val || '-'}</pre>
           </div>
         ))}
       </div>
@@ -308,7 +308,7 @@ export default function FutworkErrorsDashboard() {
       <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={'Open Contact: ' + r.prospectId} style={{ color: C.blue, textDecoration: 'none', fontFamily: 'monospace', fontSize: 11 }}>{r.prospectId.slice(0, 8)}…</a>
     )
     if (r.phone) return <span style={{ color: C.muted, fontSize: 11.5 }}>{r.phone}</span>
-    return <span style={{ color: C.muted }}>—</span>
+    return <span style={{ color: C.muted }}>-</span>
   }
 
   if (loading) {
@@ -380,7 +380,7 @@ export default function FutworkErrorsDashboard() {
             <PremKPI label="Total Errors" value={fmtN(kpi.total)} sub="in the selected window" accent={C.navy} icon={KPI_ICONS.total} />
             <PremKPI label="Errors Today" value={fmtN(kpi.errorsToday)} sub="live, includes right now" accent={C.blue} icon={KPI_ICONS.globe} />
             <PremKPI label="Last Hour" value={fmtN(kpi.lastHour)} sub="rolling 60 minutes" accent={C.cyan} icon={KPI_ICONS.ai} />
-            <PremKPI label="Top Cause" value={kpi.topCat ? (kpi.topCat.pct + '%') : '—'} sub={kpi.topCat ? (CAT_META[kpi.topCat.cat] || CAT_META.other).label : 'no errors in window'} accent={C.green} icon={KPI_ICONS.agent} />
+            <PremKPI label="Top Cause" value={kpi.topCat ? (kpi.topCat.pct + '%') : '-'} sub={kpi.topCat ? (CAT_META[kpi.topCat.cat] || CAT_META.other).label : 'no errors in window'} accent={C.green} icon={KPI_ICONS.agent} />
           </div>
           <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Opportunities Affected" value={fmtN(kpi.distinctOpps)} sub="distinct, in window" accent={C.navy} icon={KPI_ICONS.total} />
@@ -431,7 +431,7 @@ export default function FutworkErrorsDashboard() {
             </Card>
           </div>
 
-          <Card title={'Error log — ' + fmtN(filtered.length) + ' records'} sub="Click a row to view the raw LS Response and payload" noPad
+          <Card title={'Error log - ' + fmtN(filtered.length) + ' records'} sub="Click a row to view the raw LS Response and payload" noPad
             action={
               <Dropdown value={catFilter} onChange={setCatFilter} minWidth={170}
                 options={[{ value: 'all', label: 'All categories' }, ...Object.entries(CAT_META).filter(([k]) => byCategory.some(b => b.cat === k)).map(([k, v]) => ({ value: k, label: v.label }))]} />
@@ -455,9 +455,9 @@ export default function FutworkErrorsDashboard() {
                         <td style={td}>{fmtTime(r.ts)}</td>
                         <td style={td}><span style={{ fontSize: 11, fontWeight: 700, color: r.flow === 'Futwork AI' ? C.blue : C.cyan }}>{r.flow === 'Futwork AI' ? 'AI' : 'Human'}</span></td>
                         <td style={td}><span style={{ fontSize: 11, fontWeight: 700, color: meta.color, background: meta.bg, padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>{meta.label}</span></td>
-                        <td style={{ ...td, maxWidth: 320 }} title={r.detail}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.detail || '—'}</span></td>
+                        <td style={{ ...td, maxWidth: 320 }} title={r.detail}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.detail || '-'}</span></td>
                         <td style={td}>{idCell(r)}</td>
-                        <td style={td}>{r.disposition || '—'}</td>
+                        <td style={td}>{r.disposition || '-'}</td>
                         <td style={td}><span style={{ color: C.blue, fontSize: 11, fontWeight: 700 }}>View raw</span></td>
                       </tr>
                     )

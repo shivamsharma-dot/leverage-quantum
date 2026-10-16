@@ -636,7 +636,7 @@ export default function Sidebar() {
       window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: next }))
       toast(willHide ? `${label} hidden from the sidebar for everyone` : `${label} is visible again`, { type: willHide ? 'muted' : 'success' })
     } catch (e) {
-      toast(`Could not update ${label} — try again`, { type: 'neutral' })
+      toast(`Could not update ${label} - try again`, { type: 'neutral' })
     } finally {
       setHidePending(false)
     }
@@ -918,7 +918,7 @@ export default function Sidebar() {
       <SnapshotTool/>
       <PresentationTool/>
       <aside className={styles.sidebarCollapsed} onMouseEnter={openRailExpand} onMouseLeave={scheduleCloseRailExpand}>
-        {/* Quantum logo mark — visible when collapsed. Centred 44px tile, matching
+        {/* Quantum logo mark - visible when collapsed. Centred 44px tile, matching
             the 40px nav tiles below it. */}
         <div style={{
           height: 58, display:'flex', alignItems:'center', justifyContent:'center',

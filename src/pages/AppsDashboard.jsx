@@ -171,7 +171,7 @@ function FilterBuilderPopover({ conditions, combinator, filterOptions, anchor, o
       <div style={{ position: 'fixed', top, right, zIndex: 200, width: 'min(520px, 92vw)', background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 12, boxSizing: 'border-box' }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text, marginBottom: 8 }}>Filters</div>
         {conditions.length === 0 && (
-          <div style={{ fontSize: 12, color: C.muted, padding: '4px 0 10px' }}>No conditions yet — add one below.</div>
+          <div style={{ fontSize: 12, color: C.muted, padding: '4px 0 10px' }}>No conditions yet - add one below.</div>
         )}
         {/* Deliberately no maxHeight/overflowY here -- see the identical caveat on
             Overall's own AdvFilterBuilderPopover; a scrollable ancestor clips any
@@ -550,7 +550,7 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
-                <Card title="Applications, day by day" sub="Current calendar month, through the most recent day with data — not affected by any filter above">
+                <Card title="Applications, day by day" sub="Current calendar month, through the most recent day with data - not affected by any filter above">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={dailyTrendCurrentMonth} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
                       <defs><BarGrad id="appsDayGrad" color={C.blue} /></defs>
@@ -608,19 +608,19 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
                     <tbody>
                       {pageRows.map((r, i) => (
                         <tr key={(r.opportunity_id || r.prospect_id || i) + '-' + i} style={{ borderBottom: '0.5px solid var(--card-border)' }}>
-                          <td style={{ padding: '8px 14px', color: C.text, whiteSpace: 'nowrap' }}>{r.first_app_date || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text }}>{r.destination_country || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text }}>{r.intake_category || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.school_name || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course_name || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text }}>{r.source || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.opp_first_campaign_name || '—'}</td>
-                          <td style={{ padding: '8px 14px', color: C.text }}>{r.vertical || '—'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text, whiteSpace: 'nowrap' }}>{r.first_app_date || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text }}>{r.destination_country || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text }}>{r.intake_category || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.school_name || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course_name || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text }}>{r.source || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.opp_first_campaign_name || '-'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text }}>{r.vertical || '-'}</td>
                           <td style={{ padding: '8px 14px' }}>
-                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: r.futwork_human === 'Human_QL' ? '#178A54' : C.muted, background: r.futwork_human === 'Human_QL' ? '#E9F8EF' : 'var(--bg3)' }}>{r.futwork_human || '—'}</span>
+                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: r.futwork_human === 'Human_QL' ? '#178A54' : C.muted, background: r.futwork_human === 'Human_QL' ? '#E9F8EF' : 'var(--bg3)' }}>{r.futwork_human || '-'}</span>
                           </td>
                           <td style={{ padding: '8px 14px' }}>
-                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: r.futwork_ai === 'AI_QL' ? '#1577A0' : C.muted, background: r.futwork_ai === 'AI_QL' ? '#E3F5FD' : 'var(--bg3)' }}>{r.futwork_ai || '—'}</span>
+                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: r.futwork_ai === 'AI_QL' ? '#1577A0' : C.muted, background: r.futwork_ai === 'AI_QL' ? '#E3F5FD' : 'var(--bg3)' }}>{r.futwork_ai || '-'}</span>
                           </td>
                         </tr>
                       ))}

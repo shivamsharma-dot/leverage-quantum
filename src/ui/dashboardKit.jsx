@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// dashboardKit.jsx — shared design-system primitives for all dashboard pages.
+// dashboardKit.jsx - shared design-system primitives for all dashboard pages.
 // Canonical reference: src/pages/LeadQualificationDashboard.jsx (QL Ops).
 // See DESIGN_SYSTEM.md at repo root for the full guide.
 // Import from here so every page shares identical tokens + components.
@@ -18,13 +18,13 @@ export const C = {
 }
 export const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot: C.blue }
 
-// On-brand ordered palette — navy → blue → cyan → green, then tinted repeats.
+// On-brand ordered palette - navy → blue → cyan → green, then tinted repeats.
 // Used for multi-category bars so everything stays within brand colors.
 // 4 brand families x 3 tiers: navy, blue, cyan, green, each lightening.
 export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E', '#8AA4D8', '#8FD3F0', '#8FDCE1', '#9BD8AF']
 export const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length]
 
-/* ===== Chart bar treatment — see DESIGN_SYSTEM.md "Chart bars" =====
+/* ===== Chart bar treatment - see DESIGN_SYSTEM.md "Chart bars" =====
    One series = one hue, filled with a gradient of that hue. Never a flat fill,
    and never the ramp walked across the bars of a single series: colour encodes
    identity, not position. This is the Summary treatment, now the default. */
@@ -69,10 +69,10 @@ export const PAGE_SIZE = 10
 
 /* ===== Formatters ===== */
 export function fmtN(n) {
-  if (!n && n !== 0) return '—'
+  if (!n && n !== 0) return '-'
   return Math.round(n).toLocaleString('en-IN')
 }
-export function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—' }
+export function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '-' }
 
 /* ===== Section card wrapper ===== */
 // C11 fix: every one of these five colors was a hardcoded light-mode hex, even though

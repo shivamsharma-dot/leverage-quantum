@@ -364,7 +364,7 @@ function SchemaTable({ code, fields, query, typeFilter, onViewOptions, entityTyp
                   <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.text, background: 'var(--bg3)', padding: '3px 8px', borderRadius: 6 }}>{f.schemaName}</span>
                 </td>
                 <td style={td}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: tm.color, background: tm.bg, padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>{f.dataType || '—'}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: tm.color, background: tm.bg, padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>{f.dataType || '-'}</span>
                 </td>
                 <td style={td}>
                   {f.isMandatory
@@ -385,10 +385,10 @@ function SchemaTable({ code, fields, query, typeFilter, onViewOptions, entityTyp
                   )}
                 </td>
                 {isLead && <>
-                  <td style={td}>{fmtDate(f.createdOn) || <span style={{ color: C.muted }}>—</span>}</td>
-                  <td style={td}>{f.createdByName || <span style={{ color: C.muted }}>—</span>}</td>
-                  <td style={td}>{fmtDate(f.modifiedOn) || <span style={{ color: C.muted }}>—</span>}</td>
-                  <td style={td}>{f.modifiedByName || <span style={{ color: C.muted }}>—</span>}</td>
+                  <td style={td}>{fmtDate(f.createdOn) || <span style={{ color: C.muted }}>-</span>}</td>
+                  <td style={td}>{f.createdByName || <span style={{ color: C.muted }}>-</span>}</td>
+                  <td style={td}>{fmtDate(f.modifiedOn) || <span style={{ color: C.muted }}>-</span>}</td>
+                  <td style={td}>{f.modifiedByName || <span style={{ color: C.muted }}>-</span>}</td>
                 </>}
               </tr>
             )

@@ -77,7 +77,7 @@ async function graphGet(path, token, params = {}, retries = 4) {
   return d
 }
 
-// ─── Paginated fetch — first page returns immediately, rest via callback ─
+// ─── Paginated fetch - first page returns immediately, rest via callback ─
 async function graphGetAll(path, token, params = {}, maxPages = 20, onProgress = null, pageSize = 200) {
   let allData = []
   const first = await graphGet(path, token, { ...params, limit: pageSize })
@@ -114,7 +114,7 @@ function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR, prev
   else                       score += 0
 
   // ── 2. CTR trend vs previous period (week-over-week) ─────────────────
-  // This is the key signal Neolook uses — absolute CTR means nothing,
+  // This is the key signal Neolook uses - absolute CTR means nothing,
   // but a CTR DECLINING from previous period signals fatigue
   if (prev && prev.impressions >= 50 && prev.ctr > 0) {
     const ctrDrop = (prev.ctr - ctr) / prev.ctr  // positive = CTR dropped
@@ -141,7 +141,7 @@ function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR, prev
 
   // ── 3. CPM trend (spend efficiency declining) ─────────────────────────
   if (prev && prev.impressions >= 50 && prev.spend > 0) {
-    const currSpendPerImpr = (ctr / 100)  // proxy — we pass actual below
+    const currSpendPerImpr = (ctr / 100)  // proxy - we pass actual below
     // Real CPM comparison if prev spend available
     const prevCPM = (prev.spend / prev.impressions) * 1000
     const currCPM = prev._currCPM || prevCPM  // injected below
@@ -223,8 +223,8 @@ function buildCreativeReportHtml({ ads, totals, filterChips, truncatedCount, dat
         <div class="stats-row">
           <div class="stat"><div class="stat-label">Spend</div><div class="stat-value">${fmtINR(ad.spend)}</div></div>
           <div class="stat"><div class="stat-label">Leads</div><div class="stat-value">${Math.round(ad.leads || 0).toLocaleString('en-IN')}</div></div>
-          <div class="stat"><div class="stat-label">CPL</div><div class="stat-value accent">${ad.cpl ? fmtINR(ad.cpl) : '—'}</div></div>
-          <div class="stat"><div class="stat-label">CPQL</div><div class="stat-value accent">${ad.cpql ? fmtINR(ad.cpql) : '—'}</div></div>
+          <div class="stat"><div class="stat-label">CPL</div><div class="stat-value accent">${ad.cpl ? fmtINR(ad.cpl) : '-'}</div></div>
+          <div class="stat"><div class="stat-label">CPQL</div><div class="stat-value accent">${ad.cpql ? fmtINR(ad.cpql) : '-'}</div></div>
           <div class="stat"><div class="stat-label">CTR</div><div class="stat-value">${(ad.ctr || 0).toFixed(2)}%</div></div>
         </div>
       </div>
@@ -273,18 +273,18 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
   <div class="rep-head">
     <div class="rep-brand">
       <div class="rep-logo">${brandLogoSvgMarkup(24)}</div>
-      <div><p class="rep-wordmark">QUANTUM</p><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">${dateRangeLabel ? escapeHtml(dateRangeLabel) + ' &middot; ' : ''}Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</p></div>
+      <div><p class="rep-wordmark">QUANTUM</p><p class="rep-title">Meta Ads - Creative Report</p><p class="rep-sub">${dateRangeLabel ? escapeHtml(dateRangeLabel) + ' &middot; ' : ''}Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</p></div>
     </div>
     <div class="rep-filters">${chipsHtml}</div>
   </div>
   <div class="rep-summary">
     <div class="rep-stat"><div class="rep-stat-label">Total spend</div><div class="rep-stat-value">${fmtINR(totals.spend)}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Total leads</div><div class="rep-stat-value">${Math.round(totals.leads || 0).toLocaleString('en-IN')}</div></div>
-    <div class="rep-stat"><div class="rep-stat-label">CRM leads</div><div class="rep-stat-value">${totals.crmLeads != null ? Math.round(totals.crmLeads).toLocaleString('en-IN') : '—'}</div></div>
-    <div class="rep-stat"><div class="rep-stat-label">Total QLs</div><div class="rep-stat-value">${totals.totalQL ? Math.round(totals.totalQL).toLocaleString('en-IN') : '—'}</div></div>
-    <div class="rep-stat"><div class="rep-stat-label">Avg CPL (Meta)</div><div class="rep-stat-value">${totals.cpl ? fmtINR(totals.cpl) : '—'}</div></div>
-    <div class="rep-stat"><div class="rep-stat-label">Avg CPL (CRM)</div><div class="rep-stat-value">${totals.cplCrm ? fmtINR(totals.cplCrm) : '—'}</div></div>
-    <div class="rep-stat"><div class="rep-stat-label">Avg CPQL</div><div class="rep-stat-value">${totals.cpql ? fmtINR(totals.cpql) : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">CRM leads</div><div class="rep-stat-value">${totals.crmLeads != null ? Math.round(totals.crmLeads).toLocaleString('en-IN') : '-'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Total QLs</div><div class="rep-stat-value">${totals.totalQL ? Math.round(totals.totalQL).toLocaleString('en-IN') : '-'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPL (Meta)</div><div class="rep-stat-value">${totals.cpl ? fmtINR(totals.cpl) : '-'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPL (CRM)</div><div class="rep-stat-value">${totals.cplCrm ? fmtINR(totals.cplCrm) : '-'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPQL</div><div class="rep-stat-value">${totals.cpql ? fmtINR(totals.cpql) : '-'}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Avg CTR</div><div class="rep-stat-value">${(totals.ctr || 0).toFixed(2)}%</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Creatives shown</div><div class="rep-stat-value">${ads.length}</div></div>
   </div>
@@ -476,7 +476,7 @@ function CampaignsTab({ data }) {
             { label:'IMPRESSIONS',value:accImpr.toLocaleString('en-IN'),sub:accClicks.toLocaleString('en-IN')+' clicks',c1:'#1F3C84',c2:'#1C9FD4',icon:'◐' },
             { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',c1:'#1C9FD4',c2:'#29B9C3',icon:'₹' },
             { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',c1:'#4CAE6F',c2:'#29B9C3',icon:'◉' },
-            { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'—',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,c1:'#1F3C84',c2:'#29B9C3',icon:'▲' },
+            { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'-',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,c1:'#1F3C84',c2:'#29B9C3',icon:'▲' },
             { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',c1:'#29B9C3',c2:'#1C9FD4',icon:'⚡' },
           ].map(k => (
             <div key={k.label} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
@@ -515,7 +515,7 @@ function CampaignsTab({ data }) {
             <div onClick={()=>setExpanded(expanded===c.id?null:c.id)} style={{ display:'grid',gridTemplateColumns:cols,minWidth:'fit-content',padding:'11px 16px',borderBottom:'0.5px solid #F3F4F6',gap:8,cursor:'pointer',background:expanded===c.id?'#F9FAFB':'transparent',transition:'background .1s',alignItems:'center' }}>
               <div style={{ minWidth:0 }}>
                 <div style={{ fontSize:13,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c.name}</div>
-                <div style={{ fontSize:11,color:'#9CA3AF',marginTop:2 }}>{c.objective?.replace(/_/g,' ')} · {c.created_time?new Date(c.created_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—'}</div>
+                <div style={{ fontSize:11,color:'#9CA3AF',marginTop:2 }}>{c.objective?.replace(/_/g,' ')} · {c.created_time?new Date(c.created_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'-'}</div>
                 <div style={{ marginTop:5,height:3,background:'#F3F4F6',borderRadius:2,overflow:'hidden',width:'90%' }}><div style={{ height:'100%',width:Math.min(100,c.spendShare)+'%',background:'#1F3C84',borderRadius:2 }}/></div>
               </div>
               <div><span style={{ fontSize:11,fontWeight:600,color:c.corridorId==='unclassified'?'#9CA3AF':'#1F3C84',background:c.corridorId==='unclassified'?'#F3F4F6':'#E8EFF9',padding:'2px 8px',borderRadius:8,whiteSpace:'nowrap' }}>{c.corridor}</span></div>
@@ -524,16 +524,16 @@ function CampaignsTab({ data }) {
               <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.impressions)}</div>
               <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.clicks)}</div>
               <div><div style={{ fontSize:13,color:c.ctr<accCTRpct*0.6?'#1F3C84':'#374151',fontWeight:c.ctr<accCTRpct*0.6?600:400 }}>{c.ctr.toFixed(2)}%</div><div style={{ fontSize:10,color:'#9CA3AF' }}>CPM ₹{Math.round(c.cpm)}</div></div>
-              <div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpl) }}>{c.cpl>0?'₹'+c.cpl.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cplCrm) }}>{c.cplCrm>0?'₹'+c.cplCrm.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpql) }}>{c.cpql>0?'₹'+c.cpql.toLocaleString('en-IN'):'—'}</div>
-              <div style={{ fontSize:13,color:'#374151',fontWeight:500 }}>{c.leads>0?c.leads.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:13,color:'#374151',fontWeight:500,textAlign:'center' }}>{c.crmLeads!=null?c.crmLeads.toLocaleString('en-IN'):'—'}{c.crmLeads!=null&&(<div style={{ fontSize:10,fontWeight:600,marginTop:2,color:((c.crmLeads-(c.leads||0))>=0?'#4CAE6F':'#1C9FD4') }}>{(c.crmLeads-(c.leads||0))>=0?'+':''}{(c.crmLeads-(c.leads||0)).toLocaleString('en-IN')}</div>)}</div><div style={{ fontSize:13,color:'#374151',fontWeight:500,textAlign:'center' }}>{c.humanQL!=null?c.humanQL.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:13,color:'#374151',fontWeight:500,textAlign:'center' }}>{c.aiQL!=null?c.aiQL.toLocaleString('en-IN'):'—'}</div>
+              <div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpl) }}>{c.cpl>0?'₹'+c.cpl.toLocaleString('en-IN'):'-'}</div><div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cplCrm) }}>{c.cplCrm>0?'₹'+c.cplCrm.toLocaleString('en-IN'):'-'}</div><div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpql) }}>{c.cpql>0?'₹'+c.cpql.toLocaleString('en-IN'):'-'}</div>
+              <div style={{ fontSize:13,color:'#374151',fontWeight:500 }}>{c.leads>0?c.leads.toLocaleString('en-IN'):'-'}</div><div style={{ fontSize:13,color:'#374151',fontWeight:500,textAlign:'center' }}>{c.crmLeads!=null?c.crmLeads.toLocaleString('en-IN'):'-'}{c.crmLeads!=null&&(<div style={{ fontSize:10,fontWeight:600,marginTop:2,color:((c.crmLeads-(c.leads||0))>=0?'#4CAE6F':'#1C9FD4') }}>{(c.crmLeads-(c.leads||0))>=0?'+':''}{(c.crmLeads-(c.leads||0)).toLocaleString('en-IN')}</div>)}</div><div style={{ fontSize:13,color:'#374151',fontWeight:500,textAlign:'center' }}>{c.humanQL!=null?c.humanQL.toLocaleString('en-IN'):'-'}</div><div style={{ fontSize:13,color:'#374151',fontWeight:500,textAlign:'center' }}>{c.aiQL!=null?c.aiQL.toLocaleString('en-IN'):'-'}</div>
               <div>{fBadge(c.fatigueLevel)}</div>
             </div>
             {expanded===c.id&&(
               <div style={{ padding:'16px 16px 16px 32px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB' }}>
                 <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:10 }}>
-                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'},{l:'CRM Conv. Rate',v:(c.crmLeads>0&&c.clicks>0)?((c.crmLeads/c.clicks*100).toFixed(2)+'%'):'—'},{l:'Campaign ID',v:c.id||'—',id:true}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px',minWidth:0 }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:m.id?11:16,fontWeight:m.id?600:700,fontFamily:m.id?'monospace':'inherit',color:m.w?'#1F3C84':m.id?'#6B7280':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.v}</div></div>)}
+                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'-'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'-'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'-'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'-',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'},{l:'CRM Conv. Rate',v:(c.crmLeads>0&&c.clicks>0)?((c.crmLeads/c.clicks*100).toFixed(2)+'%'):'-'},{l:'Campaign ID',v:c.id||'-',id:true}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px',minWidth:0 }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:m.id?11:16,fontWeight:m.id?600:700,fontFamily:m.id?'monospace':'inherit',color:m.w?'#1F3C84':m.id?'#6B7280':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.v}</div></div>)}
                 </div>
-                {c.fatigueLevel!=='healthy'&&<div style={{ padding:'10px 14px',background:c.fatigueLevel==='fatigue'?'#FEF2F2':'#FEF9C3',borderRadius:8,fontSize:12,color:c.fatigueLevel==='fatigue'?'#991B1B':'#854D0E',fontWeight:500 }}>{c.fatigueLevel==='fatigue'?'⚠ High frequency ('+c.frequency.toFixed(1)+') — audience fatigued. Refresh creatives or expand targeting.':'⚡ Frequency '+c.frequency.toFixed(1)+' approaching fatigue. Monitor CTR closely.'}</div>}
+                {c.fatigueLevel!=='healthy'&&<div style={{ padding:'10px 14px',background:c.fatigueLevel==='fatigue'?'#FEF2F2':'#FEF9C3',borderRadius:8,fontSize:12,color:c.fatigueLevel==='fatigue'?'#991B1B':'#854D0E',fontWeight:500 }}>{c.fatigueLevel==='fatigue'?'⚠ High frequency ('+c.frequency.toFixed(1)+') - audience fatigued. Refresh creatives or expand targeting.':'⚡ Frequency '+c.frequency.toFixed(1)+' approaching fatigue. Monitor CTR closely.'}</div>}
               </div>
             )}
           </div>
@@ -577,23 +577,23 @@ const CREATIVE_SORT_VALUE = {
 // Categorical/text columns default to A-Z (ascending) on first click, not high-to-low.
 const CREATIVE_SORT_ALPHA = new Set(['name', 'corridor', 'type', 'health'])
 const CREATIVE_COLS = [
-  { key:'leads', label:'Leads', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div> },
-  { key:'crmLeads', label:'CRM Leads', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div> },
-  { key:'delta', label:'Δ', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div> },
-  { key:'totalQL', label:'Total QLs', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:'#111827' }}>{ad.totalQL!=null?ad.totalQL.toLocaleString('en-IN'):'—'}</div> },
-  { key:'humanQL', label:'Human QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'}</div> },
-  { key:'aiQL', label:'AI QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div> },
-  { key:'cpl', label:'CPL (Meta)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div> },
-  { key:'cplCrm', label:'CPL (CRM)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div> },
-  { key:'cpql', label:'CPQL', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cpqlCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
+  { key:'leads', label:'Leads', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'-'}</div> },
+  { key:'crmLeads', label:'CRM Leads', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'-':ad.crmLeads.toLocaleString('en-IN')}</div> },
+  { key:'delta', label:'Δ', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'-':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div> },
+  { key:'totalQL', label:'Total QLs', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:'#111827' }}>{ad.totalQL!=null?ad.totalQL.toLocaleString('en-IN'):'-'}</div> },
+  { key:'humanQL', label:'Human QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'-'}</div> },
+  { key:'aiQL', label:'AI QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'-'}</div> },
+  { key:'cpl', label:'CPL (Meta)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'-'}</div> },
+  { key:'cplCrm', label:'CPL (CRM)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'-'}</div> },
+  { key:'cpql', label:'CPQL', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cpqlCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'-'}</div> },
   { key:'type', label:'Type', width:90, align:'center', render:(ad,ctx)=><span style={{ background:ctx.tBg[ad.type]||'#F3F4F6',color:ctx.tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span> },
   { key:'corridor', label:'Corridor', width:130, align:'center', render:(ad)=><span style={{ fontSize:11,fontWeight:600,color:ad.corridorId==='unclassified'?'#9CA3AF':'#1F3C84',background:ad.corridorId==='unclassified'?'#F3F4F6':'#E8EFF9',padding:'2px 8px',borderRadius:8,whiteSpace:'nowrap' }}>{ad.corridor}</span> },
   { key:'health', label:'Health', width:100, align:'center', render:(ad,ctx)=><span style={{ background:ctx.hBg[ad.fatigueLabel]||'#E9F8EF',color:ctx.hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span> },
   { key:'spend', label:'Spend', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div> },
   { key:'ctr', label:'CTR', width:90, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
-  { key:'freq', label:'Freq', width:80, align:'center', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div> },
+  { key:'freq', label:'Freq', width:80, align:'center', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'-'}</div> },
   { key:'score', label:'Score', width:100, align:'center', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
-  { key:'adId', label:'Ad ID', width:150, align:'left', render:(ad)=><div style={{ fontSize:11,color:'#9CA3AF',fontFamily:'monospace' }}>{ad.id||'—'}</div> },
+  { key:'adId', label:'Ad ID', width:150, align:'left', render:(ad)=><div style={{ fontSize:11,color:'#9CA3AF',fontFamily:'monospace' }}>{ad.id||'-'}</div> },
 ]
 function CreativesTab({ data, token }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, crmSummary = {} } = data
@@ -953,17 +953,17 @@ function CreativesTab({ data, token }) {
             { key:'spend', label:'PERIOD SPEND', value:`${spendFull} (${fmtShort(kpiStats.spendSum)})`, sub:fmtShort(kpiStats.imprSum)+' impressions', c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
             { key:'impr', label:'IMPRESSIONS', value:fmtShort(kpiStats.imprSum), sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#0E7490', c2:'#1C9FD4', icon:'◫' },
             { key:'leads', label:'META LEADS', value:kpiStats.leadsSum.toLocaleString('en-IN'), sub:'in selected range', c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
-            { key:'cpl', label:'META CPL', value:kpiStats.cpl>0?'₹'+kpiStats.cpl.toLocaleString('en-IN'):'—', sub:'cost per lead', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
+            { key:'cpl', label:'META CPL', value:kpiStats.cpl>0?'₹'+kpiStats.cpl.toLocaleString('en-IN'):'-', sub:'cost per lead', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
             { key:'creatives', label:'CREATIVES', value:kpiStats.activeCount.toLocaleString('en-IN'), sub:'active of '+kpiStats.total.toLocaleString('en-IN')+' total', c1:'#0E7490', c2:'#22A7BC', icon:'▦' },
             { key:'ctr', label:'AVG CTR', value:kpiStats.ctr.toFixed(2)+'%', sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#2563A8', c2:'#1C9FD4', icon:'↗' },
           ]
           const crmKpis = [
-            { key:'crm', label:'CRM LEADS', value:(crmSummary.hasCrm?(crmSummary.crmTotal||0).toLocaleString('en-IN'):'—'), sub:(crmSummary.hasCrm?('vs '+(crmSummary.metaLeadsSum||0).toLocaleString('en-IN')+' Meta · '+(((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0))>=0?'+':'')+((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0)).toLocaleString('en-IN')):'no CRM match'), c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' },
-            { key:'cplCrm', label:'CPL (CRM)', value:kpiStats.cplCrm>0?'₹'+kpiStats.cplCrm.toLocaleString('en-IN'):'—', sub:kpiStats.cpl>0?('vs ₹'+kpiStats.cpl.toLocaleString('en-IN')+' Meta CPL'):'cost per CRM lead', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
-            { key:'cpql', label:'CPQL', value:kpiStats.cpql>0?'₹'+kpiStats.cpql.toLocaleString('en-IN'):'—', sub:'cost per qualified lead (Human + AI)', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
-            { key:'totalQL', label:'TOTAL QLS', value:kpiStats.totalQL>0?kpiStats.totalQL.toLocaleString('en-IN'):'—', sub:'human + AI qualified leads', c1:'#4CAE6F', c2:'#1F3C84', icon:'✓' },
-            { key:'humanQL', label:'FUTWORK HUMAN QLs', value:kpiStats.humanQLTotal>0?kpiStats.humanQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, full CRM sheet', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
-            { key:'aiQL', label:'FUTWORK AI QLs', value:kpiStats.aiQLTotal>0?kpiStats.aiQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, full CRM sheet', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
+            { key:'crm', label:'CRM LEADS', value:(crmSummary.hasCrm?(crmSummary.crmTotal||0).toLocaleString('en-IN'):'-'), sub:(crmSummary.hasCrm?('vs '+(crmSummary.metaLeadsSum||0).toLocaleString('en-IN')+' Meta · '+(((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0))>=0?'+':'')+((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0)).toLocaleString('en-IN')):'no CRM match'), c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' },
+            { key:'cplCrm', label:'CPL (CRM)', value:kpiStats.cplCrm>0?'₹'+kpiStats.cplCrm.toLocaleString('en-IN'):'-', sub:kpiStats.cpl>0?('vs ₹'+kpiStats.cpl.toLocaleString('en-IN')+' Meta CPL'):'cost per CRM lead', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
+            { key:'cpql', label:'CPQL', value:kpiStats.cpql>0?'₹'+kpiStats.cpql.toLocaleString('en-IN'):'-', sub:'cost per qualified lead (Human + AI)', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
+            { key:'totalQL', label:'TOTAL QLS', value:kpiStats.totalQL>0?kpiStats.totalQL.toLocaleString('en-IN'):'-', sub:'human + AI qualified leads', c1:'#4CAE6F', c2:'#1F3C84', icon:'✓' },
+            { key:'humanQL', label:'FUTWORK HUMAN QLs', value:kpiStats.humanQLTotal>0?kpiStats.humanQLTotal.toLocaleString('en-IN'):'-', sub:'in selected range, full CRM sheet', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
+            { key:'aiQL', label:'FUTWORK AI QLs', value:kpiStats.aiQLTotal>0?kpiStats.aiQLTotal.toLocaleString('en-IN'):'-', sub:'in selected range, full CRM sheet', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
           ]
           const KpiCard = k => (
             <div key={k.key} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
@@ -998,7 +998,7 @@ function CreativesTab({ data, token }) {
                     <div style={{ marginBottom:18, padding:'10px 14px', borderRadius:10, background:'#F0F7FC', border:'1px solid #D7ECF7', fontSize:12, color:'#1F3C84', lineHeight:1.5 }}>
                       {crmSummary.crmTotal > 0
                         ? `${crmSummary.crmTotal.toLocaleString('en-IN')} CRM/QL rows exist in the source sheet for ${crmSummary.since||'this period'} to ${crmSummary.until||'this period'}, but none matched any currently loaded ad by name (${crmSummary.crmNamesNoMeta.toLocaleString('en-IN')} sheet names have no matching ad). This looks like a naming mismatch, not missing data.`
-                        : `No CRM/QL data for ${crmSummary.since||'this period'} to ${crmSummary.until||'this period'} — the source sheet has no rows in this window. This is expected if the sheet hasn't been updated past this range yet; it is not a bug in this page.`}
+                        : `No CRM/QL data for ${crmSummary.since||'this period'} to ${crmSummary.until||'this period'} - the source sheet has no rows in this window. This is expected if the sheet hasn't been updated past this range yet; it is not a bug in this page.`}
                     </div>
                   )}
                   {crmSummary.hasCrm && crmSummary.crmNamesNoMeta > 0 && (crmSummary.humanQLSheetTotal + crmSummary.aiQLSheetTotal) > (crmSummary.humanQLTotal + crmSummary.aiQLTotal) && (
@@ -1130,10 +1130,10 @@ function CreativesTab({ data, token }) {
                   <button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:12,lineHeight:1,padding:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
                 </div>
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
-                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL (Meta)',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CPL (CRM)',v:ad.cplCrm>0?'₹'+ad.cplCrm.toLocaleString('en-IN'):'—'},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Human QL',v:ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'},{l:'AI QL',v:ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'},{l:'CPQL',v:ad.cpql>0?'₹'+ad.cpql.toLocaleString('en-IN'):'—',w:ad.cpql>3000},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
+                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL (Meta)',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'-',w:ad.cpl>300},{l:'CPL (CRM)',v:ad.cplCrm>0?'₹'+ad.cplCrm.toLocaleString('en-IN'):'-'},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'-'},{l:'Human QL',v:ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'-'},{l:'AI QL',v:ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'-'},{l:'CPQL',v:ad.cpql>0?'₹'+ad.cpql.toLocaleString('en-IN'):'-',w:ad.cpql>3000},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'-',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'-'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
-                <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'\u2014'}</div></div>
-                {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' — needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' — watch closely'}</div>}
+                <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'-'}</div></div>
+                {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' - needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' - watch closely'}</div>}
               </div>
             </div>
           ))}
@@ -1186,7 +1186,7 @@ function CreativesTab({ data, token }) {
                   </span>
                 </button>
               </div>
-              <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff',alignSelf:'stretch',display:'flex',flexDirection:'column',justifyContent:'center' }}><div style={{ display:'flex',alignItems:'flex-start',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'normal',wordBreak:'break-word',cursor:'text' }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,marginTop:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
+              <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff',alignSelf:'stretch',display:'flex',flexDirection:'column',justifyContent:'center' }}><div style={{ display:'flex',alignItems:'flex-start',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'normal',wordBreak:'break-word',cursor:'text' }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,marginTop:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'-'}</div></div>
               {displayOrder.map(k=>{
                 const c=CREATIVE_COLS.find(cc=>cc.key===k)
                 const isPinned = pinnedCols.includes(k)
@@ -1480,14 +1480,14 @@ function TrendTab({ token, adAccount, mode }) {
         {[
           { label:'TOTAL SPEND', value:fmtINR(totals.spend), c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
           { label:'LEADS (META)', value:totals.leads.toLocaleString('en-IN'), c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
-          { label:'CPL (META)', value:totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
-          { label:'CRM LEADS', value:totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'—', c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' },
-          { label:'CPL (CRM)', value:totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
+          { label:'CPL (META)', value:totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'-', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
+          { label:'CRM LEADS', value:totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'-', c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' },
+          { label:'CPL (CRM)', value:totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'-', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
           { label:'AVG CTR', value:totals.ctr.toFixed(2)+'%', c1:'#2563A8', c2:'#1C9FD4', icon:'↗' },
-          { label:'FUTWORK HUMAN QLs', value:totals.humanQL>0?totals.humanQL.toLocaleString('en-IN'):'—', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
-          { label:'FUTWORK AI QLs', value:totals.aiQL>0?totals.aiQL.toLocaleString('en-IN'):'—', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
-          { label:'CPQL', value:totals.cpql>0?'₹'+totals.cpql.toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
-          { label:'TOTAL QLs', value:(totals.humanQL+totals.aiQL)>0?(totals.humanQL+totals.aiQL).toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#29B9C3', icon:'✓' },
+          { label:'FUTWORK HUMAN QLs', value:totals.humanQL>0?totals.humanQL.toLocaleString('en-IN'):'-', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
+          { label:'FUTWORK AI QLs', value:totals.aiQL>0?totals.aiQL.toLocaleString('en-IN'):'-', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
+          { label:'CPQL', value:totals.cpql>0?'₹'+totals.cpql.toLocaleString('en-IN'):'-', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
+          { label:'TOTAL QLs', value:(totals.humanQL+totals.aiQL)>0?(totals.humanQL+totals.aiQL).toLocaleString('en-IN'):'-', c1:'#1F3C84', c2:'#29B9C3', icon:'✓' },
         ].map(k => (
           <div key={k.label} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
@@ -1512,13 +1512,13 @@ function TrendTab({ token, adAccount, mode }) {
             <div style={{ fontSize:13, color:'#374151' }}>{fmtN(r.impressions)}</div>
             <div style={{ fontSize:13, color:'#374151' }}>{fmtN(r.clicks)}</div>
             <div style={{ fontSize:13, color:'#374151' }}>{r.ctr.toFixed(2)}%</div>
-            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.leads>0?r.leads.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpl) }}>{r.cpl>0?'₹'+r.cpl.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.crmLeads!=null?r.crmLeads.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cplCrm) }}>{r.cplCrm>0?'₹'+r.cplCrm.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.humanQL!=null?r.humanQL.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.aiQL!=null?r.aiQL.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpql) }}>{r.cpql>0?'₹'+r.cpql.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.leads>0?r.leads.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpl) }}>{r.cpl>0?'₹'+r.cpl.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.crmLeads!=null?r.crmLeads.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cplCrm) }}>{r.cplCrm>0?'₹'+r.cplCrm.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.humanQL!=null?r.humanQL.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.aiQL!=null?r.aiQL.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpql) }}>{r.cpql>0?'₹'+r.cpql.toLocaleString('en-IN'):'-'}</div>
           </div>
         ))}
         {rows.length>0 && totals && (
@@ -1529,12 +1529,12 @@ function TrendTab({ token, adAccount, mode }) {
             <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{fmtN(totals.clicks)}</div>
             <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.ctr.toFixed(2)}%</div>
             <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.leads.toLocaleString('en-IN')}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpl) }}>{totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cplCrm) }}>{totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.humanQL>0?totals.humanQL.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.aiQL>0?totals.aiQL.toLocaleString('en-IN'):'—'}</div>
-            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpql) }}>{totals.cpql>0?'₹'+totals.cpql.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpl) }}>{totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cplCrm) }}>{totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.humanQL>0?totals.humanQL.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.aiQL>0?totals.aiQL.toLocaleString('en-IN'):'-'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpql) }}>{totals.cpql>0?'₹'+totals.cpql.toLocaleString('en-IN'):'-'}</div>
           </div>
         )}
       </div>
@@ -1812,9 +1812,9 @@ export default function MetaAdsDashboard() {
   // why a dead token looked identical to a freshly-connected one.
   const notifyTokenStored = (result) => {
     if (result?.exchanged) {
-      toast('Connected — Meta gave this token a 60-day lifetime.', { type: 'success' })
+      toast('Connected - Meta gave this token a 60-day lifetime.', { type: 'success' })
     } else {
-      toast('Connected, but still a short-lived token' + (result?.exchangeNote ? ' (' + result.exchangeNote + ')' : '') + ' — it may expire again within a couple of hours.', { type: 'muted' })
+      toast('Connected, but still a short-lived token' + (result?.exchangeNote ? ' (' + result.exchangeNote + ')' : '') + ' - it may expire again within a couple of hours.', { type: 'muted' })
     }
   }
 
@@ -2189,8 +2189,8 @@ export default function MetaAdsDashboard() {
                     ['CRM Leads','Leads matched from the CRM Google Sheet by exact ad name, for the same date range.'],
                     ['CPL','Cost per lead (Meta) = Spend / Meta Leads.'],
                     ['CPL (CRM)','Cost per CRM lead = Spend / CRM-matched Leads. Shown only where a CRM match exists.'],
-                    ['Human QL','Futwork Human QL Count — qualified leads for this ad in the selected date range, from the CRM sheet.'],
-                    ['AI QL','Futwork AI QL Count — same as Human QL but for AI-qualified leads.'],
+                    ['Human QL','Futwork Human QL Count - qualified leads for this ad in the selected date range, from the CRM sheet.'],
+                    ['AI QL','Futwork AI QL Count - same as Human QL but for AI-qualified leads.'],
                     ['CPQL','Cost per qualified lead = Spend / (Human QL + AI QL).'],
                     ['Conv. Rate','Leads / Clicks × 100.'],
                     ['CRM Conv. Rate','CRM Leads / Clicks × 100.'],
@@ -2211,7 +2211,7 @@ export default function MetaAdsDashboard() {
 
         {loading && data && <div className={styles.syncBar}/>}
 
-        {error && (data ? (<div className={styles.errorBanner} style={{ background:'#FFF7E6', borderColor:'#F2C744', color:'#8A6100' }}>Showing cached data{cacheTs ? ` from ${new Date(cacheTs).toLocaleString()}` : ''} — live refresh failed (Meta rate limit). Retrying shortly…</div>) : (<div className={styles.errorBanner}>{error}</div>))}
+        {error && (data ? (<div className={styles.errorBanner} style={{ background:'#FFF7E6', borderColor:'#F2C744', color:'#8A6100' }}>Showing cached data{cacheTs ? ` from ${new Date(cacheTs).toLocaleString()}` : ''} - live refresh failed (Meta rate limit). Retrying shortly…</div>) : (<div className={styles.errorBanner}>{error}</div>))}
 
         {loading && !data ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF' }}>

@@ -172,7 +172,7 @@ export function AuthProvider({ children }) {
         applyRemoteDesignStyle('button', data.prefs?.lq_button_style)
         applyRemoteDesignStyle('kpi', data.prefs?.lq_kpi_style)
       })
-      .catch(() => {}) // fail silently — localStorage fallback stays
+      .catch(() => {}) // fail silently - localStorage fallback stays
       .finally(() => setPrefsReady(true))
   }
   useEffect(() => { fetchHiddenPages() }, [])

@@ -38,7 +38,7 @@ function shortSource(s) {
   return parts[0] || s
 }
 function fmtC(n) {
-  if (!n && n !== 0) return '—'
+  if (!n && n !== 0) return '-'
   const v = Math.abs(n)
   if (v >= 1e7) return '₹' + (n / 1e7).toFixed(2) + 'Cr'
   if (v >= 1e5) return '₹' + (n / 1e5).toFixed(2) + 'L'

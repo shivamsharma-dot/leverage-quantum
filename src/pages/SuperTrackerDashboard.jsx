@@ -343,7 +343,7 @@ export default function SuperTrackerDashboard() {
                 value={slackWeekOverride}
                 onChange={setSlackWeekOverride}
                 minWidth={220}
-                options={[{ value: 'auto', label: 'Auto — most recent filled-in week' }, ...allWeekLabels.map(w => ({ value: w, label: w }))]}
+                options={[{ value: 'auto', label: 'Auto - most recent filled-in week' }, ...allWeekLabels.map(w => ({ value: w, label: w }))]}
               />
             </div>
           }
@@ -405,9 +405,9 @@ export default function SuperTrackerDashboard() {
                             <Td muted>{r.owner}</Td>
                             <Td muted>{r.toBePosted}</Td>
                             {viewMode === 'latest' ? (
-                              <Td style={{ fontWeight: 600, color: C.navy }}>{weekValue(r, selectedWeek) || '—'}</Td>
+                              <Td style={{ fontWeight: 600, color: C.navy }}>{weekValue(r, selectedWeek) || '-'}</Td>
                             ) : (
-                              activeSection.weekLabels.map(w => <Td key={w}>{weekValue(r, w) || '—'}</Td>)
+                              activeSection.weekLabels.map(w => <Td key={w}>{weekValue(r, w) || '-'}</Td>)
                             )}
                           </tr>
                         ))}

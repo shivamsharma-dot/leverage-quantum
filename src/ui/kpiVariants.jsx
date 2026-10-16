@@ -29,7 +29,7 @@ function DeltaPill({ deltaText, isGood, inline, prevValue }) {
   return (
     <span
       onClick={clickable ? e => { e.stopPropagation(); setShowPrev(v => !v) } : undefined}
-      title={clickable ? (showPrev ? 'Showing the previous value — click for the % change' : 'Click to see the actual previous value') : undefined}
+      title={clickable ? (showPrev ? 'Showing the previous value - click for the % change' : 'Click to see the actual previous value') : undefined}
       style={{
         fontSize: 12, fontWeight: 700, flexShrink: 0,
         color: isGood ? '#15803D' : NAVY,

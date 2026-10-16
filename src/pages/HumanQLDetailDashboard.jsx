@@ -107,7 +107,7 @@ function fmtDur(sec) {
   return m + ':' + String(s).padStart(2, '0')
 }
 function fmtDateLabel(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso + 'T00:00:00')
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
@@ -402,7 +402,7 @@ function RecordingPlayer({ row, onClose }) {
   const pct = duration > 0 ? (curTime / duration) * 100 : 0
 
   if (!row) return null
-  const title = [row.country, row.course].filter(Boolean).join(' — ') || row.prospectId
+  const title = [row.country, row.course].filter(Boolean).join(' - ') || row.prospectId
 
   return (
     <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 500, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 16, boxShadow: '0 16px 40px -8px rgba(15,23,42,0.28)', padding: '12px 18px', width: 420, fontFamily: FONT }}>
@@ -675,8 +675,8 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
     const topCountry = Object.entries(countByCountry).sort((a, b) => b[1] - a[1])[0]
     const topDisposition = Object.entries(countByDisposition).sort((a, b) => b[1] - a[1])[0]
     return {
-      total, topCountry: topCountry ? topCountry[0] : '—', topCountryN: topCountry ? topCountry[1] : 0,
-      topDisposition: topDisposition ? topDisposition[0] : '—',
+      total, topCountry: topCountry ? topCountry[0] : '-', topCountryN: topCountry ? topCountry[1] : 0,
+      topDisposition: topDisposition ? topDisposition[0] : '-',
       avgDur: durN ? Math.round(durSum / durN) : 0,
       distinctDays: [...new Set(filtered.map(r => r.date))].length,
       srCount, acCount,
@@ -758,18 +758,18 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
   function cell(r, key) {
     switch (key) {
       case 'date': return fmtDateLabel(r.date)
-      case 'vertical': return r.vertical || '—'
+      case 'vertical': return r.vertical || '-'
       case 'country': return r.country
       case 'degree': return r.degree
-      case 'course': return <span title={r.course}>{r.course || '—'}</span>
-      case 'intake': return r.intake || '—'
+      case 'course': return <span title={r.course}>{r.course || '-'}</span>
+      case 'intake': return r.intake || '-'
       case 'disposition': return <span style={{ color: DISPOSITION_COLOR[r.disposition] || C.text, fontWeight: 600 }}>{r.disposition}</span>
-      case 'budget': return r.budget || '—'
-      case 'campaign': return <span title={r.campaign}>{r.campaign || '—'}</span>
-      case 'futworkProject': return r.futworkProject || '—'
-      case 'passport': return r.passport || '—'
-      case 'degreeStatus': return r.degreeStatus || '—'
-      case 'questionsForCounselor': return <span title={r.questionsForCounselor}>{r.questionsForCounselor || '—'}</span>
+      case 'budget': return r.budget || '-'
+      case 'campaign': return <span title={r.campaign}>{r.campaign || '-'}</span>
+      case 'futworkProject': return r.futworkProject || '-'
+      case 'passport': return r.passport || '-'
+      case 'degreeStatus': return r.degreeStatus || '-'
+      case 'questionsForCounselor': return <span title={r.questionsForCounselor}>{r.questionsForCounselor || '-'}</span>
       case 'callDuration': return fmtDur(r.callDuration)
       case 'recordingUrl': return r.recordingUrl ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -784,7 +784,7 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
               : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>}
           </button>
         </span>
-      ) : '—'
+      ) : '-'
       case 'prospectId': return r.prospectId ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'monospace', fontSize: 11 }} title={'Open Contact in LeadSquared: ' + r.prospectId}>
           <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.prospectId}</a>
@@ -792,7 +792,7 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           </button>
         </span>
-      ) : '—'
+      ) : '-'
       case 'opportunityId': return r.opportunityId ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'monospace', fontSize: 11 }} title={'Open Opportunity in LeadSquared: ' + r.opportunityId}>
           <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
@@ -800,11 +800,11 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           </button>
         </span>
-      ) : '—'
+      ) : '-'
       // Any sheet-discovered column not given its own case above (see autoCols in
       // fetchRows()) renders here generically, so a newly-added sheet column shows
       // real values immediately rather than a blank dash.
-      default: return <span title={r[key] || ''}>{r[key] || '—'}</span>
+      default: return <span title={r[key] || ''}>{r[key] || '-'}</span>
     }
   }
 
@@ -897,7 +897,7 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
                   <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
                   <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 280, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: '#374151', lineHeight: 1.6 }}>
                     <div style={{ fontWeight: 800, color: C.navy, marginBottom: 6 }}>How these metrics are calculated</div>
-                    <div><strong>Total QLs</strong> — Human (Futwork agent) qualified leads in the selected window.</div>
+                    <div><strong>Total QLs</strong> - Human (Futwork agent) qualified leads in the selected window.</div>
                     <div style={{ marginTop: 6 }}>Date filters scope the KPIs, charts and table by activity date. Column filters below narrow the table (and everything derived from it) by any field shown in it.</div>
                   </div>
                 </>
@@ -932,18 +932,18 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
-            <PremKPI label="Total QLs" value={fmtN(kpi.total)} sub={(monthDay !== 'all' ? 'On ' + fmtDateLabel(monthDay) : fmtScopeLabel(datePreset, selMonth, customFrom, customTo)) + ' — human-qualified leads'} accent={C.navy} icon={KPI_ICONS.total} />
+            <PremKPI label="Total QLs" value={fmtN(kpi.total)} sub={(monthDay !== 'all' ? 'On ' + fmtDateLabel(monthDay) : fmtScopeLabel(datePreset, selMonth, customFrom, customTo)) + ' - human-qualified leads'} accent={C.navy} icon={KPI_ICONS.total} />
             <div onClick={() => toggleVerticalFocus('SR')} role="button" tabIndex={0}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleVerticalFocus('SR') } }}
               title="Click to scope this page to Student Recruitment (SR) leads"
               style={{ cursor: 'pointer', borderRadius: 16, outline: verticalFocus === 'SR' ? '2px solid ' + C.blue : 'none', outlineOffset: 2 }}>
-              <PremKPI label="Student Recruitment (SR)" value={fmtN(kpi.srCount)} sub="Commission-based — paid after admission" accent={C.blue} icon={KPI_ICONS.ai} />
+              <PremKPI label="Student Recruitment (SR)" value={fmtN(kpi.srCount)} sub="Commission-based - paid after admission" accent={C.blue} icon={KPI_ICONS.ai} />
             </div>
             <div onClick={() => toggleVerticalFocus('AC')} role="button" tabIndex={0}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleVerticalFocus('AC') } }}
               title="Click to scope this page to Admission Consultation (AC) leads"
               style={{ cursor: 'pointer', borderRadius: 16, outline: verticalFocus === 'AC' ? '2px solid ' + C.green : 'none', outlineOffset: 2 }}>
-              <PremKPI label="Admission Consultation (AC)" value={fmtN(kpi.acCount)} sub="Upfront payment — direct cash flow" accent={C.green} icon={KPI_ICONS.total} />
+              <PremKPI label="Admission Consultation (AC)" value={fmtN(kpi.acCount)} sub="Upfront payment - direct cash flow" accent={C.green} icon={KPI_ICONS.total} />
             </div>
             <PremKPI label="Top Country" value={kpi.topCountry} sub={fmtN(kpi.topCountryN) + ' leads'} accent={C.blue} icon={KPI_ICONS.globe} />
             <PremKPI label="Top Disposition" value={kpi.topDisposition} sub="Most common outcome" accent={C.cyan} icon={KPI_ICONS.agent} />
@@ -951,7 +951,7 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
           </div>
           {verticalFocus && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -12, marginBottom: 20, fontSize: 12, color: C.muted, fontFamily: FONT }}>
-              Scoped to <b style={{ color: verticalFocus === 'AC' ? C.green : C.blue }}>{verticalFocus}</b> — click the card again to clear.
+              Scoped to <b style={{ color: verticalFocus === 'AC' ? C.green : C.blue }}>{verticalFocus}</b> - click the card again to clear.
             </div>
           )}
 
@@ -962,7 +962,7 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
             <Card title="By Disposition" sub="Call outcome breakdown">
               <RankedBars data={byDisposition} labelKey="disposition" max={byDisposition[0]?.count || 0} total={kpi.total} colorFn={i => DISPOSITION_COLOR[byDisposition[i]?.disposition] || C.navy} />
             </Card>
-            <Card title="Daily Trend — SR vs AC" sub="Qualified leads per day this month, by vertical -- not affected by any filter above" noPad>
+            <Card title="Daily Trend - SR vs AC" sub="Qualified leads per day this month, by vertical -- not affected by any filter above" noPad>
               <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '12px 12px 4px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyTrendMonth} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
@@ -980,7 +980,7 @@ export default function HumanQLDetailDashboard({ embedded, initialFrom, initialT
             </Card>
           </div>
 
-          <Card title={'Lead detail — ' + fmtN(sorted.length) + (sorted.length !== rows.length ? ' of ' + fmtN(rows.length) : '') + ' records'} sub="Drag column headers to reorder" noPad
+          <Card title={'Lead detail - ' + fmtN(sorted.length) + (sorted.length !== rows.length ? ' of ' + fmtN(rows.length) : '') + ' records'} sub="Drag column headers to reorder" noPad
             action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
                 <button type="button" onClick={() => setColsOpen(v => !v)} title="Views &amp; Columns"

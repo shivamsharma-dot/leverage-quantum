@@ -1,15 +1,15 @@
 import { getSessionUser, canAccessDashboard, supabaseAdmin } from '../lib/auth.mjs'
 
 // Server-side proxy for the shared Meta Ads access token (meta_tokens table).
-// Replaces direct client-side Supabase reads/writes to this table — the anon
+// Replaces direct client-side Supabase reads/writes to this table - the anon
 // key is exposed in every browser bundle, so any client-side path to a
 // credential table is a bypass regardless of app-level UI restrictions.
 //
-// GET  — restricted to whichever pages actually consume this token client-side
+// GET  - restricted to whichever pages actually consume this token client-side
 //        (Home summary, Ask AI, Meta Ads) so a viewer granted none of those
 //        can't pull the live token straight from this endpoint and query
 //        Facebook's Graph API directly, bypassing every other restriction.
-// POST — requires meta_ads page access (same gate as the Connect UI itself)
+// POST - requires meta_ads page access (same gate as the Connect UI itself)
 
 // Same app id already public in the client bundle (MetaAdsDashboard.jsx's
 // FB.init call) -- not a secret, safe to duplicate here.

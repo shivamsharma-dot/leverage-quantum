@@ -71,7 +71,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
     setSlackBusy(true)
     try {
       const payload = await slackRich()
-      if (!payload || !payload.pngBase64) throw new Error('Could not render the table image \u2014 narrow the filter or use Export \u2192 CSV')
+      if (!payload || !payload.pngBase64) throw new Error('Could not render the table image - narrow the filter or use Export \u2192 CSV')
       const r = await fetch('/api/send-report', {
         method: 'POST',
         credentials: 'include',
@@ -265,7 +265,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
             onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
             onMouseOut={e=>e.currentTarget.style.background='none'}>
               <SlackIcon size={13} />
-              {slackBusy ? 'Posting…' : 'Send to Slack — test channel'}
+              {slackBusy ? 'Posting…' : 'Send to Slack - test channel'}
             </button>
             <button onClick={() => sendSlack('prod')} disabled={slackBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
@@ -277,7 +277,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
             onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
             onMouseOut={e=>e.currentTarget.style.background='none'}>
               <SlackIcon size={13} />
-              {slackBusy ? 'Posting…' : 'Send to Slack — main channel'}
+              {slackBusy ? 'Posting…' : 'Send to Slack - main channel'}
             </button>
         </>)}
             {extraOption && (

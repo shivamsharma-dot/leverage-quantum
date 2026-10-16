@@ -9,9 +9,9 @@
 import { CAREERS_V2 } from './careersReportV2'
 import { CAREERS_V3 } from './careersReportV3'
 
-const fmtINR = n => n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN')
-const fmtN = n => n == null ? '—' : Math.round(n).toLocaleString('en-IN')
-const pctStr = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—')
+const fmtINR = n => n == null ? '-' : '₹' + Math.round(n).toLocaleString('en-IN')
+const fmtN = n => n == null ? '-' : Math.round(n).toLocaleString('en-IN')
+const pctStr = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '-')
 const fld = (label, value) => '*' + label + '*\n' + value
 
 const DIM_LABEL = { campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
@@ -24,7 +24,7 @@ function buildCareers(ctx) {
 
   const L = []
   L.push(':bar_chart: *Leverage Careers*')
-  L.push('_' + (c.windowLabel || '') + ' — spend, leads, interested and won, by ' + dimLabel.toLowerCase() + '._')
+  L.push('_' + (c.windowLabel || '') + ' - spend, leads, interested and won, by ' + dimLabel.toLowerCase() + '._')
 
   const fields = [
     fld('Spend', fmtINR(t.spend)),

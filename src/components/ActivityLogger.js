@@ -1,4 +1,4 @@
-/* Leverage Quantum — Activity Logger
+/* Leverage Quantum - Activity Logger
  * Comprehensive tracking: page views, clicks, tab switches, sessions.
  * Writes to Supabase `activity_log` table. Throttled + batched to avoid flooding.
  *
@@ -129,7 +129,7 @@ export function installActivityTracker(getEmail, getPathname) {
     logActivity(email, action, getPathname(), detail)
   }
 
-  /* Click capture — find the most meaningful label for what was clicked */
+  /* Click capture - find the most meaningful label for what was clicked */
   const onClick = (e) => {
     const el = e.target?.closest?.('button, a, [role="tab"], [role="button"], [data-track]')
     if (!el) return
@@ -156,7 +156,7 @@ export function installActivityTracker(getEmail, getPathname) {
     fire(isTab ? 'tab' : 'click', label)
   }
 
-  /* Tab/window visibility — track when user switches away/back */
+  /* Tab/window visibility - track when user switches away/back */
   const onVisibility = () => {
     const email = getEmail()
     if (!email) return

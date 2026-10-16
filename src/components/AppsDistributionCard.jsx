@@ -46,7 +46,7 @@ function delta(cur, prev) {
   return ((cur - prev) / prev) * 100
 }
 function DeltaText({ v }) {
-  if (v == null) return <span style={{ color: C.muted }}>—</span>
+  if (v == null) return <span style={{ color: C.muted }}>-</span>
   const up = v >= 0
   return <span style={{ color: up ? C.green : C.navy, fontWeight: 700 }}>{up ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%</span>
 }
@@ -199,7 +199,7 @@ export default function AppsDistributionCard({ rows }) {
                       const p = i > 0 ? intake.get(intake.years[i - 1], m) : null
                       return (
                         <td key={y} style={tdR}>
-                          {v == null ? <span style={{ color: C.muted }}>—</span> : fmtN(v)}
+                          {v == null ? <span style={{ color: C.muted }}>-</span> : fmtN(v)}
                           {v != null && p != null && <div style={{ fontSize: 11 }}><DeltaText v={delta(v, p)} /></div>}
                         </td>
                       )

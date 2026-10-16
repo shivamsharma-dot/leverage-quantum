@@ -125,7 +125,7 @@ export default function ReportsEmailPage({ userEmail, accessList, onBack }) {
     try {
       const r = await fetchT('/api/send-report', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'unassigned_leads', triggered_by: userEmail || 'manual' }) })
       const j = await r.json().catch(() => ({}))
-      setMsg(r.ok ? `Sent — ${j.total ?? '?'} unassigned leads (${j.humanCount ?? '?'} human, ${j.aiCount ?? '?'} AI)` : '✕ ' + (j.error || 'Send failed'))
+      setMsg(r.ok ? `Sent - ${j.total ?? '?'} unassigned leads (${j.humanCount ?? '?'} human, ${j.aiCount ?? '?'} AI)` : '✕ ' + (j.error || 'Send failed'))
     } catch (e) { setMsg('✕ ' + e.message) }
     finally { setSendingTest(false); setTimeout(() => setMsg(''), 8000) }
   }

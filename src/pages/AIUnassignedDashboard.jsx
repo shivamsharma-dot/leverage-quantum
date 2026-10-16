@@ -59,7 +59,7 @@ function parseDate(raw) {
   return null
 }
 function fmtDateLabel(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso + 'T00:00:00')
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
@@ -306,22 +306,22 @@ export default function AIUnassignedDashboard() {
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           </button>
         </span>
-      ) : '—'
+      ) : '-'
       case 'owner': return <span title={r.owner} style={{ color: C.muted, fontStyle: 'italic' }}>{ownerName(r.owner)} <span style={{ opacity: 0.6 }}>(bot)</span></span>
       case 'country': return r.country
       case 'degree': return r.degree
-      case 'course': return <span title={r.course}>{r.course || '—'}</span>
+      case 'course': return <span title={r.course}>{r.course || '-'}</span>
       case 'disposition': return <span title={r.disposition}>{r.disposition}</span>
-      case 'status': return r.status || '—'
-      case 'budget': return r.budget || '—'
-      case 'campaign': return <span title={r.campaign}>{r.campaign || '—'}</span>
-      case 'channel': return r.channel || '—'
+      case 'status': return r.status || '-'
+      case 'budget': return r.budget || '-'
+      case 'campaign': return <span title={r.campaign}>{r.campaign || '-'}</span>
+      case 'channel': return r.channel || '-'
       case 'recordingUrl': return r.recordingUrl ? (
         <a href={r.recordingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none', fontWeight: 600, fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg> Play
         </a>
-      ) : '—'
-      default: return '—'
+      ) : '-'
+      default: return '-'
     }
   }
 
@@ -395,8 +395,8 @@ export default function AIUnassignedDashboard() {
                     <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
                     <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 280, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: '#374151', lineHeight: 1.6 }}>
                       <div style={{ fontWeight: 800, color: C.navy, marginBottom: 6 }}>How these metrics are calculated</div>
-                      <div><strong>Unassigned Leads</strong> — rows where the owner is still a bot/vendor placeholder (Futwork AI/Superbot), not a real floor owner.</div>
-                      <div style={{ marginTop: 6 }}><strong>Age</strong> — days since first AI activity date.</div>
+                      <div><strong>Unassigned Leads</strong> - rows where the owner is still a bot/vendor placeholder (Futwork AI/Superbot), not a real floor owner.</div>
+                      <div style={{ marginTop: 6 }}><strong>Age</strong> - days since first AI activity date.</div>
                       <div style={{ marginTop: 6 }}>Date filters scope the table, KPIs and charts by that same activity date.</div>
                     </div>
                   </>
@@ -438,7 +438,7 @@ export default function AIUnassignedDashboard() {
             </Card>
           </div>
 
-          <Card title={'Unassigned leads — ' + fmtN(sorted.length) + ' records'} sub="Search by course, country, campaign, ID or owner" noPad
+          <Card title={'Unassigned leads - ' + fmtN(sorted.length) + ' records'} sub="Search by course, country, campaign, ID or owner" noPad
             action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}

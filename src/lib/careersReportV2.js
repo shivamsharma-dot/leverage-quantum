@@ -13,7 +13,7 @@
 // file, not this one.
 import { money } from './pmReport'
 
-const DASH = '—'
+const DASH = '-'
 const DOT = ' · '
 // Same paid list as OverallDashboard.jsx's PAID_SOURCE_KEYS -- one definition of
 // paid across the two pages.
@@ -330,13 +330,13 @@ export const CAREERS_V2 = {
   id: 'careers_v2',
   code: 'V2',
   msgKeys: ['mtd', 'program', 'yday', 'dow'],
-  name: 'Summary + table — MTD, Last Day, day on day',
+  name: 'Summary + table - MTD, Last Day, day on day',
   tagline: 'Three messages: month to date, yesterday, and every day against the day before.',
   what: [
-    'Message 1 — MTD Performance: the KPI stack and the Paid vs Non-Paid native table by Source',
-    'Message 2 — Programs: each program with its Paid and Non-Paid rows, MTD',
-    'Message 3 — Last Day Performance: yesterday, read against the day before it',
-    'Message 4 — Day on Day Performance: one row per day, newest first',
+    'Message 1 - MTD Performance: the KPI stack and the Paid vs Non-Paid native table by Source',
+    'Message 2 - Programs: each program with its Paid and Non-Paid rows, MTD',
+    'Message 3 - Last Day Performance: yesterday, read against the day before it',
+    'Message 4 - Day on Day Performance: one row per day, newest first',
     'Every metric column is followed by a vs column carrying the movement AND the figure it moved from',
     'Table image and the all-columns CSV in the thread of message 1',
   ],

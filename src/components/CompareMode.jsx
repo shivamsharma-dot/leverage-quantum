@@ -9,13 +9,13 @@ const MONTHS = ['Jan-2025','Feb-2025','Mar-2025','Apr-2025','May-2025','Jun-2025
 const SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 const METRICS = [
-  { id:'spend',     label:'Ad Spend',     format: v => v > 0 ? '₹' + (v/1e7).toFixed(2) + ' Cr' : '—' },
-  { id:'opps',      label:'OPPs',         format: v => v > 0 ? (v/1e5).toFixed(2) + 'L' : '—' },
-  { id:'qls',       label:'QLs',          format: v => v > 0 ? (v/1000).toFixed(1) + 'K' : '—' },
-  { id:'cpl',       label:'CPL',          format: v => v > 0 ? '₹' + v.toLocaleString('en-IN') : '—' },
-  { id:'roas',      label:'ROAS',         format: v => v > 0 ? v + 'x' : '—' },
-  { id:'total_rev', label:'Revenue',      format: v => v > 0 ? '₹' + (v/1e7).toFixed(2) + ' Cr' : '—' },
-  { id:'ql_pct',    label:'QL%',          format: v => v > 0 ? v + '%' : '—' },
+  { id:'spend',     label:'Ad Spend',     format: v => v > 0 ? '₹' + (v/1e7).toFixed(2) + ' Cr' : '-' },
+  { id:'opps',      label:'OPPs',         format: v => v > 0 ? (v/1e5).toFixed(2) + 'L' : '-' },
+  { id:'qls',       label:'QLs',          format: v => v > 0 ? (v/1000).toFixed(1) + 'K' : '-' },
+  { id:'cpl',       label:'CPL',          format: v => v > 0 ? '₹' + v.toLocaleString('en-IN') : '-' },
+  { id:'roas',      label:'ROAS',         format: v => v > 0 ? v + 'x' : '-' },
+  { id:'total_rev', label:'Revenue',      format: v => v > 0 ? '₹' + (v/1e7).toFixed(2) + ' Cr' : '-' },
+  { id:'ql_pct',    label:'QL%',          format: v => v > 0 ? v + '%' : '-' },
 ]
 
 export default function CompareMode({ monthlyData, onClose }) {
@@ -102,7 +102,7 @@ export default function CompareMode({ monthlyData, onClose }) {
 
           {/* Bar chart */}
           <div style={{background:'#F9FAFB',borderRadius:12,padding:'16px',border:'1px solid #F3F4F6'}}>
-            <p style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:12}}>All metrics comparison — {m1.replace('-2025','')} vs {m2.replace('-2025','')}</p>
+            <p style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:12}}>All metrics comparison - {m1.replace('-2025','')} vs {m2.replace('-2025','')}</p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData} margin={{left:0,right:0,top:0,bottom:0}}>
                 <defs>

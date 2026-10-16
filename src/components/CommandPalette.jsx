@@ -1,8 +1,8 @@
 // src/components/CommandPalette.jsx
-// Cmd/Ctrl+K command palette — fast keyboard-driven navigation across the app.
+// Cmd/Ctrl+K command palette - fast keyboard-driven navigation across the app.
 // Self-contained: listens for the global shortcut, renders an overlay with a
 // fuzzy-ish filtered list of destinations, supports arrow-key + Enter navigation,
-// Esc / backdrop click to close. Presentational only — no data or backend changes.
+// Esc / backdrop click to close. Presentational only - no data or backend changes.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 

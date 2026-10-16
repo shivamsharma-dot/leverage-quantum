@@ -227,7 +227,7 @@ input:focus, textarea:focus {
   }
 }
 
-/* ── THEMES — applied via data-theme on <html> ─────────────────────────────── */
+/* ── THEMES - applied via data-theme on <html> ─────────────────────────────── */
 
 [data-theme="dark"] {
   /* Reworked. Was 35 of :root 44 tokens, --bg2 and --bg3 both #1E293B, and solid dark borders. Now: a real 4-step surface ramp (page / card+sidebar+header / inset / inputs recessed below the card), navy-cast neutrals instead of stock slate, separation from a hairline of LIGHT at low alpha because a dark border is invisible on a dark surface, and the 11 tokens that were missing from every theme block -- the six accents (light-mode hexes were rendering onto near-black; navy was 1.79:1), the three shadows (rgba(15,23,42,..) is near-black on near-black, so nothing read as elevated) and the two chart tokens (a near-white grid on every chart). Contrast measured, not eyeballed: text 15.8, text2 8.2, text3 4.3 on card; accents 5.9-9.6. Full reasoning in the CLAUDE.md entry. */
@@ -432,7 +432,7 @@ input:focus, textarea:focus {
 }
 
 /* ============================================================
-   MOTION LAYER — subtle, on-brand micro-interactions
+   MOTION LAYER - subtle, on-brand micro-interactions
    Brand: navy #1F3C84 · blue #1C9FD4 · cyan #29B9C3 · green #4CAE6F
    ============================================================ */
 @keyframes lqRise {
@@ -468,11 +468,11 @@ input:focus, textarea:focus {
 .lq-stagger > *:nth-child(7) { animation-delay: .40s; }
 .lq-stagger > *:nth-child(8) { animation-delay: .46s; }
 
-/* Hover lift — premium card interaction. */
+/* Hover lift - premium card interaction. */
 .lq-lift { transition: transform .22s cubic-bezier(0.22,0.61,0.36,1), box-shadow .22s ease, border-color .22s ease; }
 .lq-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(15,23,42,0.10); }
 
-/* Brand sheen — for 'AI' surfaces. Element needs position/overflow set by caller. */
+/* Brand sheen - for 'AI' surfaces. Element needs position/overflow set by caller. */
 .lq-sheen {
   background-image: linear-gradient(110deg, transparent 30%, rgba(28,159,212,0.10) 45%, rgba(41,185,195,0.14) 50%, transparent 70%);
   background-size: 220% 100%;
@@ -489,7 +489,7 @@ input:focus, textarea:focus {
   .lq-lift { transition: none; }
 }
 
-/* KPI card hover lift — applies to all PremKPI across dashboards */
+/* KPI card hover lift - applies to all PremKPI across dashboards */
 .kpiCard { transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s cubic-bezier(.4,0,.2,1), border-color .18s ease; will-change: transform; }
 .kpiCard:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(16,24,40,0.05), 0 18px 36px -16px rgba(31,60,132,0.32); border-color: rgba(31,60,132,0.22); }
 

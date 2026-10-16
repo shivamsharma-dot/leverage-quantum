@@ -60,7 +60,7 @@ function findContentRoot() {
 // good enough to de-garble the common "Heading" + "Subtitle" concatenation
 // without mangling a genuine word.
 function humanizeTitle(raw) {
-  let t = raw.replace(/([a-z0-9])([A-Z][a-z])/g, '$1 — $2').trim()
+  let t = raw.replace(/([a-z0-9])([A-Z][a-z])/g, '$1 - $2').trim()
   if (t.length > 70) {
     const cut = t.slice(0, 70)
     const lastSpace = cut.lastIndexOf(' ')

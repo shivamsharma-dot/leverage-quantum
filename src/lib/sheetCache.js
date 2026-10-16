@@ -1,5 +1,5 @@
 // src/lib/sheetCache.js
-// Shared in-memory CSV fetch cache — prevents 4+ simultaneous fetches of the same sheet
+// Shared in-memory CSV fetch cache - prevents 4+ simultaneous fetches of the same sheet
 // TTL: 2 minutes. All components share one fetch per URL.
 // Resilience: successful responses are mirrored to localStorage so that a transient
 // network/fetch failure can fall back to the last known-good data instead of breaking
@@ -8,7 +8,7 @@
 const CACHE = {}
 const TTL = 2 * 60 * 1000 // 2 minutes
 const PERSIST_PREFIX = 'qsheet:' // localStorage key prefix
-const PERSIST_TTL = 24 * 60 * 60 * 1000 // 24h — how long a persisted fallback stays usable
+const PERSIST_TTL = 24 * 60 * 60 * 1000 // 24h - how long a persisted fallback stays usable
 
 function lsGet(url) {
   try {
@@ -27,7 +27,7 @@ function lsSet(url, data, ts) {
   try {
     localStorage.setItem(PERSIST_PREFIX + url, JSON.stringify({ data, ts }))
   } catch (_) {
-    // quota exceeded / disabled storage — ignore, in-memory cache still works
+    // quota exceeded / disabled storage - ignore, in-memory cache still works
   }
 }
 

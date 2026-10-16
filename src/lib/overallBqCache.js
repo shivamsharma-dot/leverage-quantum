@@ -185,24 +185,45 @@ export async function fetchOverallBqCampaignRows({ since, until, patterns, signa
   const select = BQ_COLUMNS.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
   const orClause = '(' + pats.map(x => 'campaign_name.ilike."*' + x.replace(/["*]/g, '') + '*"').join(',') + ')'
-  const rows = []
-  let cur = null
-  for (let guard = 0; guard < 200; guard++) {
-    const p = new URLSearchParams({ select: select + ',row_key', order: 'row_key.asc', limit: String(PAGE) })
-    p.set('lead_date_iso', 'gte.' + since)
-    p.append('lead_date_iso', 'lte.' + until)
-    p.set('or', orClause)
-    if (cur != null) p.set('row_key', 'gt.' + cur)
-    const r = await fetch(SB_URL + '/rest/v1/overall_bq_daily?' + p.toString(), signal ? { headers, signal } : { headers })
-    if (!r.ok) throw new Error('overall_bq_daily campaign read failed (' + r.status + ')')
-    const page = await r.json()
-    if (!Array.isArray(page)) throw new Error('overall_bq_daily returned a non-array response')
-    if (!page.length) break
-    for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
-    if (page.length < PAGE) break
-    cur = page[page.length - 1].row_key
+  // A campaign-name ilike cannot use an index, so one read over a whole month times out in Postgres
+  // (57014) and the retries made the Slack Scorecard take over a minute. Split the window into
+  // 3-day slices and read 4 slices at a time: each slice is a small scan that finishes quickly.
+  const dayMs = 86400000
+  const slices = []
+  for (let t = Date.parse(since + 'T00:00:00Z'); t <= Date.parse(until + 'T00:00:00Z'); t += 3 * dayMs) {
+    const end = Math.min(t + 2 * dayMs, Date.parse(until + 'T00:00:00Z'))
+    slices.push([new Date(t).toISOString().slice(0, 10), new Date(end).toISOString().slice(0, 10)])
   }
-  return rows
+  const readSlice = async ([from, to]) => {
+    const rows = []
+    let cur = null
+    for (let guard = 0; guard < 200; guard++) {
+      const p = new URLSearchParams({ select: select + ',row_key', order: 'row_key.asc', limit: String(PAGE) })
+      p.set('lead_date_iso', 'gte.' + from)
+      p.append('lead_date_iso', 'lte.' + to)
+      p.set('or', orClause)
+      if (cur != null) p.set('row_key', 'gt.' + cur)
+      let page = null
+      for (let attempt = 0; attempt < 3 && page == null; attempt++) {
+        const r = await fetch(SB_URL + '/rest/v1/overall_bq_daily?' + p.toString(), signal ? { headers, signal } : { headers })
+        if (r.ok) { page = await r.json(); break }
+        if (attempt === 2) throw new Error('overall_bq_daily campaign read failed (' + r.status + ')')
+        await new Promise(res => setTimeout(res, 300 * (attempt + 1)))
+      }
+      if (!Array.isArray(page)) throw new Error('overall_bq_daily returned a non-array response')
+      if (!page.length) break
+      for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+      if (page.length < PAGE) break
+      cur = page[page.length - 1].row_key
+    }
+    return rows
+  }
+  const out = []
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(4, slices.length) }, async () => {
+    while (next < slices.length) { const i = next++; out.push(...await readSlice(slices[i])) }
+  }))
+  return out
 }
 
 // The Overall (BigQuery) page's own DEFAULT-view snapshot (2026-09-19) -- see

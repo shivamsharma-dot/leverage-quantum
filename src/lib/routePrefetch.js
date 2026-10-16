@@ -80,7 +80,7 @@ const ROUTE_COMPONENT = {
 const warmed = new Set()
 
 // Warm a single route's chunk (e.g. on sidebar hover/focus). Safe to call
-// repeatedly — only fetches once per session.
+// repeatedly - only fetches once per session.
 export function prefetchRoute(path) {
   const base = (path || '').split('?')[0]
   const key = ROUTE_COMPONENT[base]

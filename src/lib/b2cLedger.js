@@ -59,10 +59,10 @@ const NAME = {}
 PLAN.forEach(function (p) { if (p[0] !== 'band') NAME[p[0]] = p[1] })
 
 const SR_NOTE = 'SR is Online and Offline together in the sheet today. The split is coming shortly.'
-const COST_NOTE = 'Cost is booked by head, and a head is a cost category \u2014 People, Operating (AC + Leverage One), Performance Marketing, Offline (rent, staff, maintenance), Corporate Overheads \u2014 each one covering the whole business. It is not booked by business line, so there is no cost of SR, of AC or of Leverage One in this sheet to publish yet.'
+const COST_NOTE = 'Cost is booked by head, and a head is a cost category - People, Operating (AC + Leverage One), Performance Marketing, Offline (rent, staff, maintenance), Corporate Overheads - each one covering the whole business. It is not booked by business line, so there is no cost of SR, of AC or of Leverage One in this sheet to publish yet.'
 
 function money(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   const a = Math.abs(n)
   const sg = n < 0 ? '-' : ''
   if (a >= CR) return sg + '\u20B9' + (a / CR).toFixed(2) + ' Cr'
@@ -72,12 +72,12 @@ function money(n) {
 
 // A movement, where the sign is the whole point.
 function signed(n) {
-  if (n == null || !isFinite(n)) return '\u2014'
+  if (n == null || !isFinite(n)) return '-'
   return (n > 0 ? '+' : '') + money(n)
 }
 
 function share(part, whole) {
-  if (part == null || !whole) return '\u2014'
+  if (part == null || !whole) return '-'
   return (part / whole * 100).toFixed(1) + '%'
 }
 
@@ -208,8 +208,8 @@ function buildLedger(ctx) {
   if (ytd && c.ytd) win.push(c.ytd.label + ' = ' + c.ytd.from + ' to ' + c.ytd.to)
 
   const lead = [
-    ':ledger: *B2C \u2014 the full ledger*',
-    '_Every revenue line and every cost head the finance sheet carries, side by side, across the last completed day, the month so far and the financial year so far. Everything stops at ' + cut + ' \u2014 the day in progress is never counted._'
+    ':ledger: *B2C - the full ledger*',
+    '_Every revenue line and every cost head the finance sheet carries, side by side, across the last completed day, the month so far and the financial year so far. Everything stops at ' + cut + ' - the day in progress is never counted._'
   ]
   // People is sometimes booked once a month rather than day by day. When that is
   // so the daily totals genuinely do not contain it, and saying so is the only
@@ -222,7 +222,7 @@ function buildLedger(ctx) {
 
   const one = {
     key: 'b2c_ledger_lines',
-    label: 'B2C \u2014 revenue and cost, one table',
+    label: 'B2C - revenue and cost, one table',
     text: lead.join('\n'),
     after: caveat.length ? caveat.join('\n') : null,
     table: body(cols, live, function (col, k) { return money(col.v[k]) }, false),
@@ -249,7 +249,7 @@ function buildLedger(ctx) {
   const shareLive = live.filter(function (p) { return p[0] !== 'rev' })
   const second = {
     key: 'b2c_ledger_shape',
-    label: 'B2C \u2014 what moved, and the shape of each period',
+    label: 'B2C - what moved, and the shape of each period',
     text: two.length ? two.join('\n') : '*The shape of each period*',
     after: '*Every line as a share of that period\u2019s own revenue*\n_Rupees cannot be compared across a day, a month and a year. The shape of the P&L can._',
     table: body(cols, shareLive, function (col, k) { return share(col.v[k], col.v.rev) }, true),
@@ -263,7 +263,7 @@ export const B2C_LEDGER_VERSIONS = [{
   id: 'b2c_ledger',
   code: 'B2C-L',
   msgKeys: ['b2c_ledger_lines', 'b2c_ledger_shape'],
-  name: 'B2C \u2014 the full ledger',
+  name: 'B2C - the full ledger',
   tagline: 'Every revenue line and every cost head in one native table, across last day, month to date and FY to date, with totals.',
   what: [
     'One table with revenue above cost, so the two are read against each other instead of in separate blocks',
@@ -274,7 +274,7 @@ export const B2C_LEDGER_VERSIONS = [{
     'A second table with the same lines as a share of that period\u2019s own revenue, which is what makes a day, a month and a year comparable',
     'Slack\u2019s own table block, not a monospace code block, so a phone lays the columns out instead of wrapping them',
     'A per-day reading when the two months compared are different lengths, so a 31 day month is never flattered by a 30 day one',
-    'A plain statement of what a cost head is \u2014 a cost category, not a business line \u2014 so nobody hunts the table for a cost of SR, AC or Leverage One that the sheet does not carry',
+    'A plain statement of what a cost head is - a cost category, not a business line - so nobody hunts the table for a cost of SR, AC or Leverage One that the sheet does not carry',
     'What moved and what would close the gap, both arithmetic on the windows above',
     'The table image and a CSV land in the thread'
   ],

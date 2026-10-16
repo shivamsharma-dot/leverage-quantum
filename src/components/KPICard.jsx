@@ -1,5 +1,5 @@
 /**
- * Leverage Quantum — Unified KPICard component
+ * Leverage Quantum - Unified KPICard component
  * Visual style is selectable live from Settings > Appearance (15 directions)
  * via useDesignStyle('kpi') -- see src/ui/kpiVariants.js for the render engine
  * shared with dashboardKit.jsx's PremKPI, so picking a variant re-skins every
@@ -10,14 +10,14 @@ import { useDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 
 /**
- * @param {string}  label      — metric name (shown uppercase, small)
- * @param {string}  value      — primary metric value
- * @param {string}  [sub]      — secondary line below value (context/date)
- * @param {number}  [delta]    — WoW/MoM change as a number (positive=good, negative=bad)
- * @param {boolean} [deltaInvert] — if true, negative delta is good (e.g. CPL — lower is better)
- * @param {string}  [deltaLabel]  — override delta pill text
- * @param {React.ReactNode} [icon] — optional 14x14 SVG icon (rendered as muted monochrome)
- * @param {string}  [prevValue] — pre-formatted actual prior-period value; when set, the
+ * @param {string}  label      - metric name (shown uppercase, small)
+ * @param {string}  value      - primary metric value
+ * @param {string}  [sub]      - secondary line below value (context/date)
+ * @param {number}  [delta]    - WoW/MoM change as a number (positive=good, negative=bad)
+ * @param {boolean} [deltaInvert] - if true, negative delta is good (e.g. CPL - lower is better)
+ * @param {string}  [deltaLabel]  - override delta pill text
+ * @param {React.ReactNode} [icon] - optional 14x14 SVG icon (rendered as muted monochrome)
+ * @param {string}  [prevValue] - pre-formatted actual prior-period value; when set, the
  *   delta pill becomes clickable and swaps between the % and "was <prevValue>" in place
  */
 export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLabel, icon, prevValue }) {

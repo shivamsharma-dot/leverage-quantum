@@ -14,7 +14,7 @@
 
 const DOT = ' \u00b7 '
 const BUL = '\u2022 '
-const DASH = '\u2014'
+const DASH = '-'
 
 const list = arr => arr.filter(Boolean).map(s => BUL + s).join('\n')
 

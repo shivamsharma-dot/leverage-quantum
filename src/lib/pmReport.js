@@ -14,7 +14,7 @@
 const DOT = '   \u00b7   '
 const BUL = '\u2022 '
 const TO = '\u2192'
-const DASH = '\u2014'
+const DASH = '-'
 
 const abs1 = n => Math.abs(n).toFixed(1) + '%'
 const pctText = n => n.toFixed(1) + '%'
@@ -118,9 +118,9 @@ function corridorTable(ctx, cr) {
       (s.spend > 0 && s.paidQL > 0) ? ctx.fmtINR(s.spend / s.paidQL) : DASH, ctx.fmtN(s.apps)], true)
   }
   if (cr.single) { cr.best.forEach(c => push(line(c), false)); return t }
-  band('TOP 5 — CHEAPEST QL', cr.best)
+  band('TOP 5 - CHEAPEST QL', cr.best)
   cr.best.forEach(c => push(line(c), false))
-  band('BOTTOM 5 — DEAREST QL', cr.worst)
+  band('BOTTOM 5 - DEAREST QL', cr.worst)
   cr.worst.forEach(c => push(line(c), false))
   return t
 }
@@ -1081,10 +1081,10 @@ export const REPORT_VERSIONS = [
     tagline: 'Same as V8, with a reshaped Sales Efficiency table (Total/SR/AC as rows, each with its own Outcome % and run-rate).',
     recommended: true,
     what: [
-      'Message 1 (Marketing Efficiency): identical to V8 (see its own "what" list for the full column/definition detail) — Overall/Paid/Organic/Referral, SR/AC split, AC Sales editable right in this panel.',
+      'Message 1 (Marketing Efficiency): identical to V8 (see its own "what" list for the full column/definition detail) - Overall/Paid/Organic/Referral, SR/AC split, AC Sales editable right in this panel.',
       'Message 2 (Sales Efficiency), reshaped 2026-09-11: a 4-column table with Total/SR/AC as rows, not a flat list. Each row gets its own Total QL, its own Applications-or-AC-Sales figure (SR tracks via Applications, AC via the manually-entered AC Sales, Total is their sum), its own QL → Outcome % (whole number, no decimal), and its own QL daily run-rate. A Superbot row appears only when it\'s actually non-zero (not split by vertical, so its Applications/AC Sales and % cells are a dash).',
       'Always the current calendar month through the last COMPLETE day, independent of whatever date range or grouping the page itself has selected.',
-      'No image, no CSV attachment — a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
+      'No image, no CSV attachment - a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
     ],
     build: buildV9,
   },
@@ -1096,10 +1096,10 @@ export const REPORT_VERSIONS = [
     tagline: 'Spend/Leads/Total QLs/CPL/CPQL/Lead-to-QL%/SR-AC split by Overall/Paid/Organic/Referral, plus Total QL, Applications, AC Sales and the QL run-rate. Always this calendar month, complete days only.',
     recommended: false,
     what: [
-      'Message 1 (Marketing Efficiency) — Marketing Spend, Total Leads, Total QLs (with its SR/AC vertical split), CPL, CPQL and Lead to QL % as a native table, one row each for Overall, Paid, Organic (folds in the small "Others" bucket) and Referral. Organic/Referral show Spend/CPL/CPQL as a dash, never a stray near-zero figure — neither runs real media spend. The "Total Leads" column shows Futwork Queued (Human + AI), not Total Leads Generated (2026-09-11) — Total Leads Generated is scoped by a lead\'s own creation date while the Queued counts are scoped by their own, independently-timestamped routing date, so the two don\'t nest inside each other; showing Futwork Queued here keeps the column consistent with what Lead to QL % actually divides by. Lead to QL % is Quantum\'s own existing definition used everywhere else in the app — Futwork Human QL + Futwork AI QL over Total Queued on Futwork, excluding Superbot and Floor-routed leads.',
-      'Message 2 (Sales Efficiency) — Total QL this month with its SR/AC split (from Monthly QLs\' own pipeline; a non-zero unsplit Superbot QL is disclosed on its own line), total Applications this month (unfiltered), AC Sales (entered right in this panel above the preview — its own separate figure from Marketing Review\'s own AC Sales), and a combined QL → Outcome % ((Applications + AC Sales) ÷ Total QL), plus the QL daily run-rate.',
-      'Always the current calendar month through the last COMPLETE day (never today\'s still-accumulating numbers), independent of whatever date range or grouping the page itself has selected — read fresh off the BigQuery cache the first time this panel is opened.',
-      'No image, no CSV attachment — this is a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
+      'Message 1 (Marketing Efficiency) - Marketing Spend, Total Leads, Total QLs (with its SR/AC vertical split), CPL, CPQL and Lead to QL % as a native table, one row each for Overall, Paid, Organic (folds in the small "Others" bucket) and Referral. Organic/Referral show Spend/CPL/CPQL as a dash, never a stray near-zero figure - neither runs real media spend. The "Total Leads" column shows Futwork Queued (Human + AI), not Total Leads Generated (2026-09-11) - Total Leads Generated is scoped by a lead\'s own creation date while the Queued counts are scoped by their own, independently-timestamped routing date, so the two don\'t nest inside each other; showing Futwork Queued here keeps the column consistent with what Lead to QL % actually divides by. Lead to QL % is Quantum\'s own existing definition used everywhere else in the app - Futwork Human QL + Futwork AI QL over Total Queued on Futwork, excluding Superbot and Floor-routed leads.',
+      'Message 2 (Sales Efficiency) - Total QL this month with its SR/AC split (from Monthly QLs\' own pipeline; a non-zero unsplit Superbot QL is disclosed on its own line), total Applications this month (unfiltered), AC Sales (entered right in this panel above the preview - its own separate figure from Marketing Review\'s own AC Sales), and a combined QL → Outcome % ((Applications + AC Sales) ÷ Total QL), plus the QL daily run-rate.',
+      'Always the current calendar month through the last COMPLETE day (never today\'s still-accumulating numbers), independent of whatever date range or grouping the page itself has selected - read fresh off the BigQuery cache the first time this panel is opened.',
+      'No image, no CSV attachment - this is a small, fixed scorecard, not the funnel/campaign grid the other versions export.',
     ],
     build: buildV8,
   },
@@ -1142,13 +1142,13 @@ export const REPORT_VERSIONS = [
     tagline: 'Facebook + Google against the 10 L a day budget, the best optimised campaigns, and every CPQL running high. Complete days only, so it always reads to D-1.',
     recommended: false,
     what: [
-      'Message 1 — budget scorecard: yesterday against the 10 L a day cap, with QLs, CPQL, the target QLs a day, whether it was a bonus day and which condition failed when it was not, the last seven complete days against the seven before them, and a day-by-day table carrying a bonus column.',
-      'Message 2 — best optimised campaigns: the qualifying set over a rolling 30 complete days, cheapest CPQL first, with spend, share of spend, QLs and CPQL, an ALL QUALIFYING total row, and the corridors ranked cheapest first underneath.',
-      'Message 3 — CPQL running high: every campaign above 1.5x the qualifying-track CPQL, ordered by the rupees it spent above that rate rather than by the multiple, then the corridors over the same line, then any spend that produced no QLs at all.',
+      'Message 1 - budget scorecard: yesterday against the 10 L a day cap, with QLs, CPQL, the target QLs a day, whether it was a bonus day and which condition failed when it was not, the last seven complete days against the seven before them, and a day-by-day table carrying a bonus column.',
+      'Message 2 - best optimised campaigns: the qualifying set over a rolling 30 complete days, cheapest CPQL first, with spend, share of spend, QLs and CPQL, an ALL QUALIFYING total row, and the corridors ranked cheapest first underneath.',
+      'Message 3 - CPQL running high: every campaign above 1.5x the qualifying-track CPQL, ordered by the rupees it spent above that rate rather than by the multiple, then the corridors over the same line, then any spend that produced no QLs at all.',
       'A bonus day spends under the cap, holds CPQL at or below the benchmark, and still clears its own trailing seven-day QL average. The benchmark is the all-in CPQL of the 30 complete days that ended when the month began, frozen so it cannot drift day to day.',
       'Only campaigns whose leads were actually sent for qualification, 25 or more queued inside the window, are judged on cost per QL. Campaigns routed straight to the floor cannot produce a QL, so they are out of every campaign and corridor list here, and message 1 states their spend on its own line so the all-in CPQL still reconciles to the full budget.',
       'The QL a day target is a band the team sets, currently 550 to 600. The line under it says what the qualifying-track CPQL supports at the 10 L cap, so the band is never presented as though it fell out of the data.',
-      'Scope is Facebook + Google only, and QLs come from the Overall sheet, so campaign and corridor are the finest levels available — there is no ad-level or keyword-level QL attribution to police. No Meta or Google platform metrics, and no projections: V5 reports what happened and nothing else.',
+      'Scope is Facebook + Google only, and QLs come from the Overall sheet, so campaign and corridor are the finest levels available - there is no ad-level or keyword-level QL attribution to police. No Meta or Google platform metrics, and no projections: V5 reports what happened and nothing else.',
     ],
     build: buildV5,
   },
@@ -1160,11 +1160,11 @@ id: 'v4',
     tagline: 'Marketing-only KPI grid, share of spend inside the table, Facebook + Google corridors, ad winners and losers.',
     recommended: true,
     what: [
-      'Message 1 — executive summary as a two-column KPI grid: spend, leads, Total QLs (split into Human and AI), CPL, CPQL, and the Queued to QL rate, each carrying the number it moved from, plus the projected spend to month end at the current run-rate',
-      'Message 2 — Paid vs Non-Paid channel table with its own % of spend column, then key findings and recommendations. No pie chart, no Offers or RAUs columns',
-      'Message 3 — corridors on Facebook + Google campaigns only, split into a cheapest and a dearest band, as a native table and a CPQL chart',
-      'Message 4 — the cheapest and the dearest ads on CPQL, as a native table',
-      'Message 5 — what we did right, what went wrong, what we can improve, every line a marketing lever and nothing past the application',
+      'Message 1 - executive summary as a two-column KPI grid: spend, leads, Total QLs (split into Human and AI), CPL, CPQL, and the Queued to QL rate, each carrying the number it moved from, plus the projected spend to month end at the current run-rate',
+      'Message 2 - Paid vs Non-Paid channel table with its own % of spend column, then key findings and recommendations. No pie chart, no Offers or RAUs columns',
+      'Message 3 - corridors on Facebook + Google campaigns only, split into a cheapest and a dearest band, as a native table and a CPQL chart',
+      'Message 4 - the cheapest and the dearest ads on CPQL, as a native table',
+      'Message 5 - what we did right, what went wrong, what we can improve, every line a marketing lever and nothing past the application',
       'Every message also carries a freshness read off the last complete day and the day-by-day series: yesterday against its own trailing week, any CPQL streak, where the day ranks in the window, the largest single-day channel shift, corridor and ad rank movement, and the last seven days against the seven before',
       'Every message states in a footer exactly how its deltas were calculated',
       'Table image and the all-columns CSV land in the thread of message 2',

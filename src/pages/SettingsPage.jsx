@@ -253,9 +253,9 @@ const DATA_SOURCES = [
   // SECRET_KEY), never app_preferences. No editKey/defaultUrl, so this falls into the same
   // 'api' category as Meta Graph API / Google Ads API (see sourceCategory()) and gets the
   // lighter apiTestMode test button instead of the sheet-URL edit/diagnostics UI.
-  { name: 'LeadSquared — Leads', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'leads' },
-  { name: 'LeadSquared — Activity', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'activities' },
-  { name: 'LeadSquared — Opportunities', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'opportunities' },
+  { name: 'LeadSquared - Leads', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'leads' },
+  { name: 'LeadSquared - Activity', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'activities' },
+  { name: 'LeadSquared - Opportunities', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'opportunities' },
   // Google BigQuery, reached through /api/crm-leads?source=bigquery. Read-only:
   // the authorising account holds viewer access, and lib/bigquery.mjs refuses
   // anything that is not a SELECT/WITH. Credentials are Vercel env only.
@@ -515,14 +515,14 @@ function KpiIconPreview({ name, color = 'var(--text-3)' }) {
 // ---- Report email preview (mirrors api/send-report.js buildReport()) ----
 // Sample data + AI text stand in for a live send; header/KPI/table/footer markup is copied verbatim.
 const RP_SAMPLE = {
-  daily:   { periodLabel: 'Yesterday — Tue, 14 Jul 2026', spend: 412000, impr: 1284000, clicks: 9820, ctr: 0.76, cpm: 321, freq: 2.9, reach: 441000, leads: 186, days: 1 },
-  weekly:  { periodLabel: 'Last 7 Days — 08 Jul to 14 Jul 2026', spend: 2890000, impr: 8760000, clicks: 64200, ctr: 0.73, cpm: 330, freq: 3.4, reach: 1620000, leads: 1240, days: 7 },
-  monthly: { periodLabel: 'Last 30 Days — 15 Jun to 14 Jul 2026', spend: 11640000, impr: 35800000, clicks: 251000, ctr: 0.70, cpm: 325, freq: 4.1, reach: 4900000, leads: 5010, days: 30 },
+  daily:   { periodLabel: 'Yesterday - Tue, 14 Jul 2026', spend: 412000, impr: 1284000, clicks: 9820, ctr: 0.76, cpm: 321, freq: 2.9, reach: 441000, leads: 186, days: 1 },
+  weekly:  { periodLabel: 'Last 7 Days - 08 Jul to 14 Jul 2026', spend: 2890000, impr: 8760000, clicks: 64200, ctr: 0.73, cpm: 330, freq: 3.4, reach: 1620000, leads: 1240, days: 7 },
+  monthly: { periodLabel: 'Last 30 Days - 15 Jun to 14 Jul 2026', spend: 11640000, impr: 35800000, clicks: 251000, ctr: 0.70, cpm: 325, freq: 4.1, reach: 4900000, leads: 5010, days: 30 },
 }
 const RP_SUBJECTS = {
-  daily: d => `Meta Ads Daily Report — Yesterday · ${d}`,
-  weekly: d => `Meta Ads Weekly Report — Last 7 Days · ${d}`,
-  monthly: d => `Meta Ads Monthly Report — Last 30 Days · ${d}`,
+  daily: d => `Meta Ads Daily Report - Yesterday · ${d}`,
+  weekly: d => `Meta Ads Weekly Report - Last 7 Days · ${d}`,
+  monthly: d => `Meta Ads Monthly Report - Last 30 Days · ${d}`,
 }
 const RP_CAMPS = [
   { name: 'PMX_FB_Ger_NAS_10June2026_Ad2', status: 'ACTIVE', spend: 184000, ctr: 1.12, freq: 2.1, leads: 64 },
@@ -531,12 +531,12 @@ const RP_CAMPS = [
   { name: 'Remarketing_13July26_Sep26Intake', status: 'PAUSED', spend: 62000, ctr: 0.88, freq: 1.6, leads: 22 },
 ]
 const RP_AI_SAMPLE = `
-<div style="padding:10px 14px;border-radius:8px;background:var(--green-tint);border-left:3px solid var(--green-ink);color:var(--navy-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
-<div style="padding:10px 14px;border-radius:8px;background:var(--navy-tint);border-left:3px solid var(--navy-ink);color:var(--navy-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
+<div style="padding:10px 14px;border-radius:8px;background:var(--green-tint);border-left:3px solid var(--green-ink);color:var(--navy-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% - your most efficient campaign this period.</div>
+<div style="padding:10px 14px;border-radius:8px;background:var(--navy-tint);border-left:3px solid var(--navy-ink);color:var(--navy-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% - classic fatigue signal.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">CAMPAIGN FLAGS</div>
-<div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down — refresh creative.</div>
+<div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down - refresh creative.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">TOP 3 ACTIONS</div>
-<div style="font-size:13px;line-height:1.7;color:var(--text)">1. Refresh creative on Ad4 (UK) this week — frequency fatigue is capping reach.<br>2. Increase budget on Ad2 (Germany) — still efficient at scale.<br>3. Review Remarketing_13July26_Sep26Intake — paused but held 22 leads at strong CTR; consider reactivating.</div>`
+<div style="font-size:13px;line-height:1.7;color:var(--text)">1. Refresh creative on Ad4 (UK) this week - frequency fatigue is capping reach.<br>2. Increase budget on Ad2 (Germany) - still efficient at scale.<br>3. Review Remarketing_13July26_Sep26Intake - paused but held 22 leads at strong CTR; consider reactivating.</div>`
 
 function rpFmtINR(n) {
   n = parseFloat(n) || 0
@@ -560,7 +560,7 @@ function rpCampTable(camps, avgCTR) {
       <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.ctr >= 1 ? '#166534' : c.ctr >= avgCTR ? '#1E3A8A' : '#991B1B'}">${c.ctr.toFixed(2)}%</td>
       <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.freq > 3.5 ? '#C2410C' : 'var(--text-2)'}">${c.freq.toFixed(1)}x${c.freq > 3.5 ? ' ⚠' : ''}</td>
       <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:var(--text)">${c.leads.toLocaleString('en-IN')}</td>
-      <td style="padding:9px 8px;font-size:12px;text-align:right;color:var(--text-2)">${cpl > 0 ? rpFmtINR(cpl) : '—'}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:var(--text-2)">${cpl > 0 ? rpFmtINR(cpl) : '-'}</td>
     </tr>`
   }).join('')
   return `<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;font-family:${'-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif'}"><thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">${['Campaign', 'Status', 'Spend', 'CTR', 'Freq', 'Leads', 'CPL'].map(h => `<th style="padding:9px ${h === 'Campaign' ? '12px' : '8px'};font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);text-align:${h === 'Campaign' ? 'left' : 'right'};white-space:nowrap">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`
@@ -632,7 +632,7 @@ function buildReportPreviewHTML(reportType, senderName) {
 
       <tr><td style="padding:0 36px"><div style="height:1px;background-color:var(--border)"></div></td></tr>
 
-      <tr><td style="padding:20px 26px 32px">${rpSectionTitle('🤖', 'AI Analysis — Claude Sonnet')}${RP_AI_SAMPLE}</td></tr>
+      <tr><td style="padding:20px 26px 32px">${rpSectionTitle('🤖', 'AI Analysis - Claude Sonnet')}${RP_AI_SAMPLE}</td></tr>
 
     </table>
 
@@ -697,12 +697,12 @@ export default function SettingsPage() {
     return activityDayOffset === 0 ? 'Today' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   })()
 
-  // Report Activity Log (send history — sent/skipped/failed, incl. cron + GitHub Actions triggers)
+  // Report Activity Log (send history - sent/skipped/failed, incl. cron + GitHub Actions triggers)
   const _rlRef = useRef(false)
   useEffect(() => {
     if (activeTab === 'reports' && userIsAdmin && !_rlRef.current) { _rlRef.current=true; loadReportLogs() }
   }, [activeTab, userIsAdmin])
-  // The Quantum Gazette's stored HTML snapshot — fetched once when Reports opens,
+  // The Quantum Gazette's stored HTML snapshot - fetched once when Reports opens,
   // not part of the general preferences bulk load (see LARGE_KEYS in api/preferences.mjs).
   const _gzRef = useRef(false)
   useEffect(() => {
@@ -797,7 +797,7 @@ export default function SettingsPage() {
       { key: 'revenueRoas', label: 'Revenue & ROAS', type: 'textarea', default: 'Est. SR Revenue = Deposits x Conversion% (Settings > Data > SR Revenue Assumptions) x SR Fee. Actual SR Revenue = Actual RAUs x SR Fee (no discount -- already realized). ROAS = SR Revenue / Spend. Caveat: the sales cycle is long, so true ROAS is only knowable months after lead-gen -- never present it as a same-day figure.' },
     ]},
     { title: 'Markets & competition', fields: [
-      { key: 'sourceMarkets', label: 'Source markets', type: 'tags', placeholder: 'e.g. India — add and press Enter' },
+      { key: 'sourceMarkets', label: 'Source markets', type: 'tags', placeholder: 'e.g. India - add and press Enter' },
       { key: 'destinationMarkets', label: 'Destination markets', type: 'tags', default: ['UK','Germany','Italy','Dubai','MBBS (India source)','MBBS (UK source)'], placeholder: 'Add a destination and press Enter' },
       { key: 'prioritySegments', label: 'Priority segments', type: 'textarea', placeholder: 'Which corridor/segment matters most right now, and why.' },
       { key: 'competitors', label: 'Competitors', type: 'tags', placeholder: 'Add a competitor and press Enter' },
@@ -1255,7 +1255,7 @@ export default function SettingsPage() {
       // Sync to localStorage + broadcast to Sidebar immediately
       localStorage.setItem('lq_hidden_pages', JSON.stringify(hiddenPages))
       window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: hiddenPages }))
-      setPrefSaveMsg({ type: 'ok', text: 'Saved — sidebar updated for all users' })
+      setPrefSaveMsg({ type: 'ok', text: 'Saved - sidebar updated for all users' })
     } catch (e) {
       setPrefSaveMsg({ type: 'err', text: e.message })
     } finally {
@@ -1447,7 +1447,7 @@ export default function SettingsPage() {
     const { success, error } = await saveDesignStyle(kind, id)
     const label = DESIGN_KIND_LABEL[kind] || 'Style'
     const scope = kind === 'login' ? 'applies next time anyone signs in' : 'applies for everyone now'
-    if (success) toast(`${label} style saved — ${scope}.`, { type: 'success' })
+    if (success) toast(`${label} style saved - ${scope}.`, { type: 'success' })
     else toast('Saved locally only -- ' + error, { type: 'muted' })
   }
 
@@ -1466,25 +1466,25 @@ export default function SettingsPage() {
     {
       id: 'light',
       name: 'Light',
-      desc: 'Clean white — the default',
+      desc: 'Clean white - the default',
       preview: ['#F4F6F9', '#FFFFFF', '#1F3C84'],
     },
     {
       id: 'dark',
       name: 'Dark',
-      desc: 'Dark slate — easy on the eyes',
+      desc: 'Dark slate - easy on the eyes',
       preview: ['#0F172A', '#1E293B', '#1F3C84'],
     },
     {
       id: 'navy',
       name: 'Navy Depth',
-      desc: 'Deep navy — premium dashboard look',
+      desc: 'Deep navy - premium dashboard look',
       preview: ['#0D1B40', '#162155', '#1F3C84'],
     },
     {
       id: 'stone',
       name: 'Stone',
-      desc: 'Warm neutral — calm and focused',
+      desc: 'Warm neutral - calm and focused',
       preview: ['#F5F5F0', '#FAFAF8', '#1F3C84'],
     },
   ]
@@ -1506,9 +1506,9 @@ export default function SettingsPage() {
   }
 
   const SIDEBAR_MODES = [
-    { id: 'compact',  label: 'Compact',  desc: 'Icon-only — maximum data space',     icon: '⟵' },
-    { id: 'default',  label: 'Default',  desc: '232px — labels + icons',              icon: '☰' },
-    { id: 'wide',     label: 'Wide',     desc: '280px — more breathing room',          icon: '⟹' },
+    { id: 'compact',  label: 'Compact',  desc: 'Icon-only - maximum data space',     icon: '⟵' },
+    { id: 'default',  label: 'Default',  desc: '232px - labels + icons',              icon: '☰' },
+    { id: 'wide',     label: 'Wide',     desc: '280px - more breathing room',          icon: '⟹' },
   ]
 
   // Number format
@@ -1550,9 +1550,9 @@ export default function SettingsPage() {
     document.documentElement.setAttribute('data-density', tableDensity)
   }, [])
   const DENSITIES = [
-    { id: 'compact',      label: 'Compact',      rowH: '10px 12px',  desc: 'Tight rows — show more data' },
-    { id: 'comfortable',  label: 'Comfortable',  rowH: '14px 16px',  desc: 'Balanced — default' },
-    { id: 'spacious',     label: 'Spacious',     rowH: '18px 20px',  desc: 'Airy rows — easier scanning' },
+    { id: 'compact',      label: 'Compact',      rowH: '10px 12px',  desc: 'Tight rows - show more data' },
+    { id: 'comfortable',  label: 'Comfortable',  rowH: '14px 16px',  desc: 'Balanced - default' },
+    { id: 'spacious',     label: 'Spacious',     rowH: '18px 20px',  desc: 'Airy rows - easier scanning' },
   ]
   const KPI_ICON_SETS = {
     spend:       { label: 'Spend / Cost',   icons: ['rupee','dollar','wallet','card','chart-bar'] },
@@ -1819,7 +1819,7 @@ export default function SettingsPage() {
     return '\u20B9' + (rs < 1 ? rs.toFixed(2) : rs.toLocaleString('en-IN', { maximumFractionDigits: rs < 100 ? 2 : 0 }))
   }
   const bqCell = (v) => {
-    if (v === null || v === undefined) return '\u2014'
+    if (v === null || v === undefined) return '-'
     if (typeof v === 'object') return JSON.stringify(v)
     if (typeof v === 'boolean') return v ? 'true' : 'false'
     if (typeof v === 'number') return v.toLocaleString('en-IN', { maximumFractionDigits: 6 })
@@ -1921,7 +1921,7 @@ export default function SettingsPage() {
     if (!q) return
     setBqSql(String(q.sql || '')); setBqName(String(q.name || ''))
     setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn(''); setBqArmed('')
-    setBqSaveMsg('Loaded \u201C' + q.name + '\u201D \u2014 nothing has run yet.')
+    setBqSaveMsg('Loaded \u201C' + q.name + '\u201D - nothing has run yet.')
   }
   const bqRemove = async (id) => {
     const q = bqSaved.find((x) => x && x.id === id)
@@ -2028,9 +2028,9 @@ export default function SettingsPage() {
     return visible.length + ' of ' + DASHBOARDS.length + ' pages'
   }
   const fmtDate = (d) => {
-    if (!d) return '—'
+    if (!d) return '-'
     try { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) }
-    catch { return '—' }
+    catch { return '-' }
   }
 
   // --- Add member -----------------------------------------------------------
@@ -2078,7 +2078,7 @@ export default function SettingsPage() {
     }
     return out
   }
-  const ADD_STATUS_TEXT = { malformed: 'not an email', external: 'outside your org — signs in via emailed link', exists: 'already has access' }
+  const ADD_STATUS_TEXT = { malformed: 'not an email', external: 'outside your org - signs in via emailed link', exists: 'already has access' }
   const resetAddForm = () => {
     setNewEmail(''); setAddRole('viewer'); setAddIds([]); setAddTemplate('')
     setAddJobTitle(''); setAddDepartment(''); setAddReports(false); setAddWelcome(true); setAddFailed([])
@@ -2274,7 +2274,7 @@ export default function SettingsPage() {
         d.error || 'Could not save the PIN',
         d.failsLeft != null ? d.failsLeft + ' tries left' : null,
         d.lockedForSec ? 'locked for ' + Math.ceil(d.lockedForSec / 60) + ' min' : null,
-      ].filter(Boolean).join(' \u2014 '))
+      ].filter(Boolean).join(' - '))
       setCeoPinCur(''); setCeoPinNew(''); setCeoPinNew2('')
       setCeoPinMsg('\u2713 PIN saved')
       loadCeoPin()
@@ -2396,7 +2396,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
-      setGazetteMsg('Sent — to ' + (d.recipients || []).join(', ') + ((d.cc || []).length ? ', cc ' + d.cc.join(', ') : ''))
+      setGazetteMsg('Sent - to ' + (d.recipients || []).join(', ') + ((d.cc || []).length ? ', cc ' + d.cc.join(', ') : ''))
     } catch (e) { setGazetteMsg('✕ ' + e.message) }
     finally { setGazetteSending(false); setTimeout(() => setGazetteMsg(''), 10000) }
   }
@@ -2411,7 +2411,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
-      setUnassignedMsg('Sent \u2014 ' + (d.total ?? '?') + ' unassigned leads (' + (d.humanCount ?? '?') + ' human, ' + (d.aiCount ?? '?') + ' AI)')
+      setUnassignedMsg('Sent - ' + (d.total ?? '?') + ' unassigned leads (' + (d.humanCount ?? '?') + ' human, ' + (d.aiCount ?? '?') + ' AI)')
     } catch (e) { setUnassignedMsg('\u2715 ' + e.message) }
     finally { setUnassignedSending(false); setTimeout(() => setUnassignedMsg(''), 8000) }
   }
@@ -2543,7 +2543,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </span>
                     <div className={styles.dsBody}>
                       <div className={styles.dsName}>{s.name}</div>
-                                            <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (() => { const u = sheetUrls[s.editKey] || s.defaultUrl; if (!u) return 'No default set'; const m = u.match(/[?&]sheet=([^&]+)/); return 'Google Sheet' + (m ? ' \u00b7 ' + decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''); })() : (s.src + ' \u2014 ' + s.rows + ' rows')}</div>
+                                            <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (() => { const u = sheetUrls[s.editKey] || s.defaultUrl; if (!u) return 'No default set'; const m = u.match(/[?&]sheet=([^&]+)/); return 'Google Sheet' + (m ? ' \u00b7 ' + decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''); })() : (s.src + ' - ' + s.rows + ' rows')}</div>
                     </div>
                     <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : (s.statusSt || 'live')}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : (s.statusText || 'Live')}</span>{s.bqTest && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testBigQuery()} disabled={bqTesting}>{bqTesting ? 'Testing...' : 'Test connection'}</Button>)}{s.bqTest && bqMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: bqMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{bqMsg.type === 'err' ? '\u2715 ' : '\u2713 '}{bqMsg.text}</p>)}{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.testKind && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testConnector(s.testKind)} disabled={connTesting === s.testKind}>{connTesting === s.testKind ? 'Testing...' : 'Test connection'}</Button>)}{s.testKind && connMsg[s.testKind] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: connMsg[s.testKind].type === 'err' ? '#c0392b' : '#15803D' }}>{connMsg[s.testKind].type === 'err' ? '✕ ' : '✓ '}{connMsg[s.testKind].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste the sheet link or a CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
@@ -2555,7 +2555,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 10 }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>
-                                ✓ Connected — {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
+                                ✓ Connected - {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
                                 {sheetTest[s.editKey].monthCounts && <span style={{ fontWeight: 500, color: '#4B7A5A' }}> · {sheetTest[s.editKey].minDate && sheetTest[s.editKey].minDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} – {sheetTest[s.editKey].maxDate && sheetTest[s.editKey].maxDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -2573,7 +2573,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             )}
                             {sheetTest[s.editKey].monthCounts && sheetTest[s.editKey].monthCounts.length <= 1 && sheetTest[s.editKey].rowCount > 50 && (
                               <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginTop: 6 }}>
-                                ⚠ Only 1 month of data is present. If you expect multi-month history, check for an active <strong>Filter</strong> (Data → Create a filter, not a Filter view) on this sheet's tab — a regular filter scopes what this live query returns for everyone, not just your own view.
+                                ⚠ Only 1 month of data is present. If you expect multi-month history, check for an active <strong>Filter</strong> (Data → Create a filter, not a Filter view) on this sheet's tab - a regular filter scopes what this live query returns for everyone, not just your own view.
                               </div>
                             )}
                             {sheetTest[s.editKey].apiCompare && (() => {
@@ -2584,7 +2584,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               if (!mismatch) return null
                               return (
                                 <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginTop: 6 }}>
-                                  ⚠ Your dashboard's live API ({s.apiPath}) reports {api.rows != null ? api.rows.toLocaleString('en-IN') : '—'} rows, {api.firstDate || '—'} to {api.lastDate || '—'} — doesn't match the sheet's live data above. Dashboards may still be showing a cached snapshot; click "Test connection" again in a few minutes to re-check.
+                                  ⚠ Your dashboard's live API ({s.apiPath}) reports {api.rows != null ? api.rows.toLocaleString('en-IN') : '-'} rows, {api.firstDate || '-'} to {api.lastDate || '-'} - doesn't match the sheet's live data above. Dashboards may still be showing a cached snapshot; click "Test connection" again in a few minutes to re-check.
                                 </div>
                               )
                             })()}
@@ -2613,7 +2613,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                       <thead><tr>{sheetTest[s.editKey].columns.map((c, i) => (<th key={i} style={{ textAlign: 'left', padding: '3px 8px', color: 'var(--text-3)', fontWeight: 700, borderBottom: '0.5px solid var(--border)' }}>{c || '(blank)'}</th>))}</tr></thead>
                                       <tbody>
                                         {sheetTest[s.editKey].sampleRows.map((row, ri) => (
-                                          <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: 'var(--text-2)', borderBottom: '0.5px solid var(--bg3)' }}>{v || '—'}</td>))}</tr>
+                                          <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: 'var(--text-2)', borderBottom: '0.5px solid var(--bg3)' }}>{v || '-'}</td>))}</tr>
                                         ))}
                                       </tbody>
                                     </table>
@@ -2675,7 +2675,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.card} style={{ marginTop: 18 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
                   <div>
-                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Affiliate spend — manual entry</h3>
+                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Affiliate spend - manual entry</h3>
                     <p className={styles.cardDesc} style={{ margin: 0 }}>Affiliate spend isn't tracked by any ad platform or sheet. Enter it here by month and it flows into the Overall dashboard's totals and channel breakdown for Affiliate.</p>
                   </div>
                   {affSpendMsg && (
@@ -2694,7 +2694,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
 
                 {Object.keys(affiliateSpend).length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No affiliate spend entered yet — Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No affiliate spend entered yet - Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {Object.entries(affiliateSpend).sort((a, b) => b[0].localeCompare(a[0])).map(([ym, amount]) => (
@@ -2721,7 +2721,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
                   <div>
                     <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Cost-metric exclusions</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>A campaign whose name contains one of these patterns is left out of the cost-per-X figures on the Overall dashboard — its Spend, Leads and QLs still count everywhere else on the page. Each pattern can apply to CPL, CPQL and CPA together, or to a narrower set — CPQL + CPA, or CPQL only — for campaigns whose leads are real but never sent for qualification (they count in CPL, but not in cost per QL or per application). For campaigns that were never meant to be judged on cost per lead (e.g. brand-awareness video buys).</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>A campaign whose name contains one of these patterns is left out of the cost-per-X figures on the Overall dashboard - its Spend, Leads and QLs still count everywhere else on the page. Each pattern can apply to CPL, CPQL and CPA together, or to a narrower set - CPQL + CPA, or CPQL only - for campaigns whose leads are real but never sent for qualification (they count in CPL, but not in cost per QL or per application). For campaigns that were never meant to be judged on cost per lead (e.g. brand-awareness video buys).</p>
                   </div>
                   {ceMsg && (
                     <span style={{ fontSize: 11, fontWeight: 600, color: ceMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: ceMsg.type === 'ok' ? '#F0FDF4' : 'var(--bg3)', border: '0.5px solid ' + (ceMsg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>{ceMsg.text}</span>
@@ -2743,7 +2743,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
 
                 {costExclusions.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No exclusions configured — every campaign counts toward CPL, CPQL and CPA on the Overall dashboard.</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No exclusions configured - every campaign counts toward CPL, CPQL and CPA on the Overall dashboard.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {costExclusions.map(p => (
@@ -2814,7 +2814,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   bearer-token call returned "credits depleted"). Entered here weekly
                   instead, same shape as affiliate spend above. */}
               <SocialManualCard
-                title="LinkedIn — manual entry"
+                title="LinkedIn - manual entry"
                 description="LinkedIn has no free API access for this data (requires a multi-month Marketing Developer Platform partner approval). Enter it here weekly."
                 fields={SOCIAL_MANUAL_FIELDS}
                 weekValue={linkedinWeek}
@@ -2830,8 +2830,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               />
 
               <SocialManualCard
-                title="X (Twitter) — manual entry"
-                description="X's API is pay-per-use with no free tier — confirmed live, even a basic read failed with 'credits depleted'. Enter it here weekly instead."
+                title="X (Twitter) - manual entry"
+                description="X's API is pay-per-use with no free tier - confirmed live, even a basic read failed with 'credits depleted'. Enter it here weekly instead."
                 fields={SOCIAL_MANUAL_FIELDS}
                 weekValue={xWeek}
                 onWeekChange={setXWeek}
@@ -2935,7 +2935,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.activityHeader}>
                 <div>
                   <h3 className={styles.cardTitle}>BigQuery Usage</h3>
-                  <p className={styles.cardDesc} style={{ margin: 0 }}>Every real BigQuery job Quantum has triggered — the Leverage Careers page, a Run in the console above, and the Overall cache's own cron sync. A dry run (Estimate, or the connection check) never appears here since it creates no billable job.</p>
+                  <p className={styles.cardDesc} style={{ margin: 0 }}>Every real BigQuery job Quantum has triggered - the Leverage Careers page, a Run in the console above, and the Overall cache's own cron sync. A dry run (Estimate, or the connection check) never appears here since it creates no billable job.</p>
                 </div>
                 <Button size="sm" variant="secondary" onClick={loadBqJobs}>{bqJobsLoading ? 'Loading…' : '↻ Refresh'}</Button>
               </div>
@@ -2990,7 +2990,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.statCard}>
                         <div>
                           <div className={styles.statLabel}>Cost this month (est.)</div>
-                          <div className={styles.statValue}>{monthMeasuredJobs === 0 ? '—' : bqCost(monthMeasuredBytes)}</div>
+                          <div className={styles.statValue}>{monthMeasuredJobs === 0 ? '-' : bqCost(monthMeasuredBytes)}</div>
                           <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 2 }}>
                             {monthMeasuredJobs === 0 ? '' : bqBytes(monthMeasuredBytes) + ' billed'}{monthUnmeasured > 0 ? `${monthMeasuredJobs === 0 ? `all ${monthUnmeasured} job${monthUnmeasured === 1 ? '' : 's'} unmeasured` : ` · +${monthUnmeasured} unmeasured`}` : ''}
                           </div>
@@ -3016,8 +3016,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                   <tr key={d.day} className={styles.alRow}>
                                     <td className={styles.alTd}>{new Date(d.day + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                                     <td className={styles.alTd}>{d.jobs}</td>
-                                    <td className={styles.alTd} title={d.unmeasured > 0 ? `${d.unmeasured} of ${d.jobs} job(s) that day have no byte data (backfilled)` : ''}>{label || '—'}</td>
-                                    <td className={styles.alTd}>{measuredJobs === 0 ? '—' : bqCost(d.measuredBytes)}</td>
+                                    <td className={styles.alTd} title={d.unmeasured > 0 ? `${d.unmeasured} of ${d.jobs} job(s) that day have no byte data (backfilled)` : ''}>{label || '-'}</td>
+                                    <td className={styles.alTd}>{measuredJobs === 0 ? '-' : bqCost(d.measuredBytes)}</td>
                                   </tr>
                                 )
                               })}
@@ -3026,7 +3026,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </div>
                         <div className={styles.alFoot}>Showing last {Math.min(bqDaily.length, 30)} days</div>
                         {bqDaily.slice(0, 30).some(d => d.unmeasured > 0) && (
-                          <div className={styles.alFoot} style={{ borderTop: 'none', paddingTop: 0 }}>* includes job(s) with no byte data (backfilled) — figure covers only the jobs actually measured that day</div>
+                          <div className={styles.alFoot} style={{ borderTop: 'none', paddingTop: 0 }}>* includes job(s) with no byte data (backfilled) - figure covers only the jobs actually measured that day</div>
                         )}
                       </div>
                     )}
@@ -3038,13 +3038,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       const backfilled = bqJobs.filter(j => j.job_id == null).length
                       return backfilled > 0 ? (
                         <p className={styles.note} style={{ marginTop: 12 }}>
-                          {backfilled} of these were backfilled from GitHub Actions' own run history (real date/time, no job id or byte/row detail was captured for jobs before live tracking started) — every job logged from today onward carries the full detail.
+                          {backfilled} of these were backfilled from GitHub Actions' own run history (real date/time, no job id or byte/row detail was captured for jobs before live tracking started) - every job logged from today onward carries the full detail.
                         </p>
                       ) : null
                     })()}
 
                     <div className={styles.activityHeader} style={{ marginTop: 20 }}>
-                      <h3 className={styles.cardTitle} style={{ fontSize: 13 }}>Job Log — every job, with its job id</h3>
+                      <h3 className={styles.cardTitle} style={{ fontSize: 13 }}>Job Log - every job, with its job id</h3>
                       <Dropdown value={bqJobFilter} onChange={setBqJobFilter}
                         options={[{ value: 'all', label: 'All modes' }, ...bqModes.map(m => ({ value: m, label: m }))]} />
                     </div>
@@ -3059,16 +3059,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <tbody>
                               {bqFiltered.slice(0, 300).map((j, idx) => {
                                 const dt = j.created_at ? new Date(j.created_at) : null
-                                const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'
+                                const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
                                 const timeStr = dt ? dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
                                 return (
                                   <tr key={j.id || idx} className={styles.alRow}>
-                                    <td className={`${styles.alTd} ${styles.alPage}`}>{j.mode || '—'}</td>
-                                    <td className={styles.alTd}>{j.dashboard_id || '—'}</td>
-                                    <td className={styles.alTd} title={j.job_id == null ? 'Backfilled from GitHub Actions run history -- byte/row detail was never captured for jobs before live tracking started' : ''}>{j.total_bytes_processed == null ? '—' : bqBytes(j.total_bytes_processed)}</td>
-                                    <td className={styles.alTd}>{j.total_rows == null ? '—' : Number(j.total_rows).toLocaleString('en-IN')}</td>
+                                    <td className={`${styles.alTd} ${styles.alPage}`}>{j.mode || '-'}</td>
+                                    <td className={styles.alTd}>{j.dashboard_id || '-'}</td>
+                                    <td className={styles.alTd} title={j.job_id == null ? 'Backfilled from GitHub Actions run history -- byte/row detail was never captured for jobs before live tracking started' : ''}>{j.total_bytes_processed == null ? '-' : bqBytes(j.total_bytes_processed)}</td>
+                                    <td className={styles.alTd}>{j.total_rows == null ? '-' : Number(j.total_rows).toLocaleString('en-IN')}</td>
                                     <td className={styles.alTd}>
-                                      {j.cache_hit == null ? <span style={{ color: 'var(--text-3)' }}>—</span> : (
+                                      {j.cache_hit == null ? <span style={{ color: 'var(--text-3)' }}>-</span> : (
                                         <span className={styles.alTag} style={{ background: j.cache_hit ? 'var(--green-tint)' : 'var(--bg3)', color: j.cache_hit ? 'var(--green-ink)' : 'var(--text-2)' }}>{j.cache_hit ? 'Cache' : 'Scanned'}</span>
                                       )}
                                     </td>
@@ -3187,7 +3187,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 })}
               </div>
                 }
-                {hiddenPages.length>0&&!prefLoading&&<div style={{marginTop:10}}><Button size="sm" variant="secondary" icon={<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>} onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}}>Reset — show all</Button></div>}
+                {hiddenPages.length>0&&!prefLoading&&<div style={{marginTop:10}}><Button size="sm" variant="secondary" icon={<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>} onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}}>Reset - show all</Button></div>}
               </div>
               <div style={{borderTop:'0.5px solid var(--bg3)',margin:'22px 0'}}/>
               {/* page header */}
@@ -3281,7 +3281,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     {hasExternal && (
                       <div className={styles.addNote} style={{ marginTop: 8 }}>
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.8" x2="12" y2="8" /></svg>
-                        <span>One or more addresses aren't on your organisation's domain. "Sign in with Google" won't work for them — they'll need to use "Send me a link" on the login page instead, which emails a one-time sign-in link to anyone already on this access list.</span>
+                        <span>One or more addresses aren't on your organisation's domain. "Sign in with Google" won't work for them - they'll need to use "Send me a link" on the login page instead, which emails a one-time sign-in link to anyone already on this access list.</span>
                       </div>
                     )}
 
@@ -3638,7 +3638,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.activityHeader}>
                 <div>
                   <h3 className={styles.cardTitle}>Activity Log</h3>
-                  <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when — the whole calendar day (IST), not a flat row cap.</p>
+                  <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when - the whole calendar day (IST), not a flat row cap.</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Button size="sm" variant="secondary" disabled={activityLoading} onClick={() => { const o = activityDayOffset - 1; setActivityDayOffset(o); loadActivity(o) }}>‹ Prev day</Button>
@@ -3715,7 +3715,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <span className={styles.alTag} style={{background:a.bg,color:a.c}}>{log.action||'view'}</span>
                             </td>
                             <td className={`${styles.alTd} ${styles.alPage}`}>{pgLabel}</td>
-                            <td className={`${styles.alTd} ${styles.alDetail}`} title={log.detail||''}>{log.detail||'—'}</td>
+                            <td className={`${styles.alTd} ${styles.alDetail}`} title={log.detail||''}>{log.detail||'-'}</td>
                             <td className={styles.alTd}>{dateStr}</td>
                             <td className={styles.alTd}>{timeStr}</td>
                           </tr>
@@ -3807,9 +3807,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             </button>
                           </div>
                           <p className={styles.dsModalSub}>
-                            Exactly what recipients see in Gmail, built from the real email template. Numbers and the AI analysis are sample data — those come from a live Meta Ads fetch and a Claude call at send time — but sender, subject, and layout below reflect your actual settings.
+                            Exactly what recipients see in Gmail, built from the real email template. Numbers and the AI analysis are sample data - those come from a live Meta Ads fetch and a Claude call at send time - but sender, subject, and layout below reflect your actual settings.
                           </p>
-                          <p className={styles.rpNote}>The real template has no mobile-responsive styling, so phone Gmail doesn't reflow it — it shrinks the whole desktop layout to fit. The Mobile view here reproduces that shrink, not a redesigned layout.</p>
+                          <p className={styles.rpNote}>The real template has no mobile-responsive styling, so phone Gmail doesn't reflow it - it shrinks the whole desktop layout to fit. The Mobile view here reproduces that shrink, not a redesigned layout.</p>
                           <div className={styles.rpControls}>
                             <div className={styles.rpTabs}>
                               {['daily', 'weekly', 'monthly'].map(t => (
@@ -4079,7 +4079,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <p className={styles.cardDesc} style={{ margin: 0 }}>
                       Posts Ask AI answers, page exports and a compact summary of every scheduled
                       report as <b>@pm_analyst</b>. Preferred auth is a bot token in the Vercel
-                      env &mdash; one token reaches every channel.
+                      env - one token reaches every channel.
                     </p>
                   </div>
                   {/* The 60 words of setup detail that used to sit here permanently. */}
@@ -4150,7 +4150,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </div>
                     <p className={styles.skNote}>
                       The first one is used whenever something posts to &ldquo;test&rdquo; without picking a
-                      specific channel &mdash; a scheduled report&rsquo;s own auto-post copy, for instance.
+                      specific channel - a scheduled report&rsquo;s own auto-post copy, for instance.
                       Naming each one lets Send to Slack offer a real picker.
                     </p>
                   </div>
@@ -4170,7 +4170,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <p className={styles.skGuardNote}>
                     {sharedGuardReads ? sharedGuardReads + ' ' : ''}Posting to one of these needs an admin,
                     the exact confirmation phrase for that channel, the CEO PIN below, and then a second
-                    confirm &mdash; every single time. Scheduled reports, Ask AI and table exports can never
+                    confirm - every single time. Scheduled reports, Ask AI and table exports can never
                     post here.
                   </p>
 
@@ -4200,7 +4200,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       {/* The 44 words of PIN rules that used to be permanent body copy. */}
                       <InfoTip id="pin" open={skHelp === 'pin'} onToggle={setSkHelp}
                         label="How the CEO PIN is stored and rate-limited">
-                        <p>The PIN is never stored anywhere &mdash; only a salted, 310,000-round hash of it, signed with a key that lives in the Vercel env and never in the database.</p>
+                        <p>The PIN is never stored anywhere - only a salted, 310,000-round hash of it, signed with a key that lives in the Vercel env and never in the database.</p>
                         <p>6 to 12 digits, at least 3 different ones, no counting runs and no repeated halves.</p>
                         <p>5 wrong tries locks it for 15 min, then 30, then 60.</p>
                       </InfoTip>
@@ -4244,7 +4244,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </svg>
                     <span className={styles.skSummaryIcon}><SlackWebhookIcon /></span>
                     Fallback: Incoming Webhooks
-                    <span className={styles.skSummaryHint}>&mdash; only used when no bot token is set</span>
+                    <span className={styles.skSummaryHint}>- only used when no bot token is set</span>
                   </summary>
                   <div className={styles.skDetailsBody}>
                     <p className={styles.skNote} style={{ margin: '0 0 12px' }}>
@@ -4256,7 +4256,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (test channel)" value={slackWebhookTest}
                           onChange={e => setSlackWebhookTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
                       </div>
-                      <p className={styles.skNote}>Used by &ldquo;Send test message&rdquo; below and by the <b>Send to Slack &mdash; test channel</b> option in every page&rsquo;s Export menu. Test posts are labelled as tests in Slack.</p>
+                      <p className={styles.skNote}>Used by &ldquo;Send test message&rdquo; below and by the <b>Send to Slack - test channel</b> option in every page&rsquo;s Export menu. Test posts are labelled as tests in Slack.</p>
                     </div>
                     <div className={styles.skField}>
                       <label className={styles.fieldLabel}>Main channel webhook URL</label>
@@ -4311,7 +4311,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>The Quantum Gazette</h3>
                 <p className={styles.cardDesc}>
-                  Nightly editorial digest — Marketing and Growth, Corporate Finance, Talent Mobility, month-to-date vs. the same days last month. Regenerated automatically every night at 9 PM IST by the Quantum Gazette agent (Agents page); sends whichever edition was saved last{gazetteUpdatedAt ? (' (' + new Date(gazetteUpdatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ')') : ''} — use "Run now" on the Agents page first if tonight's edition hasn't landed yet.
+                  Nightly editorial digest - Marketing and Growth, Corporate Finance, Talent Mobility, month-to-date vs. the same days last month. Regenerated automatically every night at 9 PM IST by the Quantum Gazette agent (Agents page); sends whichever edition was saved last{gazetteUpdatedAt ? (' (' + new Date(gazetteUpdatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ')') : ''} - use "Run now" on the Agents page first if tonight's edition hasn't landed yet.
                 </p>
                 {!gazetteLoading && !gazetteHtml && (
                   <p className={styles.note}>No Gazette snapshot saved yet.</p>
@@ -4347,9 +4347,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </button>
                       </div>
                       <p className={styles.dsModalSub}>
-                        The exact HTML currently saved as the Gazette snapshot — this is byte-for-byte what "Send now" above will send.
+                        The exact HTML currently saved as the Gazette snapshot - this is byte-for-byte what "Send now" above will send.
                       </p>
-                      <p className={styles.rpNote}>The real email has no mobile-responsive styling, so phone Gmail shrinks the whole desktop layout to fit rather than reflowing it — the Mobile view here reproduces that shrink, not a redesigned layout.</p>
+                      <p className={styles.rpNote}>The real email has no mobile-responsive styling, so phone Gmail shrinks the whole desktop layout to fit rather than reflowing it - the Mobile view here reproduces that shrink, not a redesigned layout.</p>
                       <div className={styles.rpControls}>
                         <div className={styles.rpTabs}>
                           <span style={{ fontSize: 12.5, color: 'var(--text-3)', padding: '6px 4px' }}>{gazetteSubject}</span>
@@ -4411,7 +4411,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               {false && (
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Unassigned Leads Alert</h3>
-                <p className={styles.cardDesc}>Lead Qualification &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above — not part of the general opt-in recipient list.</p>
+                <p className={styles.cardDesc}>Lead Qualification &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above - not part of the general opt-in recipient list.</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 24px', margin: '4px 0 14px', fontSize: 13 }}>
                   <div><span style={{ color: 'var(--text-3)' }}>To:</span> <strong>akash.saxena@leverageedu.com</strong></div>
                   <div><span style={{ color: 'var(--text-3)' }}>CC:</span> <strong>shivam.sharma@leverageedu.com</strong></div>
@@ -4429,7 +4429,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.activityHeader}>
                   <div>
                     <h3 className={styles.cardTitle}>Report Activity</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every send attempt — scheduled (GitHub Actions cron), manual, and test — with the real outcome. A skipped run (auto-reports disabled) is logged here even though GitHub Actions itself shows it as a green "success".</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every send attempt - scheduled (GitHub Actions cron), manual, and test - with the real outcome. A skipped run (auto-reports disabled) is logged here even though GitHub Actions itself shows it as a green "success".</p>
                   </div>
                   <Button size="sm" variant="secondary" onClick={loadReportLogs}>
                     {reportLogsLoading ? 'Loading\u2026' : '\u21bb Refresh'}
@@ -4466,7 +4466,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             : (log.triggered_by || 'Unknown')
                           const trigTag = isAuto ? { c: 'var(--text-2)', bg: 'var(--bg3)' } : { c: 'var(--navy-ink)', bg: 'var(--navy-tint)' }
                           const dt = log.sent_at ? new Date(log.sent_at) : null
-                          const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
+                          const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '-'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
                           const rcpts = Array.isArray(log.recipients) ? log.recipients : []
                           // Report Activity redesign (2026-08-27): every logReport() call already
@@ -4481,7 +4481,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           const slackChannelLabel = isSlack ? (rcpts[0].includes(':') ? rcpts[0].split(':').slice(1).join(':') : 'test/default') : ''
                           return (
                             <tr key={log.id||idx} className={styles.alRow}>
-                              <td className={`${styles.alTd} ${styles.alPage}`} style={{textTransform:'capitalize'}}>{log.report_type||'—'}</td>
+                              <td className={`${styles.alTd} ${styles.alPage}`} style={{textTransform:'capitalize'}}>{log.report_type||'-'}</td>
                               <td className={styles.alTd}>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>
                                   {isSlack ? <SlackIcon size={13} /> : <GmailIcon size={13} />}
@@ -4492,9 +4492,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <span className={styles.alTag} style={{background:s.bg,color:s.c}}>{s.label}</span>
                               </td>
                               <td className={styles.alTd}><span className={styles.alTag} style={{ background: trigTag.bg, color: trigTag.c }}>{trigMode}</span><div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 3, textTransform: 'none', letterSpacing: 0 }}>{trigWho}</div></td>
-                              <td className={styles.alTd}>{isSlack ? `#${slackChannelLabel}` : rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '—'}</td>
+                              <td className={styles.alTd}>{isSlack ? `#${slackChannelLabel}` : rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '-'}</td>
                               <td className={styles.alTd}>{dateStr}{timeStr ? ` \u00b7 ${timeStr}` : ''}</td>
-                              <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '—'}</td>
+                              <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '-'}</td>
                             </tr>
                           )
                         })}
@@ -4550,7 +4550,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.activityHeader}>
                   <div>
                     <h3 className={styles.cardTitle}>Ask AI Usage &amp; Cost</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>Token counts come from each response's real usage numbers; cost is an estimate (Sonnet-tier public pricing) for budgeting, not a live Anthropic billing read — no such API is exposed to a server key.</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Token counts come from each response's real usage numbers; cost is an estimate (Sonnet-tier public pricing) for budgeting, not a live Anthropic billing read - no such API is exposed to a server key.</p>
                   </div>
                   <Button size="sm" variant="secondary" onClick={loadAskAiUsage}>
                     {askaiUsageLoading ? 'Loading…' : '↻ Refresh'}
@@ -4588,7 +4588,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: budgetNum > 0 ? 10 : 0 }}>
                     <div style={{ minWidth: 200 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Monthly budget (self-declared)</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>No public Anthropic API exposes remaining account credits — set your own monthly ceiling to get an early warning as estimated spend approaches it.</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>No public Anthropic API exposes remaining account credits - set your own monthly ceiling to get an early warning as estimated spend approaches it.</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>₹</span>
@@ -4605,7 +4605,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${budgetPctBar}%`, background: budgetColor, borderRadius: 4, transition: 'width .3s ease' }} />
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5, fontWeight: budgetOver ? 700 : 400 }}>₹{monthCostInr.toFixed(2)} of ₹{budgetNum.toFixed(2)} used this month ({budgetPctReal.toFixed(0)}%){budgetOver ? ' — over budget' : budgetPctReal >= 90 ? ' — approaching the ceiling' : ''}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5, fontWeight: budgetOver ? 700 : 400 }}>₹{monthCostInr.toFixed(2)} of ₹{budgetNum.toFixed(2)} used this month ({budgetPctReal.toFixed(0)}%){budgetOver ? ' - over budget' : budgetPctReal >= 90 ? ' - approaching the ceiling' : ''}</div>
                     </div>
                   )}
                 </div>
@@ -4634,7 +4634,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 )}
                 {askaiDaily.length === 0 && !askaiUsageLoading && (
-                  <div className={styles.empty} style={{ marginTop: 16 }}>No usage logged yet — send a message in Ask AI to start tracking.</div>
+                  <div className={styles.empty} style={{ marginTop: 16 }}>No usage logged yet - send a message in Ask AI to start tracking.</div>
                 )}
               </div>
 
@@ -4642,7 +4642,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.activityHeader}>
                   <div>
                     <h3 className={styles.cardTitle}>Business Context</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>A structured knowledge base folded into Ask AI's and every agent's system prompt, so answers interpret the data correctly and match how the business actually talks about itself — this does not change the app's own fixed brand colors/fonts (see Appearance), only the words Ask AI and the agents write.</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>A structured knowledge base folded into Ask AI's and every agent's system prompt, so answers interpret the data correctly and match how the business actually talks about itself - this does not change the app's own fixed brand colors/fonts (see Appearance), only the words Ask AI and the agents write.</p>
                   </div>
                   <Button size="sm" onClick={saveBusinessContext} disabled={bizSaving}>
                     {bizSaving ? 'Saving…' : 'Save all'}
@@ -4688,7 +4688,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.activityHeader}>
                   <div>
                     <h3 className={styles.cardTitle}>Tool-Call Audit Log</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every live Meta/Google/CRM query the assistant actually ran, with parameters, row counts, and latency — click a row to see the full request.</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every live Meta/Google/CRM query the assistant actually ran, with parameters, row counts, and latency - click a row to see the full request.</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Dropdown value={askaiToolFilter} onChange={setAskaiToolFilter}
@@ -4713,13 +4713,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         <tbody>
                           {askaiFilteredCalls.slice(0, 200).map((c, idx) => {
                             const dt = c.created_at ? new Date(c.created_at) : null
-                            const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'
+                            const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
                             const timeStr = dt ? dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
                             return (
                               <tr key={c.id || idx} className={styles.alRow}>
-                                <td className={`${styles.alTd} ${styles.alPage}`}>{c.tool_name || '—'}</td>
-                                <td className={styles.alTd}>{c.row_count == null ? '—' : c.row_count}</td>
-                                <td className={styles.alTd}>{c.latency_ms != null ? `${c.latency_ms}ms` : '—'}</td>
+                                <td className={`${styles.alTd} ${styles.alPage}`}>{c.tool_name || '-'}</td>
+                                <td className={styles.alTd}>{c.row_count == null ? '-' : c.row_count}</td>
+                                <td className={styles.alTd}>{c.latency_ms != null ? `${c.latency_ms}ms` : '-'}</td>
                                 <td className={styles.alTd}>
                                   <span className={styles.alTag} style={{ background: c.had_error ? 'var(--navy-tint)' : 'var(--green-tint)', color: c.had_error ? 'var(--navy-ink)' : 'var(--green-ink)' }}>{c.had_error ? 'Error' : 'OK'}</span>
                                 </td>
@@ -4748,7 +4748,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       </button>
                     </div>
                     <p className={styles.dsModalSub}>
-                      {askaiDetail.created_at ? new Date(askaiDetail.created_at).toLocaleString('en-IN') : ''} &middot; {askaiDetail.user_id || 'unknown user'} &middot; {askaiDetail.row_count == null ? '—' : askaiDetail.row_count} rows &middot; {askaiDetail.latency_ms != null ? `${askaiDetail.latency_ms}ms` : '—'}
+                      {askaiDetail.created_at ? new Date(askaiDetail.created_at).toLocaleString('en-IN') : ''} &middot; {askaiDetail.user_id || 'unknown user'} &middot; {askaiDetail.row_count == null ? '-' : askaiDetail.row_count} rows &middot; {askaiDetail.latency_ms != null ? `${askaiDetail.latency_ms}ms` : '-'}
                     </p>
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Parameters</div>
                     <pre style={{ margin: 0, padding: 12, background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 10, fontSize: 12, fontFamily: 'monospace', color: '#1E293B', overflowX: 'auto', maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
@@ -4777,19 +4777,19 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       the exact title of the real card this links to on User
                       Access -- one name for a link and the thing it points at. */}
                   <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:2}}>Page visibility</div>
-                  <div style={{fontSize:12,color:'var(--text-3)',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab — manage global and individual page access together.</div>
+                  <div style={{fontSize:12,color:'var(--text-3)',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab - manage global and individual page access together.</div>
                 </div>
                 <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'var(--bg3)',border:'0.5px solid var(--border)',fontSize:12,fontWeight:600,color:'var(--brand-ink)',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                   User Access →
                 </button>
               </div>
 
-              {/* DESIGN SYSTEM — Button / KPI card / Login page live pickers.
+              {/* DESIGN SYSTEM - Button / KPI card / Login page live pickers.
                   Picking any one applies to the entire app instantly. */}
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Buttons</h3>
-                <p className={styles.cardDesc}>Pick a button style — applies to every button in the app immediately.</p>
-                <p className={styles.cardDesc} style={{ marginTop: -4 }}>Hover a preview to see how it actually behaves — several of these differ mainly on hover (a ring, a glow, a spinning border), not at rest.</p>
+                <p className={styles.cardDesc}>Pick a button style - applies to every button in the app immediately.</p>
+                <p className={styles.cardDesc} style={{ marginTop: -4 }}>Hover a preview to see how it actually behaves - several of these differ mainly on hover (a ring, a glow, a spinning border), not at rest.</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
                   {BUTTON_STYLE_NAMES.map((name, i) => {
                     const id = i + 1
@@ -4810,7 +4810,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>KPI Cards</h3>
-                <p className={styles.cardDesc}>Pick a KPI card style — applies to every dashboard's metric cards immediately.</p>
+                <p className={styles.cardDesc}>Pick a KPI card style - applies to every dashboard's metric cards immediately.</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 10 }}>
                   {KPI_STYLE_NAMES.map((name, i) => {
                     const id = i + 1
@@ -5042,8 +5042,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <h3 className={styles.cardTitle}>Account details</h3>
                   <p className={styles.cardDesc}>Your profile is managed through your Leverage Edu Google account.</p>
                   <div className={styles.pxDetailGrid}>
-                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Full name</span><span className={styles.pxDetailVal}>{user?.name || '—'}</span></div>
-                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Email address</span><span className={styles.pxDetailVal}>{user?.email || '—'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Full name</span><span className={styles.pxDetailVal}>{user?.name || '-'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Email address</span><span className={styles.pxDetailVal}>{user?.email || '-'}</span></div>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Role</span><span className={styles.pxDetailVal}>{user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span></div>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Theme</span><span className={styles.pxDetailVal} style={{textTransform:'capitalize'}}>{activeTheme || 'light'}</span></div>
                   </div>

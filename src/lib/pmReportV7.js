@@ -14,7 +14,7 @@
 // to date, so carrying them would put the same table up every morning -- the exact
 // problem V7 exists to solve. M3 says so in as many words.
 
-const DASH = '\u2014'
+const DASH = '-'
 const DOT = '   \u00b7   '
 const UP = '\u25b2 '
 const DOWN = '\u25bc '

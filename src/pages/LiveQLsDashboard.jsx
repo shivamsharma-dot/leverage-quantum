@@ -750,7 +750,7 @@ export default function LiveQLsDashboard() {
     const toFetch = allIds.filter(id => !ownerCache[id]).slice(0, LIVE_QL_OWNER_WARM_CAP)
     if (!toFetch.length) return
     // Mark EVERY queued id as 'loading' up front, not just the current chunk -- previously
-    // an id still waiting its turn had no cache entry at all, which rendered as a plain "—"
+    // an id still waiting its turn had no cache entry at all, which rendered as a plain "-"
     // (looking identical to "resolved, no data") instead of "…" (still queued). On a wide
     // window this loop can take a while to reach the back of the queue, so that dash was
     // actively misleading about why not everything had a real value yet.
@@ -982,15 +982,15 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="Total QLs" value={fmtN(totalQL)} sub="Human + AI" accent={C.navy} icon={KPI_ICONS.total} />
                 <PremKPI label="Human QLs" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
-                <PremKPI label="QL % (DNP)" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
-                <PremKPI label="QL % (Fresh)" value={queuedToQlPctFresh == null ? '—' : `${queuedToQlPctFresh.toFixed(1)}%`} sub="Total QLs / Fresh Queued (DNP excluded)" accent={C.navy} icon={KPI_ICONS.total} />
-                <PremKPI label="QL % (Human)" value={qlPctHuman == null ? '—' : `${qlPctHuman.toFixed(1)}%`} sub="Human QLs / Human Queued" accent={C.blue} icon={KPI_ICONS.agent} />
-                <PremKPI label="QL % (AI)" value={qlPctAi == null ? '—' : `${qlPctAi.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh + DNP)" accent={C.cyan} icon={KPI_ICONS.bot} />
-                <PremKPI label="QL % (AI Fresh)" value={qlPctAiFresh == null ? '—' : `${qlPctAiFresh.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh only)" accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="QL % (DNP)" value={queuedToQlPct == null ? '-' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="QL % (Fresh)" value={queuedToQlPctFresh == null ? '-' : `${queuedToQlPctFresh.toFixed(1)}%`} sub="Total QLs / Fresh Queued (DNP excluded)" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="QL % (Human)" value={qlPctHuman == null ? '-' : `${qlPctHuman.toFixed(1)}%`} sub="Human QLs / Human Queued" accent={C.blue} icon={KPI_ICONS.agent} />
+                <PremKPI label="QL % (AI)" value={qlPctAi == null ? '-' : `${qlPctAi.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh + DNP)" accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="QL % (AI Fresh)" value={qlPctAiFresh == null ? '-' : `${qlPctAiFresh.toFixed(1)}%`} sub="AI QLs / AI Queued (Fresh only)" accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label={periodLabel} value={periodAvgQl.toFixed(1)} sub={periodSub} accent={C.green} icon={KPI_ICONS.total} />
                 <PremKPI label={periodUnit === 'hour' ? 'Avg Queued / Hour' : 'Avg Queued / Day'} value={periodAvgQueued.toFixed(1)} sub={`${fmtN(totalQueued)} queued, same window`} accent={C.green} icon={KPI_ICONS.total} />
-                <PremKPI label="AI Share of QLs" value={aiShareOfQl == null ? '—' : `${aiShareOfQl.toFixed(1)}%`} sub="AI QLs / Total QLs" accent={C.cyan} icon={KPI_ICONS.bot} />
-                <PremKPI label="DNP Share" value={dnpShareOfAiQueued == null ? '—' : `${dnpShareOfAiQueued.toFixed(1)}%`} sub="AI Queued (DNP) / AI Queued" accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="AI Share of QLs" value={aiShareOfQl == null ? '-' : `${aiShareOfQl.toFixed(1)}%`} sub="AI QLs / Total QLs" accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="DNP Share" value={dnpShareOfAiQueued == null ? '-' : `${dnpShareOfAiQueued.toFixed(1)}%`} sub="AI Queued (DNP) / AI Queued" accent={C.cyan} icon={KPI_ICONS.bot} />
               </div>
 
               <div style={{ padding: '16px 28px 28px' }}>
@@ -1026,10 +1026,10 @@ export default function LiveQLsDashboard() {
                           // A dash used to mean either "no Opportunity ID on this row" or "the
                           // lookup genuinely failed" -- indistinguishable to a reader. Split so
                           // "no opportunity" (a real, meaningful data gap -- this QL call was
-                          // never linked to an Opportunity at all) reads differently from "—"
+                          // never linked to an Opportunity at all) reads differently from "-"
                           // (a lookup that should have worked but didn't).
                           const noOpp = !r.opportunityId
-                          const cellVal = val => ownerLoading ? '…' : noOpp ? 'no opportunity' : ownerFailed ? '—' : (val || '—')
+                          const cellVal = val => ownerLoading ? '…' : noOpp ? 'no opportunity' : ownerFailed ? '-' : (val || '-')
                           // Futwork/Futwork AI are LeadSquared's own bot/vendor placeholder
                           // owners (see MISASSIGNED_OWNER_NAMES above) -- a lead still
                           // sitting under one of these instead of a real floor owner is a
@@ -1050,14 +1050,14 @@ export default function LiveQLsDashboard() {
                                 <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer"
                                   title={'Open Contact in LeadSquared: ' + r.prospectId}
                                   style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.prospectId}</a>
-                              ) : '—'}
+                              ) : '-'}
                             </td>
                             <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
                               {r.opportunityId ? (
                                 <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer"
                                   title={'Open Opportunity in LeadSquared: ' + r.opportunityId}
                                   style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
-                              ) : '—'}
+                              ) : '-'}
                             </td>
                             <td style={{ padding: '7px 10px', whiteSpace: 'nowrap', fontWeight: misassigned ? 700 : 400, color: misassigned ? '#DC2626' : C.text }}
                               title={misassigned ? 'Still owned by a bot/vendor placeholder, not a real floor owner -- likely a missed assignment.' : undefined}>
@@ -1080,7 +1080,7 @@ export default function LiveQLsDashboard() {
                               </td>
                             ))}
                             {visibleFields.map(f => (
-                              <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
+                              <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '-'}</td>
                             ))}
                           </tr>
                           )

@@ -4,20 +4,20 @@ import { isMarketingReviewOwner } from '../shared/access.mjs'
 
 const ALLOWED_SHEET_KEYS = new Set(Object.values(SHEET_PREF_KEYS))
 
-// GET  /api/preferences — returns the public/admin-visible preference keys
-// POST /api/preferences — saves a preference key (admin only)
+// GET  /api/preferences - returns the public/admin-visible preference keys
+// POST /api/preferences - saves a preference key (admin only)
 
 export default async function handler(req, res) {
   const me = getSessionUser(req)
 
-  // Unauthenticated requests — the login page has no per-org style pick left
+  // Unauthenticated requests - the login page has no per-org style pick left
   // to fetch (that was only ever the now-removed login design-style picker),
   // so there is nothing an unauthenticated caller is allowed to read here.
   if (!me) {
     return res.status(401).json({ error: 'Not signed in' })
   }
 
-  // GET (authenticated) ?resolveOverallSheet=1 — any signed-in user (not just admin)
+  // GET (authenticated) ?resolveOverallSheet=1 - any signed-in user (not just admin)
   // can resolve the "Overall PM" sheet URL specifically, since the Overall dashboard
   // itself is viewable by non-admins. Returns ONLY the resolved URL string -- never the
   // raw custom_data_sources list or any other source's URL -- so this doesn't reopen
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: entry.defaultUrl || null })
   }
 
-  // GET (authenticated, admin only) ?resolveGazetteHtml=1 — the Quantum Gazette's
+  // GET (authenticated, admin only) ?resolveGazetteHtml=1 - the Quantum Gazette's
   // stored HTML snapshot for the Settings > Reports "Send now" card. Kept out of
   // the general bulk GET below (LARGE_KEYS) so an ordinary Settings load doesn't
   // drag a ~180KB blob along with every other preference on every page view; this
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ snapshot: rows[0]?.value || null })
   }
 
-  // GET (authenticated) ?resolveSheetKey=<sheet_url_...> — any signed-in user
+  // GET (authenticated) ?resolveSheetKey=<sheet_url_...> - any signed-in user
   // can resolve a specific sheet-source override by key (see SHEET_PREF_KEYS in
   // src/lib/dataSources.js). Returns ONLY that one resolved URL string, never the
   // full preferences blob, so this doesn't reopen the exposure the PUBLIC_KEYS
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: rows[0]?.value || null })
   }
 
-  // GET (authenticated) — every signed-in user needs a small set of app-wide
+  // GET (authenticated) - every signed-in user needs a small set of app-wide
   // keys regardless of role (hidden_pages for the Sidebar, the 3 design-style
   // picks so Button/KPI/Login look consistent for everyone). Everything else
   // in app_preferences (sheet URLs, Slack webhook, report sender config, AI
@@ -141,7 +141,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ prefs, meta })
   }
 
-  // POST/PATCH — admin only, with one narrow, explicit exception: the Overall
+  // POST/PATCH - admin only, with one narrow, explicit exception: the Overall
   // dashboard's Funnel Summary table "Saved views" (column layout presets) are a
   // deliberately shared-with-everyone, non-sensitive feature (2026-09-19, direct
   // ask) -- any signed-in user may create/update/delete a view there, not just

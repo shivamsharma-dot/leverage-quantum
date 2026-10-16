@@ -63,7 +63,7 @@ function prevRangeOf(range) {
 
 // NPS = % happy (9-10) minus % unhappy (0-6), from -100 to +100.
 function npsOf(p, d, total) { return total > 0 ? Math.round(((p - d) / total) * 100) : null }
-const nf = v => (v === null || v === undefined ? '—' : String(v))
+const nf = v => (v === null || v === undefined ? '-' : String(v))
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const monthLabel = m => { const [y, mm] = m.split('-'); return `${MONTHS[Number(mm) - 1]} ${y.slice(2)}` }
 const dayLabel = d => { const [, mm, dd] = d.split('-'); return `${Number(dd)} ${MONTHS[Number(mm) - 1]}` }
@@ -135,7 +135,7 @@ function NpsChip({ v, total, min, big }) {
   const few = total < min
   const t = few ? { color: C.muted, bg: 'var(--bg3)' } : toneOf(v)
   return (
-    <span title={few ? `Only ${total} rating${total === 1 ? '' : 's'} — fewer than ${min}, so this NPS is mostly noise` : `${toneOf(v).word}: ${v === null ? 'no ratings' : `NPS ${v}`}`}
+    <span title={few ? `Only ${total} rating${total === 1 ? '' : 's'} - fewer than ${min}, so this NPS is mostly noise` : `${toneOf(v).word}: ${v === null ? 'no ratings' : `NPS ${v}`}`}
       style={{ display: 'inline-block', minWidth: big ? 54 : 40, textAlign: 'center', padding: big ? '4px 12px' : '2px 9px', borderRadius: 99, background: t.bg, color: t.color, fontWeight: 800, fontSize: big ? 15 : 12.5, fontFamily: FONT, opacity: few ? 0.75 : 1 }}>
       {nf(v)}{few && total > 0 ? '*' : ''}
     </span>
@@ -161,7 +161,7 @@ function MixLegend({ p, pa, d, active, onPick }) {
       <button key={key} type="button" onClick={onPick ? () => onPick(key) : undefined}
         style={{ border: `0.5px solid ${active === key ? b.color : 'transparent'}`, background: active === key ? 'var(--bg2)' : 'transparent', borderRadius: 8, padding: '3px 8px', cursor: onPick ? 'pointer' : 'default', fontFamily: FONT, fontSize: 12, color: C.sub, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 9, height: 9, borderRadius: 99, background: b.color }} />
-        {b.label} ({b.range}) <b style={{ color: C.text }}>{t ? Math.round((n / t) * 100) + '%' : '—'}</b>
+        {b.label} ({b.range}) <b style={{ color: C.text }}>{t ? Math.round((n / t) * 100) + '%' : '-'}</b>
         <span style={{ color: C.muted }}>{fmtN(n)}</span>
       </button>
     )
@@ -398,7 +398,7 @@ function CoachDrawer({ row, range, min, onClose }) {
                       <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: C.muted }}>NPS</div>
                       <div style={{ marginTop: 6 }}><NpsChip v={ov.nps} total={ov.total} min={min} big /></div>
                     </div>
-                    {[['Ratings', fmtN(ov.total)], ['Students', fmtN(ov.students)], ['Avg rating', ov.avg === null ? '—' : ov.avg.toFixed(2)]].map(([l, v]) => (
+                    {[['Ratings', fmtN(ov.total)], ['Students', fmtN(ov.students)], ['Avg rating', ov.avg === null ? '-' : ov.avg.toFixed(2)]].map(([l, v]) => (
                       <div key={l} style={{ background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 12, padding: '10px 12px' }}>
                         <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: C.muted }}>{l}</div>
                         <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginTop: 2 }}>{v}</div>
@@ -415,7 +415,7 @@ function CoachDrawer({ row, range, min, onClose }) {
                   <Card title="Week-on-week NPS" sub="A coach gets 1 or 2 ratings a day, so a weekly view is steadier than daily"><TrendChart rows={weekSeries(data)} keyName="d" fmtLabel={d => 'Wk ' + dayLabel(d)} hasPost={false} height={190} /></Card>
                   <Card title="Month-on-month NPS" sub="Full history, not limited to the date range"><TrendChart rows={seriesFor(data, 'by_month', 'm')} keyName="m" fmtLabel={monthLabel} hasPost={false} height={190} /></Card>
                   <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg2)', border: `0.5px dashed ${C.border}`, fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
-                    <b style={{ color: C.text }}>Call recordings</b> — a play button for each rating, so a manager can hear what went wrong, is the next step. It needs a recording link on each NPS row from the data team; it will appear here as this coach's list of ratings.
+                    <b style={{ color: C.text }}>Call recordings</b> - a play button for each rating, so a manager can hear what went wrong, is the next step. It needs a recording link on each NPS row from the data team; it will appear here as this coach's list of ratings.
                   </div>
                 </>
               )}
@@ -453,7 +453,7 @@ function DayPanel({ day, min, onClose, onOpenCoach }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: `0.5px solid ${C.border}` }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{longDay(day)}</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{ov ? `${fmtN(ov.total)} rating${ov.total === 1 ? '' : 's'} · NPS ${nf(ov.nps)} · avg ${ov.avg === null ? '—' : ov.avg.toFixed(2)}` : 'Loading…'}</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>{ov ? `${fmtN(ov.total)} rating${ov.total === 1 ? '' : 's'} · NPS ${nf(ov.nps)} · avg ${ov.avg === null ? '-' : ov.avg.toFixed(2)}` : 'Loading…'}</div>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ border: `0.5px solid ${C.border}`, background: 'var(--card)', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', color: C.sub, fontSize: 16 }}>×</button>
         </div>
@@ -706,13 +706,13 @@ export default function CoachNpsDashboard() {
               {infoOpen && (
                 <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 50, width: 380, background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 12, boxShadow: '0 20px 60px rgba(15,23,42,0.16)', padding: 14, fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
                   <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>How to read this page</div>
-                  <div><b>Rating</b> — the 0–10 score a customer gives after a coaching call. <b>Happy</b> = 9–10, <b>Neutral</b> = 7–8, <b>Unhappy</b> = 0–6.</div>
+                  <div><b>Rating</b> - the 0–10 score a customer gives after a coaching call. <b>Happy</b> = 9–10, <b>Neutral</b> = 7–8, <b>Unhappy</b> = 0–6.</div>
                   <div style={{ marginTop: 5 }}><b>NPS (Net Promoter Score)</b> = % happy minus % unhappy, from −100 to +100. Below 0: more unhappy than happy. 0–49: OK. 50+: strong. 70+: excellent.</div>
-                  <div style={{ marginTop: 5 }}><b>* and grey</b> — fewer than 5 ratings. Top performers and Needs attention show the 5 best / worst coaches among those with at least 10 ratings. With 2 ratings, one unhappy customer moves NPS by 50 points, so don't judge on it.</div>
-                  <div style={{ marginTop: 5 }}><b>vs previous</b> — compared with the window of the same length right before the one you picked.</div>
-                  <div style={{ marginTop: 5 }}><b>Unique students</b> — distinct students rated (a student rating twice counts once). In a manager or senior-manager row it is the sum of each coach's unique students.</div>
-                  <div style={{ marginTop: 5 }}><b>Click around</b> — a row to drill down (senior manager → manager → coach → a side panel), a bar or colour segment to filter the table, a day to see who was rated that day, a month to zoom into it.</div>
-                  <div style={{ marginTop: 5 }}><b>Who sees what</b> — a coach sees their own ratings, a manager their coaches, a senior manager their managers' coaches, admins everyone (from Team Mapping). Dates are India time; data refreshes once a day.</div>
+                  <div style={{ marginTop: 5 }}><b>* and grey</b> - fewer than 5 ratings. Top performers and Needs attention show the 5 best / worst coaches among those with at least 10 ratings. With 2 ratings, one unhappy customer moves NPS by 50 points, so don't judge on it.</div>
+                  <div style={{ marginTop: 5 }}><b>vs previous</b> - compared with the window of the same length right before the one you picked.</div>
+                  <div style={{ marginTop: 5 }}><b>Unique students</b> - distinct students rated (a student rating twice counts once). In a manager or senior-manager row it is the sum of each coach's unique students.</div>
+                  <div style={{ marginTop: 5 }}><b>Click around</b> - a row to drill down (senior manager → manager → coach → a side panel), a bar or colour segment to filter the table, a day to see who was rated that day, a month to zoom into it.</div>
+                  <div style={{ marginTop: 5 }}><b>Who sees what</b> - a coach sees their own ratings, a manager their coaches, a senior manager their managers' coaches, admins everyone (from Team Mapping). Dates are India time; data refreshes once a day.</div>
                 </div>
               )}
             </div>
@@ -737,12 +737,12 @@ export default function CoachNpsDashboard() {
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}>
                         {headline.best && (
                           <button onClick={() => openCoach(headline.best)} style={{ border: `0.5px solid ${C.border}`, background: 'var(--greenBg, #E9F8EF)', color: C.text, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }}>
-                            <b style={{ color: C.green }}>Best</b> · {headline.best.name} — NPS {headline.best.pre.nps} ({headline.best.pre.total} ratings)
+                            <b style={{ color: C.green }}>Best</b> · {headline.best.name} - NPS {headline.best.pre.nps} ({headline.best.pre.total} ratings)
                           </button>
                         )}
                         {headline.worst && (
                           <button onClick={() => openCoach(headline.worst)} style={{ border: `0.5px solid ${C.border}`, background: 'var(--navy-tint)', color: C.text, borderRadius: 10, padding: '6px 12px', cursor: 'pointer', fontFamily: FONT, fontSize: 12.5 }}>
-                            <b style={{ color: C.navy }}>Needs attention</b> · {headline.worst.name} — NPS {headline.worst.pre.nps} ({headline.worst.pre.total} ratings)
+                            <b style={{ color: C.navy }}>Needs attention</b> · {headline.worst.name} - NPS {headline.worst.pre.nps} ({headline.worst.pre.total} ratings)
                           </button>
                         )}
                         
@@ -762,10 +762,10 @@ export default function CoachNpsDashboard() {
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, padding: '16px 28px 0' }}>
                     <PremKPI label="NPS" value={nf(pre.nps)} sub={pts(pre.nps, prevPre && prevPre.nps) || 'Happy % minus unhappy %'} accent={toneOf(pre.nps).color} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-                    <PremKPI label="Average rating" value={pre.avg === null ? '—' : pre.avg.toFixed(2)} sub={pts(pre.avg, prevPre && prevPre.avg, '') || 'Out of 10'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
+                    <PremKPI label="Average rating" value={pre.avg === null ? '-' : pre.avg.toFixed(2)} sub={pts(pre.avg, prevPre && prevPre.avg, '') || 'Out of 10'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
                     <PremKPI label="Total ratings" value={fmtN(pre.total)} sub="Pre-sales" delta={chg(pre.total, prevPre && prevPre.total)} prevValue={hasPrev ? fmtN(prevPre.total) : undefined} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.agent} />
                     <PremKPI label="Unique students" value={fmtN(pre.students)} sub="Distinct students rated" delta={chg(pre.students, prevPre && prevPre.students)} prevValue={hasPrev ? fmtN(prevPre.students) : undefined} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
-                    <PremKPI label="Happy (9–10)" value={happyPct === null ? '—' : Math.round(happyPct) + '%'} sub={pts(happyPct, prevHappy) || `${fmtN(pre.promoters)} ratings`} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} />
+                    <PremKPI label="Happy (9–10)" value={happyPct === null ? '-' : Math.round(happyPct) + '%'} sub={pts(happyPct, prevHappy) || `${fmtN(pre.promoters)} ratings`} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} />
                   </div>
                 )
               })()}
@@ -898,9 +898,9 @@ export default function CoachNpsDashboard() {
                                     <span style={{ minWidth: 34, textAlign: 'right' }}>{fmtN(r.pre.total)}</span>
                                   </span>
                                 </td>
-                                <td style={td}>{r.pre.avg !== null ? r.pre.avg.toFixed(1) : '—'}</td>
+                                <td style={td}>{r.pre.avg !== null ? r.pre.avg.toFixed(1) : '-'}</td>
                                 <td style={{ ...td, background: few || r.pre.nps === null ? undefined : toneOf(r.pre.nps).color + '1F' }}><NpsChip v={r.pre.nps} total={r.pre.total} min={min} /></td>
-                                <td style={{ ...td, color: dlt === null ? C.muted : dlt >= 0 ? C.green : C.navy, fontWeight: 700 }}>{dlt === null ? '—' : dlt === 0 ? '–' : `${dlt > 0 ? '▲' : '▼'} ${Math.abs(dlt)}`}</td>
+                                <td style={{ ...td, color: dlt === null ? C.muted : dlt >= 0 ? C.green : C.navy, fontWeight: 700 }}>{dlt === null ? '-' : dlt === 0 ? '–' : `${dlt > 0 ? '▲' : '▼'} ${Math.abs(dlt)}`}</td>
                                 <td style={{ ...td, minWidth: 130 }}><MixBar p={r.pre.promoters} pa={r.pre.passives} d={r.pre.detractors} /></td>
                                 {moreCols && <>
                                   <td style={td}>{fmtN(r.pre.students)}</td>

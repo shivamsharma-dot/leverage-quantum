@@ -71,7 +71,7 @@ export function TableSkeleton({ rows = 6, cols = 5 }) {
 
 // Unified, brand-styled full-page loader used across every dashboard page
 
-// Simple universal loader — a single brand-colored spinner (no skeleton, no wordmark)
+// Simple universal loader - a single brand-colored spinner (no skeleton, no wordmark)
 export function InlineLoader({ label, height = 300 }) {
   return (
     <div style={{ minHeight: height, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%' }}>

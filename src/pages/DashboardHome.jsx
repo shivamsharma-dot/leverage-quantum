@@ -9,8 +9,8 @@ import { loadSummaryAnalysis } from '../lib/summaryData'
 const FONT = "'Plus Jakarta Sans',-apple-system,sans-serif"
 const C = { navy:'#1F3C84', blue:'#1C9FD4', green:'#4CAE6F', cyan:'#29B9C3', amber:'#F59E0B', red:'#EF4444', border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', bg:'#F4F6F9' }
 
-function fmtN(n){ if(!n && n!==0) return '\u2014'; if(n>=1e7) return (n/1e7).toFixed(1)+'Cr'; if(n>=1e5) return (n/1e5).toFixed(1)+'L'; if(n>=1e3) return Math.round(n/1e3)+'K'; return Math.round(n).toLocaleString('en-IN') }
-function fmtC(n){ if(!n && n!==0) return '\u2014'; if(n>=1e7) return '\u20b9'+(n/1e7).toFixed(2)+' Cr'; if(n>=1e5) return '\u20b9'+(n/1e5).toFixed(1)+'L'; if(n>=1e3) return '\u20b9'+Math.round(n/1e3)+'K'; return '\u20b9'+Math.round(n) }
+function fmtN(n){ if(!n && n!==0) return '-'; if(n>=1e7) return (n/1e7).toFixed(1)+'Cr'; if(n>=1e5) return (n/1e5).toFixed(1)+'L'; if(n>=1e3) return Math.round(n/1e3)+'K'; return Math.round(n).toLocaleString('en-IN') }
+function fmtC(n){ if(!n && n!==0) return '-'; if(n>=1e7) return '\u20b9'+(n/1e7).toFixed(2)+' Cr'; if(n>=1e5) return '\u20b9'+(n/1e5).toFixed(1)+'L'; if(n>=1e3) return '\u20b9'+Math.round(n/1e3)+'K'; return '\u20b9'+Math.round(n) }
 function fmtShortDate(dateStr){ const d = new Date(dateStr+'T00:00:00'); return d.toLocaleDateString('en-IN',{ day:'numeric', month:'short' }) }
 function fmtShortMonth(monthStr){ const parts = monthStr.split('-'); const d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, 1); return d.toLocaleDateString('en-IN',{ month:'short', year:'2-digit' }) }
 
@@ -43,7 +43,7 @@ function Skeleton({ w='100%', h=20, r=6 }) {
 function StatCard({ label, value, sub, loading, icon }) {
   const numVal = parseFloat((value||'').toString().replace(/[^0-9.]/g,''))||0
   const display = useCountUp(loading ? null : numVal, 900)
-  const formatted = loading ? null : display === null ? '\u2014' : (value||'\u2014').toString().replace(/[\d.]+/, display.toString())
+  const formatted = loading ? null : display === null ? '-' : (value||'-').toString().replace(/[\d.]+/, display.toString())
   return (
     <div style={{ background:'#fff', border:'0.5px solid '+C.border, borderRadius:12, padding:'16px 20px 14px', boxShadow:'0 1px 4px rgba(15,23,42,0.04)', fontFamily:FONT }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>

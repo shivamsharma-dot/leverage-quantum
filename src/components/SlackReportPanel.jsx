@@ -140,7 +140,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const openBrowse = () => { setBrowseOpen(true); if (!allChannels) loadChannels() }
   const pickRawChannel = c => {
     const key = 'raw:' + c.id
-    setRawDest({ key, label: '#' + c.name, name: c.name, guarded: false, isTest: false, reads: 'Picked from Browse channels — not saved, just for this send.' })
+    setRawDest({ key, label: '#' + c.name, name: c.name, guarded: false, isTest: false, reads: 'Picked from Browse channels - not saved, just for this send.' })
     setTarget(key)
     setBrowseOpen(false)
   }
@@ -173,7 +173,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     testChannels.length
       ? testChannels.map(c => ({
           key: 'test:' + c.id, label: '#' + c.name, name: c.name, guarded: false, isTest: true,
-          reads: 'Sandbox — only visible in #' + c.name + '.',
+          reads: 'Sandbox - only visible in #' + c.name + '.',
         }))
       : [LEGACY_TEST_DEST]
   ), [testChannels])
@@ -309,7 +309,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
           d.error || 'Failed to post to Slack',
           d.failsLeft != null ? d.failsLeft + ' tries left' : null,
           d.lockedForSec ? 'locked for ' + Math.ceil(d.lockedForSec / 60) + ' min' : null,
-        ].filter(Boolean).join(' \u2014 '))
+        ].filter(Boolean).join(' - '))
       }
       const entry = { at: new Date().toISOString(), channel: d.channel || target }
       writeLastSent(versionId, entry)
@@ -467,7 +467,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               <>
                 <div>
                   <div style={{ ...LABEL, marginBottom:6, color: pickErr ? '#B42318' : C.muted }}>
-                    Sandbox — pick one to test with
+                    Sandbox - pick one to test with
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
                     {sandboxDests.map(d => {
@@ -553,7 +553,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
                 <Lock color={C.navy} />
                 <span style={{ fontSize:11.5, fontWeight:800, color:C.navy, fontFamily:MONO }}>{channelHandle(target)}</span>
-                <span style={{ fontSize:10.5, fontWeight:700, color:C.sub }}>is locked &mdash; the CEO reads it</span>
+                <span style={{ fontSize:10.5, fontWeight:700, color:C.sub }}>is locked - the CEO reads it</span>
               </div>
               <div style={{ fontSize:10.5, color:C.sub, lineHeight:1.55 }}>
                 {!pinInfo ? 'Checking the PIN\u2026'
@@ -585,7 +585,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               fontFamily:FONT, boxShadow:'0 1px 2px rgba(15,23,42,0.10)',
             }}>
               {busy ? 'Sending\u2026'
-                : armed ? 'Confirm \u2014 post to ' + channelHandle(target)
+                : armed ? 'Confirm - post to ' + channelHandle(target)
                 : 'Send ' + messages.length + (messages.length === 1 ? ' message' : ' messages')}
             </button>
           </div>
@@ -657,7 +657,7 @@ function SuperTrackerChannelPicker({
         <button onClick={() => setTier('real')} style={tabStyle(tier === 'real')}>Real channels</button>
       </div>
       <div style={{ fontSize:10.5, color:C.muted, marginBottom:9 }}>
-        {tier === 'sandbox' ? 'Test sends — only your team’s sandbox channels see these.' : 'Posts to a live team channel. Read the preview above before picking one.'}
+        {tier === 'sandbox' ? 'Test sends - only your team’s sandbox channels see these.' : 'Posts to a live team channel. Read the preview above before picking one.'}
       </div>
 
       {tier === 'sandbox' && grid(sandboxDests.map(d => card(d, false)))}
@@ -687,7 +687,7 @@ function SuperTrackerChannelPicker({
                 <>
                   <span style={{ fontSize:11.5, fontWeight:700, color:C.ink }}>Browse channels</span>
                   <span style={{ fontSize:10.5, color:C.muted }}>
-                    {realDests.length} named{realGuardedCount ? ' — ' + realGuardedCount + ' locked with a PIN' : ''}, plus any the bot’s in
+                    {realDests.length} named{realGuardedCount ? ' - ' + realGuardedCount + ' locked with a PIN' : ''}, plus any the bot’s in
                   </span>
                 </>
               )}

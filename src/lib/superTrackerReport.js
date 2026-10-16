@@ -72,10 +72,10 @@ function groupRows(rows, categoryOrder) {
     const inCat = rows.filter(r => (r.category || 'Uncategorized') === cat)
     const codeOrder = []
     const seen = new Set()
-    inCat.forEach(r => { const k = (r.sNo || '').trim() || '—'; if (!seen.has(k)) { seen.add(k); codeOrder.push(k) } })
+    inCat.forEach(r => { const k = (r.sNo || '').trim() || '-'; if (!seen.has(k)) { seen.add(k); codeOrder.push(k) } })
     groupCount += codeOrder.length
     const sorted = []
-    codeOrder.forEach(code => inCat.forEach(r => { if (((r.sNo || '').trim() || '—') === code) sorted.push({ ...r, __group: code, __category: cat }) }))
+    codeOrder.forEach(code => inCat.forEach(r => { if (((r.sNo || '').trim() || '-') === code) sorted.push({ ...r, __group: code, __category: cat }) }))
     out.push(...sorted)
   })
   return { rows: out, categoryCount: ordered.length, groupCount }
@@ -93,8 +93,8 @@ function escMrkdwn(s) {
 }
 
 // -- native Slack table cells (raw_text is literal, never mrkdwn-parsed) ----
-const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '—' : String(v) })
-const cellBold = v => ({ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] })
+const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '-' : String(v) })
+const cellBold = v => ({ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '-' : String(v), style: { bold: true } }] }] })
 const cellPlain = c => {
   if (!c) return ''
   if (c.type === 'raw_text') return c.text
@@ -124,14 +124,14 @@ function messageRowsFor(section, budget, weekOverride, categoryOrder) {
 function buildSectionMessage(section, idx, weekOverride, categoryOrder) {
   const t = messageRowsFor(section, SECTION_ROW_BUDGET, weekOverride, categoryOrder)
   const title = ':ledger: *' + escMrkdwn(section.label) + '*'
-  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in — newer columns exist but are still mostly blank)')
+  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in - newer columns exist but are still mostly blank)')
   const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.categoryCount + ' categor' + (t.categoryCount === 1 ? 'y' : 'ies') + ' and ' + t.groupCount + ' group(s)'
-    + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + staleNote + '._'
+    + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '-')) + staleNote + '._'
   const head = ['Category', 'Group', 'Metric', 'Business Line', 'Owner']
   if (t.prev) head.push('Last week (' + t.prev + ')')
-  head.push('This week (' + (t.cur || '—') + ')')
+  head.push('This week (' + (t.cur || '-') + ')')
   const body = t.shown.map(r => {
-    const row = [r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—']
+    const row = [r.__category, r.__group, r.metric, r.businessLine || '-', r.owner || '-']
     if (t.prev) row.push(weekValue(r, t.prev))
     row.push(weekValue(r, t.cur))
     return row
@@ -139,7 +139,7 @@ function buildSectionMessage(section, idx, weekOverride, categoryOrder) {
   const cols = head.map((_, i) => (i < 5 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
   const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
   const overflow = t.total - t.shown.length
-  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
+  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section - full detail is in the CSV attached to this report._' : null
   return {
     key: 'section_' + idx,
     label: section.label,
@@ -170,16 +170,16 @@ function buildCombinedMessage(sections, weekOverride, categoryOrder) {
   sections.forEach(section => {
     const t = messageRowsFor(section, perSectionBudget, weekOverride, categoryOrder)
     t.shown.forEach(r => body.push([
-      section.label, r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—',
-      t.prev ? weekValue(r, t.prev) + ' (' + t.prev + ')' : '—',
-      weekValue(r, t.cur) + ' (' + (t.cur || '—') + ')',
+      section.label, r.__category, r.__group, r.metric, r.businessLine || '-', r.owner || '-',
+      t.prev ? weekValue(r, t.prev) + ' (' + t.prev + ')' : '-',
+      weekValue(r, t.cur) + ' (' + (t.cur || '-') + ')',
     ]))
     const overflow = t.total - t.shown.length
     if (overflow > 0) overflowNotes.push(section.label + ': +' + overflow.toLocaleString('en-IN') + ' more')
   })
   const cols = head.map((_, i) => (i < 6 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
   const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
-  const overflowLine = overflowNotes.length ? '_Truncated per section — ' + overflowNotes.join(', ') + '. Full detail is in the CSV attached to this report._' : null
+  const overflowLine = overflowNotes.length ? '_Truncated per section - ' + overflowNotes.join(', ') + '. Full detail is in the CSV attached to this report._' : null
   return {
     key: 'combined',
     label: 'More sections',
@@ -217,15 +217,15 @@ function buildSuperTracker(ctx) {
 function buildSectionMessageV2(section, idx, weekOverride, categoryOrder) {
   const t = messageRowsFor(section, SECTION_ROW_BUDGET, weekOverride, categoryOrder)
   const title = ':ledger: *' + escMrkdwn(section.label) + '*'
-  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in — newer columns exist but are still mostly blank)')
+  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in - newer columns exist but are still mostly blank)')
   const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.categoryCount + ' categor' + (t.categoryCount === 1 ? 'y' : 'ies')
-    + ', week of ' + (t.cur || '—') + staleNote + '._'
+    + ', week of ' + (t.cur || '-') + staleNote + '._'
   const head = ['Category', 'Metric', 'Business Line', t.cur || 'This week']
-  const body = t.shown.map(r => [r.__category, r.metric, r.businessLine || '—', weekValue(r, t.cur)])
+  const body = t.shown.map(r => [r.__category, r.metric, r.businessLine || '-', weekValue(r, t.cur)])
   const cols = head.map((_, i) => (i < 3 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
   const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
   const overflow = t.total - t.shown.length
-  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
+  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section - full detail is in the CSV attached to this report._' : null
   return {
     key: 'section_' + idx,
     label: section.label,
@@ -257,15 +257,15 @@ function buildCombinedMessageV2(sections, weekOverride, categoryOrder) {
   sections.forEach(section => {
     const t = messageRowsFor(section, perSectionBudget, weekOverride, categoryOrder)
     t.shown.forEach(r => body.push([
-      section.label, r.__category, r.metric, r.businessLine || '—',
-      weekValue(r, t.cur) + ' (' + (t.cur || '—') + ')',
+      section.label, r.__category, r.metric, r.businessLine || '-',
+      weekValue(r, t.cur) + ' (' + (t.cur || '-') + ')',
     ]))
     const overflow = t.total - t.shown.length
     if (overflow > 0) overflowNotes.push(section.label + ': +' + overflow.toLocaleString('en-IN') + ' more')
   })
   const cols = head.map((_, i) => (i < 4 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
   const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
-  const overflowLine = overflowNotes.length ? '_Truncated per section — ' + overflowNotes.join(', ') + '. Full detail is in the CSV attached to this report._' : null
+  const overflowLine = overflowNotes.length ? '_Truncated per section - ' + overflowNotes.join(', ') + '. Full detail is in the CSV attached to this report._' : null
   return {
     key: 'combined',
     label: 'More sections',
@@ -337,7 +337,7 @@ const CHART_TITLE_MAX = 50
 const CONTAINER_TITLE_MAX = 150
 
 function truncateLabel(s, max) {
-  s = String(s == null ? '' : s).trim() || '—'
+  s = String(s == null ? '' : s).trim() || '-'
   return s.length <= max ? s : s.slice(0, max - 1) + '…'
 }
 
@@ -385,7 +385,7 @@ function weekDelta(row, prevWeek, curWeek) {
 // compared -- either value wasn't a plain number, or last week's value was
 // zero (a percent change off zero is undefined, not infinite/huge).
 function fmtDelta(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   if (d.abs === 0) return 'flat'
   const arrow = d.abs > 0 ? '▲' : '▼'
   if (d.pct != null) return arrow + ' ' + Math.abs(d.pct).toFixed(1) + '%'
@@ -451,7 +451,7 @@ function indexedTrendChart(section, rows) {
 
   return {
     type: 'data_visualization',
-    title: truncateLabel(section.label + ' — trend (first week = 100)', CHART_TITLE_MAX),
+    title: truncateLabel(section.label + ' - trend (first week = 100)', CHART_TITLE_MAX),
     chart: { type: 'line', series, axis_config: { categories, x_label: 'Week', y_label: 'Index (first week = 100)' } },
   }
 }
@@ -493,18 +493,18 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
     }
   }
 
-  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in — newer columns exist but are still mostly blank)')
+  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in - newer columns exist but are still mostly blank)')
   const postedRows = (section.rows || []).filter(r => isYes(r.toBePosted))
   const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.categoryCount + ' categor' + (t.categoryCount === 1 ? 'y' : 'ies')
-    + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + staleNote + '._'
+    + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '-')) + staleNote + '._'
 
   const head = ['Category', 'Group', 'Metric', 'Business Line', 'Owner']
   if (t.prev) head.push('Last week (' + t.prev + ')')
-  head.push('This week (' + (t.cur || '—') + ')')
+  head.push('This week (' + (t.cur || '-') + ')')
   if (t.prev) head.push('Δ vs last week')
   const metricColIdx = head.indexOf('Metric')
   const body = t.shown.map(r => {
-    const row = [r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—']
+    const row = [r.__category, r.__group, r.metric, r.businessLine || '-', r.owner || '-']
     if (t.prev) row.push(weekValue(r, t.prev))
     row.push(weekValue(r, t.cur))
     if (t.prev) row.push(fmtDelta(weekDelta(r, t.prev, t.cur)))
@@ -514,7 +514,7 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
   const movers = moversBlock(postedRows, t.prev, t.cur, 3)
   const chart = indexedTrendChart(section, postedRows)
   const overflow = t.total - t.shown.length
-  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
+  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section - full detail is in the CSV attached to this report._' : null
 
   return {
     key: 'section_' + idx,
@@ -525,7 +525,7 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
       { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
       ...(movers ? [movers] : []),
       ...(chart ? [chart] : []),
-      dataTableBlock('st3_sec_' + idx, section.label + ' — metrics', head, body, metricColIdx),
+      dataTableBlock('st3_sec_' + idx, section.label + ' - metrics', head, body, metricColIdx),
       ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
     ],
     table: { columns: head, rows: body },
@@ -543,7 +543,7 @@ function buildSectionMessageV3(section, idx, weekOverride, categoryOrder) {
 // left to the individual section messages above.
 function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
   const title = ':bar_chart: *' + sections.map(s => escMrkdwn(s.label)).join(' · ') + '*'
-  const sub = '_' + sections.length + ' more section(s) — each collapsed below into its own table. Full detail for all of them is in the CSV attached to this report._'
+  const sub = '_' + sections.length + ' more section(s) - each collapsed below into its own table. Full detail for all of them is in the CSV attached to this report._'
   const perSectionBudget = Math.max(8, Math.floor(SECTION_ROW_BUDGET / sections.length))
   const SECTION_CONTAINER_BUDGET = 12
 
@@ -571,7 +571,7 @@ function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
     head.push('This week')
     if (t.prev) head.push('Δ vs last week')
     const body = t.shown.map(r => {
-      const row = [r.__category, r.__group, r.metric, r.businessLine || '—', r.owner || '—']
+      const row = [r.__category, r.__group, r.metric, r.businessLine || '-', r.owner || '-']
       if (t.prev) row.push(weekValue(r, t.prev))
       row.push(weekValue(r, t.cur))
       if (t.prev) row.push(fmtDelta(weekDelta(r, t.prev, t.cur)))
@@ -588,8 +588,8 @@ function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: '_' + t.total.toLocaleString('en-IN') + ' metric(s), week of ' + (t.cur || '—')
-              + (overflow > 0 ? ' — showing first ' + t.shown.length.toLocaleString('en-IN') + ', rest in the CSV' : '') + '._',
+            text: '_' + t.total.toLocaleString('en-IN') + ' metric(s), week of ' + (t.cur || '-')
+              + (overflow > 0 ? ' - showing first ' + t.shown.length.toLocaleString('en-IN') + ', rest in the CSV' : '') + '._',
           },
         },
         {
@@ -604,7 +604,7 @@ function buildRemainingMessageV3(sections, weekOverride, categoryOrder) {
 
   const movers = moversBlock(pooledRows, poolPrev, poolCur, 3)
   const overflowSectionsNote = sections.length > shownCount
-    ? '_' + (sections.length - shownCount) + ' further section(s) are in the CSV only — not shown above.'
+    ? '_' + (sections.length - shownCount) + ' further section(s) are in the CSV only - not shown above.'
     : null
 
   return {
@@ -640,13 +640,13 @@ export const SUPER_TRACKER_REPORT_VERSIONS = [
     id: 'super_tracker_v1',
     code: 'ST',
     msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
-    name: 'Super Tracker — actual figures by section',
+    name: 'Super Tracker - actual figures by section',
     tagline: 'Every real tracked value, grouped by category and then by S.No. code.',
     what: [
       'One message per real workbook section (B2C, B2B, Fly Finance, Fly Homes), each ONE native Slack table',
-      'Grouped by category (the sheet’s own Reference Categories — Content & Community, Revenue, ...) and then by the finer S.No. code (CC01, R02, ...) within it',
+      'Grouped by category (the sheet’s own Reference Categories - Content & Community, Revenue, ...) and then by the finer S.No. code (CC01, R02, ...) within it',
       'Only metrics flagged To be posted? = Yes',
-      'The actual value for the week you pick — defaults to the most recent one that’s genuinely filled in, not a guaranteed-blank "latest column"',
+      'The actual value for the week you pick - defaults to the most recent one that’s genuinely filled in, not a guaranteed-blank "latest column"',
       'A section over the row budget is truncated with a stated count; sections beyond the first 5 share one closing message',
       'The full flattened sheet (every section/metric/week) attached as a CSV',
     ],
@@ -656,12 +656,12 @@ export const SUPER_TRACKER_REPORT_VERSIONS = [
     id: 'super_tracker_v2',
     code: 'ST2',
     msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
-    name: 'Super Tracker — condensed (4 columns)',
-    tagline: 'Category, Metric, Business Line, and this week’s value — nothing else.',
+    name: 'Super Tracker - condensed (4 columns)',
+    tagline: 'Category, Metric, Business Line, and this week’s value - nothing else.',
     what: [
       'Same one-message-per-section structure as the full version',
       'Every table narrowed to exactly 4 columns: Category, Metric, Business Line, and the current week’s value',
-      'No S.No. code column, no Owner, no week-over-week comparison — one week’s real figure only',
+      'No S.No. code column, no Owner, no week-over-week comparison - one week’s real figure only',
       'Only metrics flagged To be posted? = Yes, same as the full version',
       'Sections beyond the first 5 share one closing message (adds a 5th Section column there, since rows from multiple sections are mixed into one table)',
       'The full flattened sheet (every section/metric/week) attached as a CSV',
@@ -672,17 +672,17 @@ export const SUPER_TRACKER_REPORT_VERSIONS = [
     id: 'super_tracker_v3',
     code: 'ST3',
     msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
-    name: 'Super Tracker — analysis (trend chart + movers + native tables)',
-    tagline: 'What actually moved this week, an indexed trend chart, and a native sortable table — not who reported it.',
+    name: 'Super Tracker - analysis (trend chart + movers + native tables)',
+    tagline: 'What actually moved this week, an indexed trend chart, and a native sortable table - not who reported it.',
     what: [
-      'A "Biggest increases / decreases" callout at the top of every message — the metrics that moved the most this week, with the real before/after figures',
+      'A "Biggest increases / decreases" callout at the top of every message - the metrics that moved the most this week, with the real before/after figures',
       'Every section table is a native Slack data_table (sortable/paginated in Slack itself) with a real Δ vs last week column computed from the actual tracked values',
-      'A real indexed trend chart per section (first tracked week = 100) so metrics on completely different scales — a follower count, a percentage, a rupee figure — can be compared as trajectories on one chart without ever mixing their raw units',
-      'Every number comparison is one metric vs. itself across weeks — this never adds or averages two different metrics together',
+      'A real indexed trend chart per section (first tracked week = 100) so metrics on completely different scales - a follower count, a percentage, a rupee figure - can be compared as trajectories on one chart without ever mixing their raw units',
+      'Every number comparison is one metric vs. itself across weeks - this never adds or averages two different metrics together',
       'Sections beyond the first 5 (previously squashed into one shared table) now each get their own collapsible card with its own proper table, plus one combined movers callout across all of them',
       'Only metrics flagged To be posted? = Yes, same as the other versions',
       'The full flattened sheet (every section/metric/week) attached as a CSV',
-      'Uses newer Slack block types (data_table, data_visualization, container) — live-tested working on this workspace, but degrades to a plain-text summary on a client that doesn’t support them yet',
+      'Uses newer Slack block types (data_table, data_visualization, container) - live-tested working on this workspace, but degrades to a plain-text summary on a client that doesn’t support them yet',
     ],
     build: buildSuperTrackerV3,
   },
