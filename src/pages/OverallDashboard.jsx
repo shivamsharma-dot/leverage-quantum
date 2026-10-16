@@ -3806,7 +3806,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // in mtdScorecardForReport below, off overallAcSales (its own separate, always-
       // live state), so editing AC Sales through this panel updates the preview
       // immediately without needing to close/reopen the panel or hit Refresh.
-      const totalApps = typeof appsCount === 'number' ? appsCount : null
+      // Applications = the same figure the Overall dashboard shows (its Applications KPI): the
+      // `Applications` column of the Overall data summed over the report window, NOT a row count
+      // from the Apps page cache (that counts one row per university/course application).
+      const totalApps = rows.reduce((a, r) => a + (r.apps || 0), 0)
       const dailyRunRate = daysDone > 0 ? overallRow.totalQL / daysDone : null
 
       setMtdScorecard({
