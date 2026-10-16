@@ -1401,6 +1401,8 @@ function EfficiencyList({ data, labelKey, rateKey, subKey }) {
 //
 // perDay keeps full float precision and is only rounded at display, so the days always
 // reconcile exactly back to the entered month total.
+// Assumed Affiliate spend for a month with no manual entry yet (Rs). Fixed on purpose.
+const AFFILIATE_DEFAULT_MONTHLY = 900000
 function buildSyntheticAffiliateRows(map) {
   if (!map) return []
   const now = new Date()
@@ -1424,6 +1426,23 @@ function buildSyntheticAffiliateRows(map) {
       })
     }
   })
+  // Default estimate (2026-10-16): until the real Affiliate spend for the CURRENT month is entered in
+  // Settings, assume AFFILIATE_DEFAULT_MONTHLY for the month, spread evenly over its calendar days
+  // (one day's share per elapsed day). A real manual entry for the month replaces it. Past months
+  // that were never entered are left alone. Skipped while the map is still null (prefs not loaded).
+  const curKey = curY + '-' + String(curM).padStart(2, '0')
+  const entered = map[curKey]
+  if (entered === undefined || entered === null || entered === '') {
+    const dim = new Date(curY, curM, 0).getDate()
+    for (let d = 1; d <= Math.min(curD, dim); d++) {
+      const date = new Date(curY, curM - 1, d)
+      out.push({
+        date, mk: monthKey(date), source: 'Affiliate', campaign: 'Affiliate (manual entry)',
+        leads: 0, floorQueued: 0, futworkHumanQ: 0, futworkAiQ: 0, superbotQ: 0, humanQL: 0, futworkAiQl: 0, superbotAiQl: 0,
+        totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0, spend: AFFILIATE_DEFAULT_MONTHLY / dim,
+      })
+    }
+  }
   return out
 }
 
@@ -3705,7 +3724,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // evenly-spread-per-day Affiliate rows client-side (buildSyntheticAffiliateRows)
       // -- this report just never did the same merge. Fixed by doing exactly that,
       // filtered to this report's own date window.
-      const affiliateManualMap = (prefsOk && prefsResp.prefs.affiliate_spend_manual) || null
+      const affiliateManualMap = prefsOk ? (prefsResp.prefs.affiliate_spend_manual || {}) : null
       const syntheticAffiliate = buildSyntheticAffiliateRows(affiliateManualMap)
         .filter(r => r.date >= monthStartDate && r.date <= yesterdayDate)
       const rows = raw.map(mapRow).concat(syntheticAffiliate)
