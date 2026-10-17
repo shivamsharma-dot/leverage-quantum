@@ -5138,15 +5138,19 @@ async function handleBigQuery(req, res, me) {
       const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
       const acRows = []
       const tabInfo = {}
-      {
-        const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'FY 2027'")}!A1:Z8000`, { headers: { Authorization: `Bearer ${token}` } })
+      const monthsSeen = new Set()
+      for (const t of ['FY 2027', "Aug'2026", "Sep'2026", 'Oct Live 2026']) {
+        const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'" + t + "'")}!A1:Z8000`, { headers: { Authorization: `Bearer ${token}` } })
         const d = await r.json().catch(() => ({}))
-        if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) return res.status(502).json({ ok: false, error: 'FY 2027 tab: ' + ((d.error && d.error.message) || ('HTTP ' + r.status)) })
-        const head = d.values[0].map(h => String(h || '').trim().toLowerCase())
-        const iType = head.indexOf('ac/ vas'), iPid = head.indexOf('prospect id'), iMail = head.indexOf('student leverage email id'), iStp = head.indexOf('stp'), iMonth = head.indexOf('month')
-        if (iType < 0 || iMonth < 0) return res.status(502).json({ ok: false, error: 'FY 2027 headers: ' + head.join('|') })
-        let ac = 0, vas = 0
+        if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) { tabInfo[t] = { error: (d.error && d.error.message) || ('HTTP ' + r.status) }; continue }
+        const head = d.values[0].map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, ' '))
+        const find = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i } return -1 }
+        const iType = find('ac/ vas', 'ac/vas'), iPid = find('prospect id'), iMail = find('student leverage email id', 'student leverage mail'), iStp = find('stp'), iMonth = find('month')
+        if (iType < 0 || iMonth < 0) { tabInfo[t] = { error: 'headers: ' + head.join('|') }; continue }
+        let ac = 0, vas = 0, skippedDupMonth = 0
         const perMonth = {}
+        const tabMonths = new Set()
+        const rowsHere = []
         for (const row of d.values.slice(1)) {
           const type = String((row && row[iType]) || '').trim().toUpperCase()
           if (type === 'VAS') { vas++; continue }
@@ -5154,18 +5158,19 @@ async function handleBigQuery(req, res, me) {
           const m = String((row && row[iMonth]) || '').trim().toLowerCase().match(/^([a-z]{3})[a-z]*[-' ]*(\d{2,4})$/)
           if (!m || !MONTHS[m[1]]) continue
           const yy = m[2].length === 2 ? '20' + m[2] : m[2]
-          const dt = `${yy}-${String(MONTHS[m[1]]).padStart(2, '0')}-15`
-          ac++
-          perMonth[yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')] = (perMonth[yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')] || 0) + 1
+          const mk = yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')
+          tabMonths.add(mk)
           const pid = String((iPid >= 0 && row[iPid]) || '').trim().toLowerCase()
-          acRows.push({
-            pid: /^[0-9a-f-]{36}$/.test(pid) ? pid : '',
-            email: String((iMail >= 0 && row[iMail]) || '').trim().toLowerCase().replace(/'/g, ''),
-            stp: String((iStp >= 0 && row[iStp]) || '').trim().toLowerCase().replace(/'/g, ''),
-            dt,
-          })
+          rowsHere.push({ mk, pid: /^[0-9a-f-]{36}$/.test(pid) ? pid : '',
+            email: String((iMail >= 0 && row[iMail]) || '').trim().toLowerCase().replace(/['|~]/g, ''),
+            stp: String((iStp >= 0 && row[iStp]) || '').trim().toLowerCase().replace(/['|~]/g, ''), dt: mk + '-15' })
         }
-        Object.assign(tabInfo, { acRows: ac, vasRows: vas, acPerMonth: perMonth, acWithPidInSheet: acRows.filter(r => r.pid).length })
+        for (const x of rowsHere) {
+          if (monthsSeen.has(x.mk)) { skippedDupMonth++; continue }
+          acRows.push(x); ac++; perMonth[x.mk] = (perMonth[x.mk] || 0) + 1
+        }
+        for (const mk of tabMonths) monthsSeen.add(mk)
+        tabInfo[t] = { acRows: ac, vasRows: vas, acPerMonth: perMonth, skippedAlreadyInEarlierTab: skippedDupMonth, withPidInSheet: acRows.filter(x => x.pid).length }
       }
       const acBlob = acRows.map(r => (r.pid ? 'p' + r.pid : r.email ? 'e' + r.email : r.stp ? 's' + r.stp : 'x') + '~' + r.dt.slice(2, 4) + r.dt.slice(5, 7)).join('|')
       const salesCte = `acraw AS (
