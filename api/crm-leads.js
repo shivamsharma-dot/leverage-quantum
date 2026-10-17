@@ -5189,7 +5189,7 @@ async function handleBigQuery(req, res, me) {
                ELSE '5 Unassigned / other' END AS route
         FROM opps o LEFT JOIN ql q ON q.oid = o.oid
       )`
-      const opts = { maxBytes: 20_000_000_000, mode: 'route_funnel', dashboardId: 'settings', userEmail: me.email }
+      const opts = { maxBytes: 60_000_000_000, mode: 'route_funnel', dashboardId: 'settings', userEmail: me.email }
       const leadsSql = `WITH ${baseCtes}
         SELECT route, COUNT(*) AS leads, COUNTIF(queued) AS queued, COUNTIF(isql) AS qls
         FROM routed WHERE cd BETWEEN DATE '${since}' AND DATE '${until}' GROUP BY route ORDER BY route`
