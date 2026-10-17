@@ -5167,8 +5167,12 @@ async function handleBigQuery(req, res, me) {
         }
         Object.assign(tabInfo, { acRows: ac, vasRows: vas, acPerMonth: perMonth, acWithPidInSheet: acRows.filter(r => r.pid).length })
       }
-      const acVals = acRows.map((r, i) => `STRUCT('${r.pid}' AS pid, '${r.email}' AS email, '${r.stp}' AS stp, ${i} AS idx, DATE '${r.dt}' AS d)`)
-      const salesCte = `acraw AS (SELECT * FROM UNNEST([${acVals.join(',')}])),
+      const acBlob = acRows.map(r => (r.pid ? 'p' + r.pid : r.email ? 'e' + r.email : r.stp ? 's' + r.stp : 'x') + '~' + r.dt.slice(2, 4) + r.dt.slice(5, 7)).join('|')
+      const salesCte = `acraw AS (
+        SELECT off AS idx, SUBSTR(SPLIT(x, '~')[OFFSET(0)], 1, 1) AS kt, SUBSTR(SPLIT(x, '~')[OFFSET(0)], 2) AS kv,
+          DATE(2000 + CAST(SUBSTR(SPLIT(x, '~')[OFFSET(1)], 1, 2) AS INT64), CAST(SUBSTR(SPLIT(x, '~')[OFFSET(1)], 3, 2) AS INT64), 15) AS d
+        FROM UNNEST(SPLIT('${acBlob}', '|')) AS x WITH OFFSET off
+      ),
       enr AS (
         SELECT LOWER(CAST(prospect_id AS STRING)) AS pr, LOWER(leverage_email) AS em, LOWER(user_code) AS uc
         FROM \`leverage_direct.enrolled_students_funnel_v2\` WHERE prospect_id IS NOT NULL
@@ -5176,10 +5180,9 @@ async function handleBigQuery(req, res, me) {
       enr_em AS (SELECT em, ANY_VALUE(pr) AS pr FROM enr WHERE em IS NOT NULL AND em != '' GROUP BY em),
       enr_uc AS (SELECT uc, ANY_VALUE(pr) AS pr FROM enr WHERE uc IS NOT NULL AND uc != '' GROUP BY uc),
       acres AS (
-        SELECT a.d, a.idx, a.pid != '' AS m_sheet, (a.pid = '' AND e1.pr IS NOT NULL) AS m_email,
-          (a.pid = '' AND e1.pr IS NULL AND e2.pr IS NOT NULL) AS m_stp,
-          COALESCE(NULLIF(a.pid, ''), e1.pr, e2.pr, CONCAT('unresolved_', CAST(a.idx AS STRING))) AS rp
-        FROM acraw a LEFT JOIN enr_em e1 ON e1.em = a.email AND a.email != '' LEFT JOIN enr_uc e2 ON e2.uc = a.stp AND a.stp != ''
+        SELECT a.d, a.idx, a.kt = 'p' AS m_sheet, (a.kt = 'e' AND e1.pr IS NOT NULL) AS m_email, (a.kt = 's' AND e2.pr IS NOT NULL) AS m_stp,
+          IF(a.kt = 'p', a.kv, COALESCE(e1.pr, e2.pr, CONCAT('unresolved_', CAST(a.idx AS STRING)))) AS rp
+        FROM acraw a LEFT JOIN enr_em e1 ON a.kt = 'e' AND e1.em = a.kv LEFT JOIN enr_uc e2 ON a.kt = 's' AND e2.uc = a.kv
       ),
       sales AS (
         SELECT 'SR' AS typ, LOWER(CAST(prospect_id AS STRING)) AS pid, MIN(DATE(DepositMade)) AS d
