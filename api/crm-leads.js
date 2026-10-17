@@ -5124,6 +5124,88 @@ async function handleBigQuery(req, res, me) {
     // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
     // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
     // per call keeps each run well inside Vercel's 60s limit.
+    if (mode === 'route_funnel') {
+      // Lead-route funnel analysis (2026-10-17): offline / online x Futwork-queued or not, with SR deposits and AC sales.
+      // Admin only. Reads the CIB workbook (AC sales, with Prospect ID) via the service account, joins to
+      // source_attribution_v3 in BigQuery and returns small aggregates. Period = ?since / ?until (default FY26-27 H1).
+      if (me.role !== 'admin') return res.status(403).json({ ok: false, error: 'Admin only' })
+      const q = req.query || {}
+      const since = /^\d{4}-\d{2}-\d{2}$/.test(q.since || '') ? q.since : '2026-04-01'
+      const until = /^\d{4}-\d{2}-\d{2}$/.test(q.until || '') ? q.until : '2026-09-30'
+      const tabs = ["April'2026", "May'2026", "June'2026", "July'2026", "Aug'2026", "Sep'2026", 'Oct Live 2026']
+      const token = await sheetsWriteToken()
+      const acRows = []
+      const tabInfo = []
+      for (const t of tabs) {
+        const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'" + t + "'")}!A1:Z6000`, { headers: { Authorization: `Bearer ${token}` } })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) { tabInfo.push({ tab: t, error: (d.error && d.error.message) || ('HTTP ' + r.status) }); continue }
+        const head = d.values[0].map(h => String(h || '').trim().toLowerCase())
+        const iType = head.indexOf('ac/vas'), iPid = head.indexOf('prospect id'), iDate = head.indexOf('date')
+        if (iType < 0 || iPid < 0) { tabInfo.push({ tab: t, error: 'headers: ' + head.join('|') }); continue }
+        let ac = 0, vas = 0, acNoPid = 0
+        for (const row of d.values.slice(1)) {
+          const type = String((row && row[iType]) || '').trim().toUpperCase()
+          if (type === 'VAS') { vas++; continue }
+          if (type !== 'AC') continue
+          ac++
+          const pid = String((row && row[iPid]) || '').trim().toLowerCase()
+          let dt = ''
+          const m = String((row && row[iDate]) || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+          if (m) dt = `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+          if (!/^[0-9a-f-]{36}$/.test(pid)) { acNoPid++; continue }
+          acRows.push({ pid, dt })
+        }
+        tabInfo.push({ tab: t, acRows: ac, vasRows: vas, acNoProspectId: acNoPid })
+      }
+      const acVals = acRows.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.dt)).map(r => `STRUCT('${r.pid}' AS pid, DATE '${r.dt}' AS d)`)
+      const salesCte = `sales AS (
+        SELECT 'SR' AS typ, LOWER(CAST(prospect_id AS STRING)) AS pid, MIN(DATE(DepositMade)) AS d
+        FROM \`leverage_direct.enrolled_students_funnel_v2\`
+        WHERE DATE(DepositMade) >= DATE '${since}' GROUP BY 2
+        UNION ALL
+        SELECT 'AC', pid, MIN(d) FROM UNNEST([${acVals.join(',')}]) WHERE d >= DATE '${since}' GROUP BY pid
+      )`
+      const baseCtes = `${salesCte},
+      opps AS (
+        SELECT opportunity_id AS oid, LOWER(CAST(prospectid AS STRING)) AS pid, DATE(opportunity_created_date) AS cd,
+          opportunity_opted_by AS team,
+          (last_disposition_from_futwork IS NOT NULL OR last_disposition_ai_futwork IS NOT NULL OR last_disposition_from_superbot IS NOT NULL) AS queued
+        FROM \`leverage_direct.source_attribution_v3\`
+      ),
+      ql AS (
+        SELECT DISTINCT opportunity_id_futwork AS oid FROM \`leverage_direct.lsq_activities_futwork\`
+        WHERE LOWER(note) LIKE '%post%' AND disposition IN ('Interested in Call Back','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Interested in 2026 Intakes','Interested in 2027 Intakes','Low Intent Lead','Call Transferred To Counsellor')
+        UNION DISTINCT
+        SELECT DISTINCT opportunity_id FROM \`leverage_direct.lsq_activities_futwork_ai\`
+        WHERE LOWER(notes) LIKE '%post%' AND disposition IN ('Interested in Callback','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Low Intent Lead','Interested in 2026 Intakes','Interested in 2027 Intakes','Call Transferred To Counsellor')
+      ),
+      routed AS (
+        SELECT o.*, (q.oid IS NOT NULL) AS isql,
+          CASE WHEN o.team = 'Offline Team' AND NOT o.queued THEN '1 Offline D2F'
+               WHEN o.team = 'Online Team' AND o.queued THEN '2 Online via Futwork'
+               WHEN o.team = 'Offline Team' AND o.queued THEN '3 Online to offline (Futwork, offline team)'
+               WHEN o.team = 'Online Team' AND NOT o.queued THEN '4 Online D2F'
+               ELSE '5 Unassigned / other' END AS route
+        FROM opps o LEFT JOIN ql q ON q.oid = o.oid
+      )`
+      const opts = { maxBytes: 20_000_000_000, mode: 'route_funnel', dashboardId: 'settings', userEmail: me.email }
+      const leadsSql = `WITH ${baseCtes}
+        SELECT route, COUNT(*) AS leads, COUNTIF(queued) AS queued, COUNTIF(isql) AS qls
+        FROM routed WHERE cd BETWEEN DATE '${since}' AND DATE '${until}' GROUP BY route ORDER BY route`
+      const salesSql = `WITH ${baseCtes},
+      mapped AS (
+        SELECT s.typ, s.pid, s.d, r.route, r.cd, r.isql,
+          ROW_NUMBER() OVER (PARTITION BY s.typ, s.pid ORDER BY IF(r.cd <= s.d, 0, 1), ABS(DATE_DIFF(s.d, r.cd, DAY))) AS rn
+        FROM sales s LEFT JOIN routed r ON r.pid = s.pid
+      )
+      SELECT typ, COALESCE(route, '0 Unmatched') AS route,
+        (cd BETWEEN DATE '${since}' AND DATE '${until}') AS lead_in_period,
+        (d <= DATE '${until}') AS sale_in_period, COUNT(*) AS sales, COUNTIF(isql) AS sales_with_ql
+      FROM mapped WHERE rn = 1 GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`
+      const [leads, sales] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts)])
+      return res.status(200).json({ ok: true, since, until, tabInfo, acWithId: acRows.length, acWithIdAndDate: acVals.length, acDistinctProspects: new Set(acRows.map(r => r.pid)).size, leads: leads.rows, sales: sales.rows })
+    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
