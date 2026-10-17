@@ -44,8 +44,14 @@ function scoreTable(rows, fmtINR, fmtN) {
   // row for it is gone, not any underlying figure.
   rows.filter(r => r.label !== 'Referral').forEach(r => {
     const blankCost = r.label === 'Organic'
-    const cpl = !blankCost && r.leads > 0 ? r.spend / r.leads : null
-    const cpql = !blankCost && r.totalQL > 0 ? r.spend / r.totalQL : null
+    // 2026-10-17: the Spend column is the spend that counts for cost (excluded campaigns taken out), and
+    // CPL / CPQL divide that same figure, so the table can be checked by hand. CPQL divides by the Total QL
+    // shown (Monthly QLs, the same source as the SR / AC split). Falls back to raw spend if the
+    // exclusions could not be loaded (cpqlSpend absent).
+    const shownSpend = r.cpqlSpend != null ? r.cpqlSpend : r.spend
+    const cplLeads = r.cplLeads != null ? r.cplLeads : r.leads
+    const cpl = !blankCost && cplLeads > 0 ? shownSpend / cplLeads : null
+    const cpql = !blankCost && r.totalQL > 0 ? shownSpend / r.totalQL : null
     const futworkQueued = r.futworkHumanQ + r.futworkAiQ
     const leadToQl = futworkQueued > 0 ? ((r.humanQL + r.futworkAiQl) / futworkQueued) * 100 : null
     if (r.label === 'Overall') t.strongRows.push(t.rows.length)
@@ -54,7 +60,7 @@ function scoreTable(rows, fmtINR, fmtN) {
     // what Lead to QL % actually divides by, rather than the two being two
     // different, independently-timestamped counts sitting side by side.
     t.rows.push([
-      r.label, blankCost ? DASH : moneyCompact(r.spend), fmtN(futworkQueued), fmtN(r.totalQL),
+      r.label, blankCost ? DASH : moneyCompact(shownSpend), fmtN(futworkQueued), fmtN(r.totalQL),
       r.srQl == null ? DASH : fmtN(r.srQl), r.acQl == null ? DASH : fmtN(r.acQl),
       cpl == null ? DASH : fmtINR(cpl), cpql == null ? DASH : fmtINR(cpql),
       pctText(leadToQl),
@@ -126,7 +132,11 @@ export function buildV9(ctx) {
   const dateLine = '_' + s.monthLabel + ' 1st through ' + s.throughLabel + ' (complete days only)_'
   // CPL / CPQL need the Settings cost-metric exclusions; if they could not be loaded the table above shows
   // the plain spend / leads figures and says so (the panel retries once each time it is opened).
-  const exclNote = s.exclusionsApplied === false ? '_CPL / CPQL shown without the cost-metric exclusions - they could not be loaded just now; reopen the panel._' : null
+  const overallRow = (s.rows || []).find(r => r.label === 'Overall')
+  const excludedSpend = overallRow && overallRow.cpqlSpend != null ? overallRow.spend - overallRow.cpqlSpend : 0
+  const exclNote = s.exclusionsApplied === false
+    ? '_Spend is unadjusted: the excluded campaigns could not be loaded just now._'
+    : '_Spend excludes ' + moneyCompact(excludedSpend) + ' of campaigns not counted for cost (TOF YouTube branding, MBBS, VAS). QLs from Monthly QLs._'
   // Overall row's Total QL / SR / AC come from the QL Split sheet only once it is filled through the
   // whole window; otherwise BigQuery counts are used and the reader is told (2026-10-05).
   const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts - the Monthly QLs data could not be loaded just now._' : null
