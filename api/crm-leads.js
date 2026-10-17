@@ -5232,7 +5232,7 @@ async function handleBigQuery(req, res, me) {
       const baseCtes = `${salesCte},
       opps AS (
         SELECT opportunity_id AS oid, LOWER(CAST(prospectid AS STRING)) AS pid, DATE(opportunity_created_date) AS cd,
-          opportunity_opted_by AS team,
+          opportunity_opted_by AS team, source AS src,
           (last_disposition_from_futwork IS NOT NULL OR last_disposition_ai_futwork IS NOT NULL OR last_disposition_from_superbot IS NOT NULL) AS queued
         FROM \`leverage_direct.source_attribution_v3\`
       ),
@@ -5254,7 +5254,7 @@ async function handleBigQuery(req, res, me) {
         FROM \`leverage_direct.lsq_outbound_phone_call_activity\` GROUP BY pid
       ),
       routed AS (
-        SELECT o.oid, o.pid, o.cd, o.team, (o.queued OR q.oid IS NOT NULL) AS queued, (q.oid IS NOT NULL) AS isql,
+        SELECT o.oid, o.pid, o.cd, o.team, o.src, (o.queued OR q.oid IS NOT NULL) AS queued, (q.oid IS NOT NULL) AS isql,
           CASE WHEN o.team = 'Offline Team' AND NOT (o.queued OR q.oid IS NOT NULL) THEN '1 Offline D2F'
                WHEN o.team = 'Online Team' AND (o.queued OR q.oid IS NOT NULL) THEN '2 Online via Futwork'
                WHEN o.team = 'Offline Team' AND (o.queued OR q.oid IS NOT NULL) THEN '3 Online to offline (Futwork, offline team)'
@@ -5264,6 +5264,7 @@ async function handleBigQuery(req, res, me) {
             CASE WHEN fl.ts IS NULL THEN 'c no floor call recorded'
                  WHEN fw.ts IS NULL OR fl.ts <= fw.ts THEN 'b floor called first'
                  ELSE 'a Futwork called first, then floor' END
+               WHEN o.team IS NULL OR o.team NOT IN ('Online Team', 'Offline Team') THEN IF(LOWER(o.src) = 'referral', 'y Referral', 'z Other sources')
           END AS r3
         FROM opps o LEFT JOIN ql q ON q.oid = o.oid LEFT JOIN fwf fw ON fw.oid = o.oid LEFT JOIN flf fl ON fl.pid = o.pid
       )`
