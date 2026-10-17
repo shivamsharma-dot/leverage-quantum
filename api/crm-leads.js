@@ -5226,7 +5226,10 @@ async function handleBigQuery(req, res, me) {
           existingNonEmptyInPQ: existingPQ,
         } : { error: cibError },
       }
-      if (dry) return res.status(200).json(out)
+      // 2026-10-17: the sheet now computes O (via a Connected Sheet), P and Q (IMPORTRANGE + SUMIFS) and the
+      // Missing coaches tab itself, so this mode must NEVER overwrite them again. It stays as a read-only
+      // reconciliation check (dryRun or default); a real write needs an explicit ?force=1.
+      if (dry || String(q.force || '') !== '1') return res.status(200).json({ ...out, wrote: false, note: 'Read-only. The sheet computes these columns itself; pass force=1 only to overwrite them with values.' })
       const rng = c => decodeURIComponent(tab) + '!' + c + '3:' + c + (values.length + 2)
       const data = [{ range: rng('O'), values }]
       if (cib) { data.push({ range: rng('P'), values: cib.acVals }, { range: rng('Q'), values: cib.vasVals }) }
