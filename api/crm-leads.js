@@ -5238,7 +5238,40 @@ async function handleBigQuery(req, res, me) {
         const e = await w.json().catch(() => ({}))
         return res.status(502).json({ ...out, ok: false, error: 'Could not write columns: ' + (e.error?.message || w.status) })
       }
-      return res.status(200).json({ ...out, wroteRows: values.length, wroteColumns: cib ? 'O,P,Q' : 'O' })
+      // "Missing coaches" tab: coaches with sales or deposits this month who are not in Team Mapping column G, with their
+      // revenue, so nothing is silently dropped. Created on first use; rewritten every run. Never blocks O / P / Q.
+      let missingTab = null
+      try {
+        const MISS = 'Missing coaches'
+        const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=sheets.properties.title`, { headers: { Authorization: `Bearer ${token}` } })
+        const md = await meta.json().catch(() => ({}))
+        if (!(md.sheets || []).some(sh => sh.properties && sh.properties.title === MISS)) {
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}:batchUpdate`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests: [{ addSheet: { properties: { title: MISS } } }] }),
+          })
+        }
+        const rowsBy = new Map()
+        const row = e => { if (!rowsBy.has(e)) rowsBy.set(e, { ac: 0, vas: 0, dep: 0 }); return rowsBy.get(e) }
+        if (cib) {
+          for (const x of cib.acNotInSheet) row(x.email).ac = x.cib
+          for (const x of cib.vasNotInSheet) row(x.email).vas = x.cib
+        }
+        for (const x of notInSheet) row(x.email).dep = x.deposits
+        const grid = [['Coach email', 'AC CIB (Rs)', 'AC revenue (CIB x 0.90)', 'VAS CIB (Rs)', 'VAS revenue (CIB x 0.95)', 'SR deposits', 'SR revenue (deposits x 2,50,000)', 'Month', 'Updated (IST)']]
+        const stamp = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 16)
+        for (const [e, v] of [...rowsBy.entries()].sort((a, b) => (b[1].ac + b[1].vas) - (a[1].ac + a[1].vas))) {
+          grid.push([e, v.ac, Math.round(v.ac * AC_REFUND_FACTOR), v.vas, Math.round(v.vas * VAS_REFUND_FACTOR), v.dep, v.dep * SR_REVENUE_PER_DEPOSIT, month, stamp])
+        }
+        if (grid.length === 1) grid.push(['None this month -- every coach with sales is in Team Mapping', '', '', '', '', '', '', month, stamp])
+        const miss = encodeURIComponent("'" + MISS + "'")
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${miss}!A1:I500:clear`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+        const mw = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${miss}!A1:I${grid.length}?valueInputOption=RAW`, {
+          method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: grid }),
+        })
+        missingTab = mw.ok ? { rows: grid.length - 1 } : { error: 'HTTP ' + mw.status }
+      } catch (e) { missingTab = { error: String((e && e.message) || e) } }
+      return res.status(200).json({ ...out, wroteRows: values.length, wroteColumns: cib ? 'O,P,Q' : 'O', missingTab })
     }
     if (mode === 'call_nps_sync') {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
