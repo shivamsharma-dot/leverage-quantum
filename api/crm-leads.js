@@ -5214,11 +5214,11 @@ async function handleBigQuery(req, res, me) {
         WHERE LOWER(notes) LIKE '%post%' AND disposition IN ('Interested in Callback','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Low Intent Lead','Interested in 2026 Intakes','Interested in 2027 Intakes','Call Transferred To Counsellor')
       ),
       routed AS (
-        SELECT o.*, (q.oid IS NOT NULL) AS isql,
-          CASE WHEN o.team = 'Offline Team' AND NOT o.queued THEN '1 Offline D2F'
-               WHEN o.team = 'Online Team' AND o.queued THEN '2 Online via Futwork'
-               WHEN o.team = 'Offline Team' AND o.queued THEN '3 Online to offline (Futwork, offline team)'
-               WHEN o.team = 'Online Team' AND NOT o.queued THEN '4 Online D2F'
+        SELECT o.oid, o.pid, o.cd, o.team, (o.queued OR q.oid IS NOT NULL) AS queued, (q.oid IS NOT NULL) AS isql,
+          CASE WHEN o.team = 'Offline Team' AND NOT (o.queued OR q.oid IS NOT NULL) THEN '1 Offline D2F'
+               WHEN o.team = 'Online Team' AND (o.queued OR q.oid IS NOT NULL) THEN '2 Online via Futwork'
+               WHEN o.team = 'Offline Team' AND (o.queued OR q.oid IS NOT NULL) THEN '3 Online to offline (Futwork, offline team)'
+               WHEN o.team = 'Online Team' AND NOT (o.queued OR q.oid IS NOT NULL) THEN '4 Online D2F'
                ELSE '5 Unassigned / other' END AS route
         FROM opps o LEFT JOIN ql q ON q.oid = o.oid
       )`
