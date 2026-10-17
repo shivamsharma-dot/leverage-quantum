@@ -5145,7 +5145,7 @@ async function handleBigQuery(req, res, me) {
         if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) { tabInfo[t] = { error: (d.error && d.error.message) || ('HTTP ' + r.status) }; continue }
         const head = d.values[0].map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, ' '))
         const find = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i } return -1 }
-        const iType = find('ac/ vas', 'ac/vas'), iPid = find('prospect id'), iMail = find('student leverage email id', 'student leverage mail'), iStp = find('stp'), iMonth = find('month')
+        const iType = find('ac/ vas', 'ac/vas'), iPid = find('prospect id'), iMail = find('student leverage email id', 'student leverage mail'), iStp = find('stp'), iMonth = find('month'), iYear = find('year')
         if (iType < 0 || iMonth < 0) { tabInfo[t] = { error: 'headers: ' + head.join('|') }; continue }
         let ac = 0, vas = 0, skippedDupMonth = 0
         const perMonth = {}
@@ -5155,9 +5155,12 @@ async function handleBigQuery(req, res, me) {
           const type = String((row && row[iType]) || '').trim().toUpperCase()
           if (type === 'VAS') { vas++; continue }
           if (type !== 'AC') continue
-          const m = String((row && row[iMonth]) || '').trim().toLowerCase().match(/^([a-z]{3})[a-z]*[-' ]*(\d{2,4})$/)
+          const mt = String((row && row[iMonth]) || '').trim().toLowerCase()
+          const m = mt.match(/^([a-z]{3})/)
           if (!m || !MONTHS[m[1]]) continue
-          const yy = m[2].length === 2 ? '20' + m[2] : m[2]
+          const ym = mt.match(/(\d{4}|\d{2})\s*$/)
+          const yRaw = ym ? ym[1] : String((iYear >= 0 && row[iYear]) || '').trim()
+          const yy = /^\d{4}$/.test(yRaw) ? yRaw : /^\d{2}$/.test(yRaw) ? '20' + yRaw : '2026'
           const mk = yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')
           tabMonths.add(mk)
           const pid = String((iPid >= 0 && row[iPid]) || '').trim().toLowerCase()
