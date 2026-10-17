@@ -5132,39 +5132,61 @@ async function handleBigQuery(req, res, me) {
       const q = req.query || {}
       const since = /^\d{4}-\d{2}-\d{2}$/.test(q.since || '') ? q.since : '2026-04-01'
       const until = /^\d{4}-\d{2}-\d{2}$/.test(q.until || '') ? q.until : '2026-09-30'
-      const tabs = ["April'2026", "May'2026", "June'2026", "July'2026", "Aug'2026", "Sep'2026", 'Oct Live 2026']
+      // Apr-Aug month tabs have no Prospect ID column; the consolidated "FY 2027" tab does (often blank), plus
+      // the student's Leverage email and STP id, which resolve to a prospect through the enrolled-students table.
       const token = await sheetsWriteToken()
+      const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
       const acRows = []
-      const tabInfo = []
-      for (const t of tabs) {
-        const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'" + t + "'")}!A1:Z6000`, { headers: { Authorization: `Bearer ${token}` } })
+      const tabInfo = {}
+      {
+        const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'FY 2027'")}!A1:Z8000`, { headers: { Authorization: `Bearer ${token}` } })
         const d = await r.json().catch(() => ({}))
-        if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) { tabInfo.push({ tab: t, error: (d.error && d.error.message) || ('HTTP ' + r.status) }); continue }
+        if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) return res.status(502).json({ ok: false, error: 'FY 2027 tab: ' + ((d.error && d.error.message) || ('HTTP ' + r.status)) })
         const head = d.values[0].map(h => String(h || '').trim().toLowerCase())
-        const iType = head.indexOf('ac/vas'), iPid = head.indexOf('prospect id'), iDate = head.indexOf('date')
-        if (iType < 0 || iPid < 0) { tabInfo.push({ tab: t, error: 'headers: ' + head.join('|') }); continue }
-        let ac = 0, vas = 0, acNoPid = 0
+        const iType = head.indexOf('ac/ vas'), iPid = head.indexOf('prospect id'), iMail = head.indexOf('student leverage email id'), iStp = head.indexOf('stp'), iMonth = head.indexOf('month')
+        if (iType < 0 || iMonth < 0) return res.status(502).json({ ok: false, error: 'FY 2027 headers: ' + head.join('|') })
+        let ac = 0, vas = 0
+        const perMonth = {}
         for (const row of d.values.slice(1)) {
           const type = String((row && row[iType]) || '').trim().toUpperCase()
           if (type === 'VAS') { vas++; continue }
           if (type !== 'AC') continue
+          const m = String((row && row[iMonth]) || '').trim().toLowerCase().match(/^([a-z]{3})[a-z]*[-' ]*(\d{2,4})$/)
+          if (!m || !MONTHS[m[1]]) continue
+          const yy = m[2].length === 2 ? '20' + m[2] : m[2]
+          const dt = `${yy}-${String(MONTHS[m[1]]).padStart(2, '0')}-15`
           ac++
-          const pid = String((row && row[iPid]) || '').trim().toLowerCase()
-          let dt = ''
-          const m = String((row && row[iDate]) || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
-          if (m) dt = `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
-          if (!/^[0-9a-f-]{36}$/.test(pid)) { acNoPid++; continue }
-          acRows.push({ pid, dt })
+          perMonth[yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')] = (perMonth[yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')] || 0) + 1
+          const pid = String((iPid >= 0 && row[iPid]) || '').trim().toLowerCase()
+          acRows.push({
+            pid: /^[0-9a-f-]{36}$/.test(pid) ? pid : '',
+            email: String((iMail >= 0 && row[iMail]) || '').trim().toLowerCase().replace(/'/g, ''),
+            stp: String((iStp >= 0 && row[iStp]) || '').trim().toLowerCase().replace(/'/g, ''),
+            dt,
+          })
         }
-        tabInfo.push({ tab: t, acRows: ac, vasRows: vas, acNoProspectId: acNoPid })
+        Object.assign(tabInfo, { acRows: ac, vasRows: vas, acPerMonth: perMonth, acWithPidInSheet: acRows.filter(r => r.pid).length })
       }
-      const acVals = acRows.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(r.dt)).map(r => `STRUCT('${r.pid}' AS pid, DATE '${r.dt}' AS d)`)
-      const salesCte = `sales AS (
+      const acVals = acRows.map((r, i) => `STRUCT('${r.pid}' AS pid, '${r.email}' AS email, '${r.stp}' AS stp, ${i} AS idx, DATE '${r.dt}' AS d)`)
+      const salesCte = `acraw AS (SELECT * FROM UNNEST([${acVals.join(',')}])),
+      enr AS (
+        SELECT LOWER(CAST(prospect_id AS STRING)) AS pr, LOWER(leverage_email) AS em, LOWER(user_code) AS uc
+        FROM \`leverage_direct.enrolled_students_funnel_v2\` WHERE prospect_id IS NOT NULL
+      ),
+      enr_em AS (SELECT em, ANY_VALUE(pr) AS pr FROM enr WHERE em IS NOT NULL AND em != '' GROUP BY em),
+      enr_uc AS (SELECT uc, ANY_VALUE(pr) AS pr FROM enr WHERE uc IS NOT NULL AND uc != '' GROUP BY uc),
+      acres AS (
+        SELECT a.d, a.idx, a.pid != '' AS m_sheet, (a.pid = '' AND e1.pr IS NOT NULL) AS m_email,
+          (a.pid = '' AND e1.pr IS NULL AND e2.pr IS NOT NULL) AS m_stp,
+          COALESCE(NULLIF(a.pid, ''), e1.pr, e2.pr, CONCAT('unresolved_', CAST(a.idx AS STRING))) AS rp
+        FROM acraw a LEFT JOIN enr_em e1 ON e1.em = a.email AND a.email != '' LEFT JOIN enr_uc e2 ON e2.uc = a.stp AND a.stp != ''
+      ),
+      sales AS (
         SELECT 'SR' AS typ, LOWER(CAST(prospect_id AS STRING)) AS pid, MIN(DATE(DepositMade)) AS d
         FROM \`leverage_direct.enrolled_students_funnel_v2\`
         WHERE DATE(DepositMade) >= DATE '${since}' GROUP BY 2
         UNION ALL
-        SELECT 'AC', pid, MIN(d) FROM UNNEST([${acVals.join(',')}]) WHERE d >= DATE '${since}' GROUP BY pid
+        SELECT 'AC', rp, MIN(d) FROM acres WHERE d >= DATE '${since}' GROUP BY rp
       )`
       const baseCtes = `${salesCte},
       opps AS (
@@ -5203,8 +5225,9 @@ async function handleBigQuery(req, res, me) {
         (cd BETWEEN DATE '${since}' AND DATE '${until}') AS lead_in_period,
         (d <= DATE '${until}') AS sale_in_period, COUNT(*) AS sales, COUNTIF(isql) AS sales_with_ql
       FROM mapped WHERE rn = 1 GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`
-      const [leads, sales] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts)])
-      return res.status(200).json({ ok: true, since, until, tabInfo, acWithId: acRows.length, acWithIdAndDate: acVals.length, acDistinctProspects: new Set(acRows.map(r => r.pid)).size, leads: leads.rows, sales: sales.rows })
+      const diagSql = `WITH ${salesCte}, x AS (SELECT 1) SELECT COUNT(*) AS ac_rows, COUNTIF(m_sheet) AS by_sheet, COUNTIF(m_email) AS by_email, COUNTIF(m_stp) AS by_stp, COUNTIF(NOT m_sheet AND NOT m_email AND NOT m_stp) AS unresolved FROM acres`
+      const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
+      return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
