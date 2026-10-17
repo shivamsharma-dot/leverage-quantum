@@ -1,0 +1,35 @@
+name: SR Revenue Fill (Team Mapping sheet)
+
+# Fills column O ("# of Deposits x 250,000") of the Team Mapping tab in the ops sheet by calling
+# the sr_revenue_fill mode on api/crm-leads.js. That endpoint owns the BigQuery deposit count
+# (leverage_direct.enrolled_students_funnel_v2, owner = coach_email), the reconciliation against
+# Overall's deposit count and the sheet write, so this workflow is only the trigger. It always
+# covers the current IST month to date, so it restarts on its own each month.
+#
+# Trigger it daily from cron-job.org -> workflow_dispatch (same as the other syncs), not from
+# GitHub's own schedule. Needs the CRON_SECRET repository Actions secret (already set).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: sr-revenue-fill
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fill SR Revenue
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=sr_revenue_fill" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          if [ "$(echo "$JSON" | jq -r '.ok')" != "true" ]; then echo "ok is not true -- failing"; exit 1; fi
+          if [ "$(echo "$JSON" | jq -r '.matchesOverall')" != "true" ]; then
+            echo "::warning::Deposits from enrolled_students_funnel_v2 ($(echo "$JSON" | jq -r '.depositsTotal')) do not match Overall ($(echo "$JSON" | jq -r '.overallDeposits')) for this window."
+          fi
+          echo "SR Revenue filled for $(echo "$JSON" | jq -r '.month')."

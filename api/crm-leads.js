@@ -2916,6 +2916,25 @@ async function syncTeamMappingSheet(sheetId, creds) {
   return { rows: rows.length }
 }
 
+// SR Revenue fill for the Team Mapping tab of the ops sheet (2026-10-17, direct ask): column O =
+// (this month's deposits credited to the coach in column G) x 2,50,000. The sheet is shared with the
+// same service account the other sheet features use (Editor). Deposits are leverage_direct
+// .enrolled_students_funnel_v2 rows whose DepositMade falls in the month, counted by UTC date: that is
+// what Overall's date_of_transaction does too (checked: 26 vs 26 for 1-16 Oct, equal on every day).
+// The owner is coach_email, lower-cased, with any +alias stripped (a few arrive as name+lc@...).
+const SR_REVENUE_SHEET_ID = '1TVEjyPeKq7BN2B3hdgwm5xUV9lykknY8DuJkhjuWles'
+const SR_REVENUE_TAB = 'Team Mapping'
+const SR_REVENUE_PER_DEPOSIT = 250000
+async function sheetsWriteToken() {
+  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+  const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  if (!clientEmail || !privateKey) throw new Error('GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY are not set')
+  const { JWT } = await import('google-auth-library')
+  const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets'] })
+  const { access_token } = await auth.authorize()
+  return access_token
+}
+
 // MTD Scorecard Slack report only -- see the 'ql_split_totals' dispatch
 // comment for full context. Reads the "QL Split" sheet's plain long table
 // (Day / Provider / Vertical / Count, no header assumptions beyond column
@@ -5097,6 +5116,65 @@ async function handleBigQuery(req, res, me) {
     // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
     // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
     // per call keeps each run well inside Vercel's 60s limit.
+    if (mode === 'sr_revenue_fill') {
+      // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
+      const q = req.query || {}
+      const istNow = new Date(Date.now() + 5.5 * 3600 * 1000)
+      const month = /^\d{4}-\d{2}$/.test(q.month || '') ? q.month : istNow.toISOString().slice(0, 7)
+      const [yy, mm] = month.split('-').map(Number)
+      const first = month + '-01'
+      const last = new Date(Date.UTC(yy, mm, 0)).toISOString().slice(0, 10) // last day of that month
+      const todayUtc = new Date().toISOString().slice(0, 10)
+      const until = last < todayUtc ? last : todayUtc
+      const dry = String(q.dryRun || '') === '1'
+      const depSql = `SELECT LOWER(REGEXP_REPLACE(TRIM(coach_email), r'\\+[^@]*@', '@')) AS e, COUNT(DISTINCT user_id_uuid) AS n
+        FROM \`leverage_direct.enrolled_students_funnel_v2\`
+        WHERE DATE(DepositMade) BETWEEN '${first}' AND '${until}' GROUP BY e`
+      const ovSql = `SELECT SUM(count_deposit_snapshot) AS d FROM \`chatbot_marketing.marketing_table_v1\`
+        WHERE DATE(date_of_transaction) BETWEEN '${first}' AND '${until}'`
+      const opts = { maxBytes: 5_000_000_000, mode: 'sr_revenue_fill', dashboardId: 'settings', userEmail: me.email }
+      const [dep, ov] = await Promise.all([bq.bigQuerySelect(depSql, opts), bq.bigQuerySelect(ovSql, opts)])
+      const byEmail = new Map()
+      let depositsTotal = 0
+      for (const r of dep.rows || []) {
+        const n = Number(r.n) || 0
+        depositsTotal += n
+        if (r.e) byEmail.set(r.e, (byEmail.get(r.e) || 0) + n)
+      }
+      const overallDeposits = Number((ov.rows && ov.rows[0] && ov.rows[0].d) || 0)
+
+      const token = await sheetsWriteToken()
+      const tab = encodeURIComponent("'" + SR_REVENUE_TAB + "'")
+      const readG = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${tab}!G3:G2000`, { headers: { Authorization: `Bearer ${token}` } })
+      const gd = await readG.json().catch(() => ({}))
+      if (!readG.ok) return res.status(502).json({ ok: false, error: 'Could not read column G: ' + (gd.error?.message || readG.status) })
+      const emails = (gd.values || []).map(r => String((r && r[0]) || '').trim().toLowerCase().replace(/\+[^@]*@/, '@'))
+      const used = new Set()
+      const values = emails.map(e => {
+        if (!e) return ['']
+        used.add(e)
+        return [(byEmail.get(e) || 0) * SR_REVENUE_PER_DEPOSIT]
+      })
+      const notInSheet = [...byEmail.entries()].filter(([e]) => !used.has(e)).map(([e, n]) => ({ email: e, deposits: n }))
+      const inSheetDeposits = depositsTotal - notInSheet.reduce((a, x) => a + x.deposits, 0)
+      const out = {
+        ok: true, month, window: { from: first, to: until }, dryRun: dry,
+        depositsTotal, overallDeposits, matchesOverall: depositsTotal === overallDeposits,
+        sheetRows: emails.filter(Boolean).length, coachesWithDeposits: byEmail.size,
+        depositsMappedToSheet: inSheetDeposits, notInSheet,
+        totalSrRevenue: inSheetDeposits * SR_REVENUE_PER_DEPOSIT,
+      }
+      if (dry) return res.status(200).json(out)
+      const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${tab}!O3:O${values.length + 2}?valueInputOption=RAW`, {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
+      })
+      if (!w.ok) {
+        const e = await w.json().catch(() => ({}))
+        return res.status(502).json({ ...out, ok: false, error: 'Could not write column O: ' + (e.error?.message || w.status) })
+      }
+      return res.status(200).json({ ...out, wroteRows: values.length })
+    }
     if (mode === 'call_nps_sync') {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
       const crypto = await import('crypto')
@@ -6154,6 +6232,15 @@ export default async function handler(req, res) {
   if (
     (req.query && req.query.source) === 'bigquery' &&
     (req.query && req.query.mode) === 'apps_sync' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
+  }
+  // Same reasoning, for the daily SR Revenue fill of the ops sheet's Team Mapping tab.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'sr_revenue_fill' &&
     process.env.CRON_SECRET &&
     req.headers['x-cron-secret'] === process.env.CRON_SECRET
   ) {
