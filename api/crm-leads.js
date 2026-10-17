@@ -5145,7 +5145,7 @@ async function handleBigQuery(req, res, me) {
         if (!r.ok || !Array.isArray(d.values) || d.values.length < 2) { tabInfo[t] = { error: (d.error && d.error.message) || ('HTTP ' + r.status) }; continue }
         const head = d.values[0].map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, ' '))
         const find = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i } return -1 }
-        const iType = find('ac/ vas', 'ac/vas'), iPid = find('prospect id'), iMail = find('student leverage email id', 'student leverage mail'), iStp = find('stp'), iMonth = find('month'), iYear = find('year')
+        const iType = find('ac/ vas', 'ac/vas'), iPid = find('prospect id'), iMail = find('student leverage email id', 'student leverage mail'), iStp = find('stp'), iMonth = find('month'), iYear = find('year'), iAmt = find('net cib - as per fin sheet', 'cib amount', 'net cib')
         if (iType < 0 || iMonth < 0) { tabInfo[t] = { error: 'headers: ' + head.join('|') }; continue }
         let ac = 0, vas = 0, skippedDupMonth = 0
         const perMonth = {}
@@ -5166,7 +5166,8 @@ async function handleBigQuery(req, res, me) {
           const pid = String((iPid >= 0 && row[iPid]) || '').trim().toLowerCase()
           rowsHere.push({ mk, pid: /^[0-9a-f-]{36}$/.test(pid) ? pid : '',
             email: String((iMail >= 0 && row[iMail]) || '').trim().toLowerCase().replace(/['|~]/g, ''),
-            stp: String((iStp >= 0 && row[iStp]) || '').trim().toLowerCase().replace(/['|~]/g, ''), dt: mk + '-15' })
+            stp: String((iStp >= 0 && row[iStp]) || '').trim().toLowerCase().replace(/['|~]/g, ''), dt: mk + '-15',
+            amt: (() => { const n = parseFloat(String((iAmt >= 0 && row[iAmt]) || '').replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) ? n : 0 })() })
         }
         for (const x of rowsHere) {
           if (monthsSeen.has(x.mk)) { skippedDupMonth++; continue }
@@ -5175,7 +5176,36 @@ async function handleBigQuery(req, res, me) {
         for (const mk of tabMonths) monthsSeen.add(mk)
         tabInfo[t] = { acRows: ac, vasRows: vas, acPerMonth: perMonth, skippedAlreadyInEarlierTab: skippedDupMonth, withPidInSheet: acRows.filter(x => x.pid).length }
       }
-      const acBlob = acRows.map(r => (r.pid ? 'p' + r.pid : r.email ? 'e' + r.email : r.stp ? 's' + r.stp : 'x') + '~' + r.dt.slice(2, 4) + r.dt.slice(5, 7)).join('|')
+      // Finance's "AC full sale" = unique AC student whose cash-in across the period is above Rs 1.5L (STP, else email).
+      const FULL_SALE_MIN = 150000
+      const keyOf = x => (x.stp && x.stp !== '#n/a' ? 'stp:' + x.stp : x.email ? 'em:' + x.email : x.pid ? 'pid:' + x.pid : '')
+      const stu = new Map()
+      for (const x of acRows) {
+        const k = keyOf(x); if (!k) continue
+        const e = stu.get(k) || { sum: 0, pid: '', email: '', stp: '', done: false }
+        stu.set(k, e)
+        if (x.pid && !e.pid) e.pid = x.pid
+        if (x.email && !e.email) e.email = x.email
+        if (x.stp && !e.stp) e.stp = x.stp
+      }
+      const saleRows = []
+      const uniqApSep = new Set()
+      let cashApSep = 0
+      for (const x of acRows.slice().sort((p, q) => (p.mk < q.mk ? -1 : p.mk > q.mk ? 1 : 0))) {
+        const k = keyOf(x); if (!k) continue
+        const e = stu.get(k)
+        e.sum += x.amt
+        if (x.mk <= '2026-09') { uniqApSep.add(k); cashApSep += x.amt }
+        if (!e.done && e.sum > FULL_SALE_MIN) { e.done = true; saleRows.push({ pid: e.pid, email: e.email, stp: e.stp, dt: x.mk + '-15', mk: x.mk }) }
+      }
+      const acRecon = {
+        acRowsAprSep: acRows.filter(x => x.mk <= '2026-09').length,
+        uniqueStudentsAprSep: uniqApSep.size,
+        fullSaleStudentsAprSep: saleRows.filter(r => r.mk <= '2026-09').length,
+        fullSaleStudentsToDate: saleRows.length,
+        cashInAprSepCr: Math.round(cashApSep / 1e5) / 100,
+      }
+      const acBlob = saleRows.map(r => (r.pid ? 'p' + r.pid : r.email ? 'e' + r.email : r.stp ? 's' + r.stp : 'x') + '~' + r.dt.slice(2, 4) + r.dt.slice(5, 7)).join('|')
       const salesCte = `acraw AS (
         SELECT off AS idx, SUBSTR(SPLIT(x, '~')[OFFSET(0)], 1, 1) AS kt, SUBSTR(SPLIT(x, '~')[OFFSET(0)], 2) AS kv,
           DATE(2000 + CAST(SUBSTR(SPLIT(x, '~')[OFFSET(1)], 1, 2) AS INT64), CAST(SUBSTR(SPLIT(x, '~')[OFFSET(1)], 3, 2) AS INT64), 15) AS d
@@ -5213,32 +5243,47 @@ async function handleBigQuery(req, res, me) {
         SELECT DISTINCT opportunity_id FROM \`leverage_direct.lsq_activities_futwork_ai\`
         WHERE LOWER(notes) LIKE '%post%' AND disposition IN ('Interested in Callback','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Low Intent Lead','Interested in 2026 Intakes','Interested in 2027 Intakes','Call Transferred To Counsellor')
       ),
+      fwf AS (
+        SELECT oid, MIN(ts) AS ts FROM (
+          SELECT opportunity_id_futwork AS oid, TIMESTAMP(activity_creation_date) AS ts FROM \`leverage_direct.lsq_activities_futwork\`
+          UNION ALL SELECT opportunity_id, TIMESTAMP(activity_creation_date) FROM \`leverage_direct.lsq_activities_futwork_ai\`
+        ) GROUP BY oid
+      ),
+      flf AS (
+        SELECT LOWER(CAST(prospectid AS STRING)) AS pid, MIN(TIMESTAMP(activity_creation_date)) AS ts
+        FROM \`leverage_direct.lsq_outbound_phone_call_activity\` GROUP BY pid
+      ),
       routed AS (
         SELECT o.oid, o.pid, o.cd, o.team, (o.queued OR q.oid IS NOT NULL) AS queued, (q.oid IS NOT NULL) AS isql,
           CASE WHEN o.team = 'Offline Team' AND NOT (o.queued OR q.oid IS NOT NULL) THEN '1 Offline D2F'
                WHEN o.team = 'Online Team' AND (o.queued OR q.oid IS NOT NULL) THEN '2 Online via Futwork'
                WHEN o.team = 'Offline Team' AND (o.queued OR q.oid IS NOT NULL) THEN '3 Online to offline (Futwork, offline team)'
                WHEN o.team = 'Online Team' AND NOT (o.queued OR q.oid IS NOT NULL) THEN '4 Online D2F'
-               ELSE '5 Unassigned / other' END AS route
-        FROM opps o LEFT JOIN ql q ON q.oid = o.oid
+               ELSE '5 Unassigned / other' END AS route,
+          CASE WHEN o.team = 'Offline Team' AND (o.queued OR q.oid IS NOT NULL) THEN
+            CASE WHEN fl.ts IS NULL THEN 'c no floor call recorded'
+                 WHEN fw.ts IS NULL OR fl.ts <= fw.ts THEN 'b floor called first'
+                 ELSE 'a Futwork called first, then floor' END
+          END AS r3
+        FROM opps o LEFT JOIN ql q ON q.oid = o.oid LEFT JOIN fwf fw ON fw.oid = o.oid LEFT JOIN flf fl ON fl.pid = o.pid
       )`
       const opts = { maxBytes: 60_000_000_000, mode: 'route_funnel', dashboardId: 'settings', userEmail: me.email }
       const leadsSql = `WITH ${baseCtes}
-        SELECT route, COUNT(*) AS leads, COUNTIF(queued) AS queued, COUNTIF(isql) AS qls
-        FROM routed WHERE cd BETWEEN DATE '${since}' AND DATE '${until}' GROUP BY route ORDER BY route`
+        SELECT route, COALESCE(r3, '') AS r3, COUNT(*) AS leads, COUNTIF(queued) AS queued, COUNTIF(isql) AS qls
+        FROM routed WHERE cd BETWEEN DATE '${since}' AND DATE '${until}' GROUP BY route, r3 ORDER BY route, r3`
       const salesSql = `WITH ${baseCtes},
       mapped AS (
-        SELECT s.typ, s.pid, s.d, r.route, r.cd, r.isql,
+        SELECT s.typ, s.pid, s.d, r.route, r.r3, r.cd, r.isql,
           ROW_NUMBER() OVER (PARTITION BY s.typ, s.pid ORDER BY IF(r.cd <= s.d, 0, 1), ABS(DATE_DIFF(s.d, r.cd, DAY))) AS rn
         FROM sales s LEFT JOIN routed r ON r.pid = s.pid
       )
-      SELECT typ, COALESCE(route, '0 Unmatched') AS route,
+      SELECT typ, COALESCE(route, '0 Unmatched') AS route, COALESCE(r3, '') AS r3,
         (cd BETWEEN DATE '${since}' AND DATE '${until}') AS lead_in_period,
         (d <= DATE '${until}') AS sale_in_period, COUNT(*) AS sales, COUNTIF(isql) AS sales_with_ql
-      FROM mapped WHERE rn = 1 GROUP BY 1, 2, 3, 4 ORDER BY 1, 2, 3, 4`
+      FROM mapped WHERE rn = 1 GROUP BY 1, 2, 3, 4, 5 ORDER BY 1, 2, 3, 4, 5`
       const diagSql = `WITH ${salesCte}, x AS (SELECT 1) SELECT COUNT(*) AS ac_rows, COUNTIF(m_sheet) AS by_sheet, COUNTIF(m_email) AS by_email, COUNTIF(m_stp) AS by_stp, COUNTIF(NOT m_sheet AND NOT m_email AND NOT m_stp) AS unresolved FROM acres`
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
-      return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
+      return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
