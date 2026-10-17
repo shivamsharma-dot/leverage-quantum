@@ -2925,6 +2925,14 @@ async function syncTeamMappingSheet(sheetId, creds) {
 const SR_REVENUE_SHEET_ID = '1TVEjyPeKq7BN2B3hdgwm5xUV9lykknY8DuJkhjuWles'
 const SR_REVENUE_TAB = 'Team Mapping'
 const SR_REVENUE_PER_DEPOSIT = 250000
+// AC / VAS revenue (2026-10-17): per coach, from Finance's "Source wise CIB" workbook. Each month has one tab of sales
+// ("Oct Live 2026" for the month in progress, "Sep'2026" once closed), one row per payment with Coach, CIB Amount and
+// AC/VAS. AC Revenue = sum of CIB for AC rows x 0.90, VAS Revenue = sum of CIB for VAS rows x 0.95 (the 10% / 5% refund
+// allowances named in the Team Mapping headers). CIB Amount is already Finance's net figure, so nothing else is deducted.
+const CIB_SHEET_ID = '1MIbHGyTHLo_WnthZxAX_ZRFokPo83JBIWs1n4_QYzFs'
+const AC_REFUND_FACTOR = 0.9
+const VAS_REFUND_FACTOR = 0.95
+const MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 async function sheetsWriteToken() {
   const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
   const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
@@ -5155,6 +5163,53 @@ async function handleBigQuery(req, res, me) {
         used.add(e)
         return [(byEmail.get(e) || 0) * SR_REVENUE_PER_DEPOSIT]
       })
+      // --- AC / VAS revenue from the CIB workbook. A failure here never blocks the SR column (O). ---
+      const normEmail = v => String(v || '').trim().toLowerCase().replace(/\+[^@]*@/, '@')
+      const numOf = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) ? n : 0 }
+      let cib = null, cibError = null
+      try {
+        const mon = MON_ABBR[mm - 1]
+        const candidates = [`${mon} Live ${yy}`, `${mon}'${yy}`]
+        let rowsIn = null, tabUsed = null, lastErr = ''
+        for (const t of candidates) {
+          const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'" + t + "'")}!A1:Z6000`, { headers: { Authorization: `Bearer ${token}` } })
+          const d = await r.json().catch(() => ({}))
+          if (r.ok && Array.isArray(d.values) && d.values.length > 1) { rowsIn = d.values; tabUsed = t; break }
+          lastErr = (d.error && d.error.message) || ('HTTP ' + r.status)
+        }
+        if (!rowsIn) throw new Error('Could not read the CIB tab (' + candidates.join(' / ') + '): ' + lastErr + ' -- is the workbook shared with ' + process.env.GOOGLE_SHEETS_CLIENT_EMAIL + '?')
+        const head = rowsIn[0].map(h => String(h || '').trim().toLowerCase())
+        const iCib = head.indexOf('cib amount'), iCoach = head.indexOf('coach'), iType = head.indexOf('ac/vas')
+        if (iCib < 0 || iCoach < 0 || iType < 0) throw new Error('CIB tab headers changed (need "CIB Amount", "Coach", "AC/VAS"); found: ' + head.join(' | '))
+        const acBy = new Map(), vasBy = new Map()
+        let acRaw = 0, vasRaw = 0, acRows = 0, vasRows = 0, skippedRows = 0
+        for (const r of rowsIn.slice(1)) {
+          const type = String((r && r[iType]) || '').trim().toUpperCase()
+          const e = normEmail(r && r[iCoach])
+          const amt = numOf(r && r[iCib])
+          if (!e || !amt || (type !== 'AC' && type !== 'VAS')) { if (e || amt) skippedRows++; continue }
+          if (type === 'AC') { acBy.set(e, (acBy.get(e) || 0) + amt); acRaw += amt; acRows++ }
+          else { vasBy.set(e, (vasBy.get(e) || 0) + amt); vasRaw += amt; vasRows++ }
+        }
+        const acVals = emails.map(e => e ? [Math.round((acBy.get(e) || 0) * AC_REFUND_FACTOR)] : [''])
+        const vasVals = emails.map(e => e ? [Math.round((vasBy.get(e) || 0) * VAS_REFUND_FACTOR)] : [''])
+        const inSheet = new Set(emails.filter(Boolean))
+        const acMissing = [...acBy.entries()].filter(([e]) => !inSheet.has(e)).map(([e, v]) => ({ email: e, cib: Math.round(v) }))
+        const vasMissing = [...vasBy.entries()].filter(([e]) => !inSheet.has(e)).map(([e, v]) => ({ email: e, cib: Math.round(v) }))
+        const sumMapped = (m) => [...m.entries()].filter(([e]) => inSheet.has(e)).reduce((a, [, v]) => a + v, 0)
+        cib = {
+          tabUsed, acVals, vasVals, acRows, vasRows, skippedRows,
+          acCibTotal: Math.round(acRaw), vasCibTotal: Math.round(vasRaw),
+          acRevenueMapped: Math.round(sumMapped(acBy) * AC_REFUND_FACTOR), vasRevenueMapped: Math.round(sumMapped(vasBy) * VAS_REFUND_FACTOR),
+          acNotInSheet: acMissing, vasNotInSheet: vasMissing,
+        }
+      } catch (e) { cibError = String((e && e.message) || e) }
+      let existingPQ = null
+      if (cib) {
+        const pq = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${tab}!P3:Q${emails.length + 2}`, { headers: { Authorization: `Bearer ${token}` } })
+        const pqd = await pq.json().catch(() => ({}))
+        existingPQ = (pqd.values || []).reduce((a, r) => a + (r || []).filter(c => String(c || '').trim() !== '').length, 0)
+      }
       const notInSheet = [...byEmail.entries()].filter(([e]) => !used.has(e)).map(([e, n]) => ({ email: e, deposits: n }))
       const inSheetDeposits = depositsTotal - notInSheet.reduce((a, x) => a + x.deposits, 0)
       const out = {
@@ -5163,17 +5218,27 @@ async function handleBigQuery(req, res, me) {
         sheetRows: emails.filter(Boolean).length, coachesWithDeposits: byEmail.size,
         depositsMappedToSheet: inSheetDeposits, notInSheet,
         totalSrRevenue: inSheetDeposits * SR_REVENUE_PER_DEPOSIT,
+        acVas: cib ? {
+          tab: cib.tabUsed, acRows: cib.acRows, vasRows: cib.vasRows, skippedRows: cib.skippedRows,
+          acCibTotal: cib.acCibTotal, vasCibTotal: cib.vasCibTotal,
+          acRevenueMapped: cib.acRevenueMapped, vasRevenueMapped: cib.vasRevenueMapped,
+          acNotInSheet: cib.acNotInSheet, vasNotInSheet: cib.vasNotInSheet,
+          existingNonEmptyInPQ: existingPQ,
+        } : { error: cibError },
       }
       if (dry) return res.status(200).json(out)
-      const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${tab}!O3:O${values.length + 2}?valueInputOption=RAW`, {
-        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values }),
+      const rng = c => decodeURIComponent(tab) + '!' + c + '3:' + c + (values.length + 2)
+      const data = [{ range: rng('O'), values }]
+      if (cib) { data.push({ range: rng('P'), values: cib.acVals }, { range: rng('Q'), values: cib.vasVals }) }
+      const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values:batchUpdate`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valueInputOption: 'RAW', data }),
       })
       if (!w.ok) {
         const e = await w.json().catch(() => ({}))
-        return res.status(502).json({ ...out, ok: false, error: 'Could not write column O: ' + (e.error?.message || w.status) })
+        return res.status(502).json({ ...out, ok: false, error: 'Could not write columns: ' + (e.error?.message || w.status) })
       }
-      return res.status(200).json({ ...out, wroteRows: values.length })
+      return res.status(200).json({ ...out, wroteRows: values.length, wroteColumns: cib ? 'O,P,Q' : 'O' })
     }
     if (mode === 'call_nps_sync') {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
