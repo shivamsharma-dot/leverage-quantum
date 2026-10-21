@@ -2827,24 +2827,6 @@ export default async function handler(req, res) {
     return res.status(200).end()
   }
 
-  if ((req.body?.type || req.query?.type) === 'tmp_slack_delete_one') {
-    // TEMPORARY (2026-10-21): deletes ONE hard-coded bot message (the 4:19 pm Daily P&L posted to
-    // #b2c-leverage-core by mistake). Admin only, channel and ts are fixed in code. Removed right after use.
-    const { getSessionUser: _gsu2 } = await import('../lib/auth.mjs')
-    const me2 = _gsu2(req)
-    if (!me2) return res.status(401).json({ error: 'Not signed in' })
-    if (me2.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-    const tok = process.env.SLACK_BOT_TOKEN
-    if (!tok) return res.status(500).json({ error: 'SLACK_BOT_TOKEN not configured' })
-    const r = await fetch('https://slack.com/api/chat.delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + tok },
-      body: JSON.stringify({ channel: 'C0B57DU7REZ', ts: '1792579751.419129' }),
-    })
-    const j = await r.json().catch(() => ({}))
-    return res.status(200).json({ ok: !!j.ok, error: j.error || null })
-  }
-
   if ((req.body?.type || req.query?.type) === 'welcome_email_test') {
     // Admin-only preview of the new-user welcome email. Goes ONLY to the caller's own
     // address, never to anyone else, and is not wired to "add user" yet.
