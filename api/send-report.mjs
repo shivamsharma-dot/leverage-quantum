@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions'
 import { SLACK_CHANNELS, DEFAULT_CHANNEL_ID, channelHandle, confirmPhrase, phraseMatches } from '../shared/slackChannels.mjs'
 import { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL, fetchOverallTotals } from './ask-ai.mjs'
 import { buildWelcomeEmail } from '../lib/welcomeEmail.mjs'
@@ -2575,41 +2576,46 @@ async function handleSlackViewSubmission(payload) {
     }
 
     const logType = 'b2c ' + row.statement + ' report (approved)'
-    try {
-      if (hook.mode === 'bot' && hook.channel) {
-        for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
-        // Frozen at pending-creation time (see savePendingB2CReport) --
-        // posted as its own top-level message, same as the on-page manual
-        // 'sheet image' send, since the image IS the report rather than an
-        // attachment to the table message above it.
-        if (row.image_png_base64) {
-          try {
-            const files = [await slackUploadFile(token, {
-              filename: (row.image_filename || 'ceo-b2c-cashflow') + '.png',
-              buffer: Buffer.from(row.image_png_base64, 'base64'), title: 'Cash Flow statement',
-            })]
-            if (row.image_csv) files.push(await slackUploadFile(token, {
-              filename: (row.image_filename || 'ceo-b2c-cashflow') + '.csv',
-              buffer: Buffer.from(row.image_csv, 'utf8'), title: 'Cash Flow statement (CSV)',
-            }))
-            await slackCompleteUpload(token, {
-              files, channel: hook.channel, initialComment: ':bar_chart: *B2C Student Mobility - Cash Flow*',
-            })
-          } catch (e) { console.error('[b2c approve] cashflow image upload (real channel) failed', e.message) }
+    // Slack wants the answer to Confirm within 3 seconds, but posting the table and uploading the picture
+    // takes longer. So the PIN check and the claim above stay before the answer, and the posting runs
+    // afterwards (kept alive by waitUntil in the dispatcher). The claim already blocks double posting.
+    const after = async () => {
+      try {
+        if (hook.mode === 'bot' && hook.channel) {
+          for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
+          // Frozen at pending-creation time (see savePendingB2CReport) --
+          // posted as its own top-level message, same as the on-page manual
+          // 'sheet image' send, since the image IS the report rather than an
+          // attachment to the table message above it.
+          if (row.image_png_base64) {
+            try {
+              const files = [await slackUploadFile(token, {
+                filename: (row.image_filename || 'ceo-b2c-cashflow') + '.png',
+                buffer: Buffer.from(row.image_png_base64, 'base64'), title: 'Cash Flow statement',
+              })]
+              if (row.image_csv) files.push(await slackUploadFile(token, {
+                filename: (row.image_filename || 'ceo-b2c-cashflow') + '.csv',
+                buffer: Buffer.from(row.image_csv, 'utf8'), title: 'Cash Flow statement (CSV)',
+              }))
+              await slackCompleteUpload(token, {
+                files, channel: hook.channel, initialComment: ':bar_chart: *B2C Student Mobility - Cash Flow*',
+              })
+            } catch (e) { console.error('[b2c approve] cashflow image upload (real channel) failed', e.message) }
+          }
         }
+        await logReport({ report_type: logType, recipients: ['slack:' + (hook.label || '?')], status: 'sent', triggered_by: actor })
+        if (meta.channel && meta.ts) {
+          const destLabel = hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
+          const noteLine = note ? '\n>' + note : ''
+          await slackUpdateBlocks(token, meta.channel, meta.ts, 'Approved', [
+            { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* - sent to ${destLabel}.${noteLine}` } },
+          ]).catch(() => {})
+        }
+      } catch (e) {
+        await logReport({ report_type: logType, recipients: [], status: 'failed', error: e.message, triggered_by: actor })
       }
-      await logReport({ report_type: logType, recipients: ['slack:' + (hook.label || '?')], status: 'sent', triggered_by: actor })
-      if (meta.channel && meta.ts) {
-        const destLabel = hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
-        const noteLine = note ? '\n>' + note : ''
-        await slackUpdateBlocks(token, meta.channel, meta.ts, 'Approved', [
-          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* - sent to ${destLabel}.${noteLine}` } },
-        ]).catch(() => {})
-      }
-    } catch (e) {
-      await logReport({ report_type: logType, recipients: [], status: 'failed', error: e.message, triggered_by: actor })
     }
-    return { response_action: 'clear' }
+    return { response_action: 'clear', _after: after }
   }
 
   if (view.callback_id === 'b2c_disapprove_modal') {
@@ -2791,7 +2797,10 @@ export default async function handler(req, res) {
       // PIN, blank reason), 'clear' closes it once the real work is done.
       try {
         const result = await handleSlackViewSubmission(payload)
-        return res.status(200).json(result || { response_action: 'clear' })
+        const { _after, ...ackBody } = result || { response_action: 'clear' }
+        res.status(200).json(ackBody)
+        if (typeof _after === 'function') waitUntil(_after().catch(e => console.error('Slack approve post-ack work failed:', e)))
+        return
       } catch (e) {
         console.error('Slack view_submission failed:', e)
         return res.status(200).json({ response_action: 'clear' })
