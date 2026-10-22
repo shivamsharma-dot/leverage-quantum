@@ -36,6 +36,11 @@ const{tab='campaigns',dateRange='LAST_30_DAYS',from,to}=req.query
 const dc=from&&to?`segments.date BETWEEN '${from}' AND '${to}'`:`segments.date DURING ${dateRange}`
 try{
 const token=await getAccessToken()
+if(tab==='gaqltmp'){
+if(me.role!=='admin')return res.status(403).json({error:'Admin only'})
+const rows=await gaql(token,cid,String(req.query.q||''))
+return res.status(200).json({rows})
+}
 if(tab==='campaigns'){
 const rows=await gaql(token,cid,`SELECT campaign.id,campaign.name,campaign.status,campaign.advertising_channel_type,campaign.bidding_strategy_type,campaign.target_cpa.target_cpa_micros,campaign.target_roas.target_roas,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.conversions_value,metrics.cost_per_conversion,metrics.search_impression_share FROM campaign WHERE ${dc} AND campaign.status!='REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 100`)
 const campaigns=rows.map(r=>{
