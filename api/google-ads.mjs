@@ -36,6 +36,13 @@ const{tab='campaigns',dateRange='LAST_30_DAYS',from,to}=req.query
 const dc=from&&to?`segments.date BETWEEN '${from}' AND '${to}'`:`segments.date DURING ${dateRange}`
 try{
 const token=await getAccessToken()
+if(tab==='kwplan'){
+if(me.role!=='admin')return res.status(403).json({error:'Admin only'})
+const kws=String(req.query.kw||'').split('|').map(x=>x.trim()).filter(Boolean).slice(0,200)
+const r=await fetch(`${ADS_BASE}/customers/${cid}:generateKeywordHistoricalMetrics`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'developer-token':process.env.GOOGLE_ADS_DEVELOPER_TOKEN,'Content-Type':'application/json','login-customer-id':process.env.GOOGLE_ADS_MANAGER_ID||cid},body:JSON.stringify({keywords:kws,geoTargetConstants:['geoTargetConstants/'+(req.query.geo||'2356')],language:'languageConstants/1000',keywordPlanNetwork:'GOOGLE_SEARCH'})})
+const t=await r.text()
+return res.status(r.status).setHeader('Content-Type','application/json').send(t)
+}
 if(tab==='gaqltmp'){
 if(me.role!=='admin')return res.status(403).json({error:'Admin only'})
 const rows=await gaql(token,cid,String(req.query.q||''))
