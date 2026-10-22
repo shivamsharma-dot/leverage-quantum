@@ -2836,6 +2836,35 @@ export default async function handler(req, res) {
     return res.status(200).end()
   }
 
+  if ((req.body?.type || req.query?.type) === 'tmp_slack_delete_many') {
+    // TEMPORARY (2026-10-22): deletes a FIXED list of mistaken bot posts in #team-performance-marketing
+    // (the 10:16 am report batch, its thread reply and the two attached files). Admin only, ids fixed in code.
+    // Removed right after use.
+    const { getSessionUser: _gsu3 } = await import('../lib/auth.mjs')
+    const me3 = _gsu3(req)
+    if (!me3) return res.status(401).json({ error: 'Not signed in' })
+    if (me3.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const tok3 = process.env.SLACK_BOT_TOKEN
+    if (!tok3) return res.status(500).json({ error: 'SLACK_BOT_TOKEN not configured' })
+    const call = async (method, body) => {
+      const r = await fetch('https://slack.com/api/' + method, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + tok3 },
+        body: JSON.stringify(body),
+      })
+      const j = await r.json().catch(() => ({}))
+      return { ok: !!j.ok, error: j.error || null }
+    }
+    const out = {}
+    out.files = []
+    for (const id of ['F0CC1AQB5TJ', 'F0CC1AQCG48']) out.files.push(await call('files.delete', { file: id }))
+    out.messages = []
+    for (const ts of ['1792644416.387079', '1792644413.853369', '1792644413.737469', '1792644413.631109']) {
+      out.messages.push({ ts, ...(await call('chat.delete', { channel: 'C0B52AJS0TU', ts })) })
+    }
+    return res.status(200).json(out)
+  }
+
   if ((req.body?.type || req.query?.type) === 'welcome_email_test') {
     // Admin-only preview of the new-user welcome email. Goes ONLY to the caller's own
     // address, never to anyone else, and is not wired to "add user" yet.
