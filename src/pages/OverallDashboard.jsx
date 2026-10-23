@@ -5043,7 +5043,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     let tipFrom, tipTo
                     if (key === 'LD') { tipFrom = new Date(today2); tipFrom.setDate(today2.getDate() - 1); tipTo = tipFrom }
                     else if (key === 'L7D') { tipTo = new Date(today2); tipTo.setDate(today2.getDate() - 1); tipFrom = new Date(tipTo); tipFrom.setDate(tipTo.getDate() - 6) }
-                    else { tipFrom = new Date(today2.getFullYear(), today2.getMonth(), 1); tipTo = today2 }
+                    else { tipFrom = new Date(today2.getFullYear(), today2.getMonth(), 1); tipTo = new Date(today2); if (today2.getDate() > 1) tipTo.setDate(today2.getDate() - 1) }
                     const fmtShort = d => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`
                     const tipLabel = fmtShort(tipFrom) + ' - ' + fmtShort(tipTo)
                     const isHov = hoveredPreset === key
