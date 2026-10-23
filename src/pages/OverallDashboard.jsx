@@ -3156,9 +3156,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // table -- is honored in BQ mode; the other three are skipped outright rather than
   // silently misapplied, and the table's own subtitle says so (see monthScopeNote
   // below) so this is a disclosed limitation, not a quiet bug.
+  // The Month tab stops at yesterday, like the KPI cards and the Day tab: today is still filling
+  // in (its spend lands before its QLs), so counting it makes the current month's CPQL read high.
+  const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t }
   const summaryMonthRows = useMemo(() => {
-    if (!bqActive) return nonDateRows
-    let rs = [...summaryMonthBqRows, ...buildSyntheticAffiliateRows(affiliateManual)]
+    const cut = startOfToday()
+    const closed = r => !r.date || r.date < cut
+    if (!bqActive) return nonDateRows.filter(closed)
+    let rs = [...summaryMonthBqRows, ...buildSyntheticAffiliateRows(affiliateManual)].filter(closed)
     if (!sourceIsAll) rs = rs.filter(matchesSource)
     return rs
   }, [bqActive, summaryMonthBqRows, affiliateManual, nonDateRows, sourceIsAll, selectedSources])
@@ -3362,7 +3367,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // BigQuery mode: the agg rows carry no campaign, so the excluded campaigns' own rows (fetched
       // separately, see monthExclRef) are subtracted here. Sheet mode already has campaigns in `full`.
       const exLoaded = bqActive ? monthExclRef.current.byMk[m.mk] : null
-      const exRows = (bqActive && exLoaded) ? (sourceIsAll ? exLoaded : exLoaded.filter(matchesSource)) : []
+      const exRows = (bqActive && exLoaded) ? (sourceIsAll ? exLoaded : exLoaded.filter(matchesSource)).filter(r => !r.date || r.date < startOfToday()) : []
       const exSum = (test, k, paidOnly) => exRows.reduce((t, r) => t + (test(r) && (!paidOnly || paidSources.has(r.source)) ? r[k] : 0), 0)
       return {
         label:m.label, mk:m.mk, leads:m.leads, queued:m.queued, floorQueued:m.floorQueued, futworkHumanQ:m.futworkHumanQ, futworkAiQ:m.futworkAiQ, superbotQ:m.superbotQ, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
