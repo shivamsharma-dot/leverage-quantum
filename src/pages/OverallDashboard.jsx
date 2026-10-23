@@ -693,10 +693,10 @@ function buildDatePresets() {
   const monthStart = (offset) => new Date(today.getFullYear(), today.getMonth() + offset, 1)
   const monthEnd = (offset) => new Date(today.getFullYear(), today.getMonth() + offset + 1, 0)
   return [
-    { label:'Last 7 days', from: daysAgo(6), to: today },
-    { label:'Last 30 days', from: daysAgo(29), to: today },
-    { label:'Last 90 days', from: daysAgo(89), to: today },
-    { label:'This month', from: monthStart(0), to: today },
+    { label:'Last 7 days', from: daysAgo(7), to: daysAgo(1) },
+    { label:'Last 30 days', from: daysAgo(30), to: daysAgo(1) },
+    { label:'Last 90 days', from: daysAgo(90), to: daysAgo(1) },
+    { label:'This month', from: monthStart(0), to: today.getDate() > 1 ? daysAgo(1) : today },
     { label:'Last month', from: monthStart(-1), to: monthEnd(-1) },
   ]
 }
@@ -2287,7 +2287,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const today = new Date(); today.setHours(0, 0, 0, 0)
     if (datePreset === 'LD') { const y = new Date(today); y.setDate(today.getDate() - 1); return { from:y, to:y, label:'Last Day' } }
     if (datePreset === 'L7D') { const y = new Date(today); y.setDate(today.getDate() - 1); const f = new Date(y); f.setDate(y.getDate() - 6); return { from:f, to:y, label:'Last 7 days' } }
-    if (datePreset === 'MTD') { const f = new Date(today.getFullYear(), today.getMonth(), 1); return { from:f, to:today, label:'MTD ' + today.toLocaleString('default', { month:'short', year:'numeric' }) } }
+    if (datePreset === 'MTD') {
+      // MTD ends YESTERDAY (the last complete day) like every other view; today is still filling in.
+      // On the 1st there is no complete day yet, so it falls back to today.
+      const f = new Date(today.getFullYear(), today.getMonth(), 1)
+      const end = new Date(today); if (today.getDate() > 1) end.setDate(today.getDate() - 1)
+      return { from:f, to:end, label:'MTD ' + today.toLocaleString('default', { month:'short', year:'numeric' }) } }
     if (datePreset === 'custom' && customFrom && customTo) {
       const [fy, fm, fd] = customFrom.split('-').map(Number); const cf = new Date(fy, fm - 1, fd); cf.setHours(0, 0, 0, 0)
       const [ty, tm, td] = customTo.split('-').map(Number); const ct = new Date(ty, tm - 1, td); ct.setHours(23, 59, 59, 999)
@@ -3573,7 +3578,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const mk = monthKeyByLabel.get(selMonth)
     if (mk != null) {
       const today = new Date(); today.setHours(0, 0, 0, 0)
-      if (mk === monthKey(today)) return today.getDate()
+      if (mk === monthKey(today)) return Math.max(1, today.getDate() - 1) // complete days only: today is excluded
       return Math.round((monthEndDate(mk) - monthStartDate(mk)) / oneDay) + 1
     }
     // Plain reduce, not Math.min/max(...array) -- this sheet has 180k+ raw rows, and
