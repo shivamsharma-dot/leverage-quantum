@@ -483,6 +483,74 @@ async function handleSlackChannelHistory(req, res) {
   }
 }
 
+// Admin-only, READ-ONLY inventory of the channels the Quantum bot is in: name, public or
+// private, topic / purpose, member names, and when the last message was. Optional filters
+// so any question needs no redeploy: `privateOnly` (default true), `memberLike` (only
+// channels that have a member whose name contains this text, e.g. "akshay"), `members`
+// (default true). Never posts.
+async function handleSlackBotChannels(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+  const b = req.body || {}
+  const privateOnly = b.privateOnly === undefined ? true : !!b.privateOnly
+  const withMembers = b.members === undefined ? true : !!b.members
+  const memberLike = String(b.memberLike || '').toLowerCase().trim()
+  const call = async (method, params) => {
+    const r = await fetch('https://slack.com/api/' + method + '?' + new URLSearchParams(params).toString(), { headers: { Authorization: `Bearer ${token}` } })
+    return r.json()
+  }
+  try {
+    const chans = []
+    let cursor = ''
+    do {
+      const d = await call('conversations.list', { types: privateOnly ? 'private_channel' : 'public_channel,private_channel', exclude_archived: 'true', limit: '200', ...(cursor ? { cursor } : {}) })
+      if (!d.ok) return res.status(502).json({ error: d.error || 'conversations.list failed' })
+      for (const c of d.channels || []) if (c.is_member) chans.push(c)
+      cursor = d.response_metadata?.next_cursor || ''
+    } while (cursor)
+
+    const users = {}
+    cursor = ''
+    do {
+      const d = await call('users.list', { limit: '500', ...(cursor ? { cursor } : {}) })
+      if (!d.ok) break
+      for (const u of d.members || []) users[u.id] = u.real_name || u.name || u.id
+      cursor = d.response_metadata?.next_cursor || ''
+    } while (cursor)
+
+    const out = await Promise.all(chans.map(async c => {
+      let members = []
+      if (withMembers || memberLike) {
+        let mc = ''
+        do {
+          const d = await call('conversations.members', { channel: c.id, limit: '500', ...(mc ? { cursor: mc } : {}) })
+          if (!d.ok) break
+          members.push(...(d.members || []).map(u => users[u] || u))
+          mc = d.response_metadata?.next_cursor || ''
+        } while (mc)
+      }
+      const h = await call('conversations.history', { channel: c.id, limit: '1' })
+      const last = h.ok && h.messages && h.messages[0] ? h.messages[0] : null
+      return {
+        id: c.id, name: c.name, isPrivate: !!c.is_private, numMembers: c.num_members || members.length,
+        topic: c.topic?.value || '', purpose: c.purpose?.value || '',
+        lastAt: last ? new Date(parseFloat(last.ts) * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '',
+        lastFrom: last ? (last.bot_id || last.subtype === 'bot_message' ? 'bot' : (users[last.user] || last.user)) : '',
+        members: members.sort(),
+      }
+    }))
+    const kept = memberLike ? out.filter(c => c.members.some(m => String(m).toLowerCase().includes(memberLike))) : out
+    kept.sort((a, b) => a.name.localeCompare(b.name))
+    return res.status(200).json({ ok: true, count: kept.length, channels: kept })
+  } catch (e) {
+    return res.status(502).json({ error: 'Slack request failed: ' + e.message })
+  }
+}
+
 async function postToSlack(webhookUrl, payload) {
   const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
   const text = await res.text()
@@ -2976,6 +3044,9 @@ export default async function handler(req, res) {
 
   if ((req.body?.type || req.query?.type) === 'slack_channel_list') {
     return handleSlackChannelList(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_bot_channels') {
+    return handleSlackBotChannels(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'slack_channel_history') {
     return handleSlackChannelHistory(req, res)
