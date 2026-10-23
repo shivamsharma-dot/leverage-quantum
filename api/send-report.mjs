@@ -430,8 +430,23 @@ async function handleSlackChannelHistory(req, res) {
       } while (cursor)
       if (!id) return res.status(404).json({ error: 'The bot cannot see a channel named "' + want + '" (it is private and the bot was not added, or the name is different).' })
     }
-    const h = await call('conversations.history', { channel: id, limit: String(limit) })
-    if (!h.ok) return res.status(502).json({ error: h.error || 'conversations.history failed', channel: name, id })
+    const days = Math.max(0, Math.min(90, parseInt(req.body?.days || req.query?.days || '0', 10) || 0))
+    const h = { ok: true, messages: [] }
+    if (days > 0) {
+      // Page back through history until `days` ago (max 600 messages).
+      const oldest = String(Math.floor(Date.now() / 1000) - days * 86400)
+      let cursor = ''
+      do {
+        const d = await call('conversations.history', { channel: id, limit: '200', oldest, ...(cursor ? { cursor } : {}) })
+        if (!d.ok) return res.status(502).json({ error: d.error || 'conversations.history failed', channel: name, id })
+        h.messages.push(...(d.messages || []))
+        cursor = d.response_metadata?.next_cursor || ''
+      } while (cursor && h.messages.length < 600)
+    } else {
+      const d = await call('conversations.history', { channel: id, limit: String(limit) })
+      if (!d.ok) return res.status(502).json({ error: d.error || 'conversations.history failed', channel: name, id })
+      h.messages = d.messages || []
+    }
     const names = {}
     const who = async (u) => {
       if (!u) return ''
