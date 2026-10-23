@@ -399,6 +399,63 @@ async function handleSlackChannelList(req, res) {
   return res.status(200).json({ channels })
 }
 
+// Admin-only, READ-ONLY look at a channel's recent messages, as the Quantum bot
+// itself (conversations.history). Never posts. Needs groups:history for a private
+// channel (granted) and the bot to have been added to that channel.
+async function handleSlackChannelHistory(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+  const want = String(req.body?.channel || req.query?.channel || '').replace(/^#/, '').trim()
+  if (!want) return res.status(400).json({ error: 'channel is required (name or id)' })
+  const limit = Math.max(1, Math.min(100, parseInt(req.body?.limit || req.query?.limit || '30', 10) || 30))
+  const call = async (method, params) => {
+    const r = await fetch('https://slack.com/api/' + method + '?' + new URLSearchParams(params).toString(), { headers: { Authorization: `Bearer ${token}` } })
+    return r.json()
+  }
+  try {
+    let id = /^[CG][A-Z0-9]{8,}$/.test(want) ? want : ''
+    let name = want
+    if (!id) {
+      let cursor = ''
+      do {
+        const d = await call('conversations.list', { types: 'public_channel,private_channel', exclude_archived: 'true', limit: '200', ...(cursor ? { cursor } : {}) })
+        if (!d.ok) return res.status(502).json({ error: d.error || 'conversations.list failed' })
+        const hit = (d.channels || []).find(c => c.name === want)
+        if (hit) { id = hit.id; name = hit.name; if (!hit.is_member) return res.status(200).json({ ok: false, channel: name, id, error: 'The bot is not a member of this channel -- add @Quantum to it first.' }) ; break }
+        cursor = d.response_metadata?.next_cursor || ''
+      } while (cursor)
+      if (!id) return res.status(404).json({ error: 'The bot cannot see a channel named "' + want + '" (it is private and the bot was not added, or the name is different).' })
+    }
+    const h = await call('conversations.history', { channel: id, limit: String(limit) })
+    if (!h.ok) return res.status(502).json({ error: h.error || 'conversations.history failed', channel: name, id })
+    const names = {}
+    const who = async (u) => {
+      if (!u) return ''
+      if (names[u] === undefined) { const d = await call('users.info', { user: u }); names[u] = d.ok ? (d.user?.real_name || d.user?.name || u) : u }
+      return names[u]
+    }
+    const messages = []
+    for (const m of h.messages || []) {
+      messages.push({
+        ts: m.ts,
+        at: new Date(parseFloat(m.ts) * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        from: m.bot_id || m.subtype === 'bot_message' ? (m.username || m.bot_profile?.name || 'bot') : await who(m.user),
+        isBot: !!(m.bot_id || m.subtype === 'bot_message'),
+        text: String(m.text || '').slice(0, 1500),
+        replies: m.reply_count || 0,
+        files: (m.files || []).map(f => f.name || f.title).filter(Boolean),
+      })
+    }
+    return res.status(200).json({ ok: true, channel: name, id, count: messages.length, messages })
+  } catch (e) {
+    return res.status(502).json({ error: 'Slack request failed: ' + e.message })
+  }
+}
+
 async function postToSlack(webhookUrl, payload) {
   const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
   const text = await res.text()
@@ -2892,6 +2949,9 @@ export default async function handler(req, res) {
 
   if ((req.body?.type || req.query?.type) === 'slack_channel_list') {
     return handleSlackChannelList(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_channel_history') {
+    return handleSlackChannelHistory(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'slack_export') {
     return handleSlackExport(req, res)
