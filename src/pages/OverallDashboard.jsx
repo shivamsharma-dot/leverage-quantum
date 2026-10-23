@@ -2949,7 +2949,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const periodAPaidKpis = useMemo(() => sumKpis(periodARows.filter(r => paidSources.has(r.source) && !isCostExcluded(r))), [periodARows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const periodAPaidCplKpis = useMemo(() => sumKpis(periodARows.filter(r => paidSources.has(r.source) && !isCplCostExcluded(r))), [periodARows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const periodACpl = periodAPaidCplKpis.leads > 0 ? periodAKpis.cplCostSpend / periodAPaidCplKpis.leads : 0
-  const periodACpql = periodAPaidKpis.totalQL > 0 ? periodAKpis.costSpend / periodAPaidKpis.totalQL : 0
+  // Blended, like the KPI card: cost-eligible spend over ALL QLs of the period.
+  const periodACpql = periodAKpis.totalQL > 0 ? periodAKpis.costSpend / periodAKpis.totalQL : 0
 
   const compareLabel = useMemo(() => {
     if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '-'
@@ -2966,7 +2967,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const comparePaidKpis = useMemo(() => sumKpis(compareRows.filter(r => paidSources.has(r.source) && !isCostExcluded(r))), [compareRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const comparePaidCplKpis = useMemo(() => sumKpis(compareRows.filter(r => paidSources.has(r.source) && !isCplCostExcluded(r))), [compareRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const compareCpl = comparePaidCplKpis.leads > 0 ? compareKpis.cplCostSpend / comparePaidCplKpis.leads : 0
-  const compareCpql = comparePaidKpis.totalQL > 0 ? compareKpis.costSpend / comparePaidKpis.totalQL : 0
+  const compareCpql = compareKpis.totalQL > 0 ? compareKpis.costSpend / compareKpis.totalQL : 0
   const comparePaidCpaKpis = useMemo(() => sumKpis(compareRows.filter(r => paidSources.has(r.source) && !isCpaCostExcluded(r))), [compareRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   const compareCpa = comparePaidCpaKpis.apps > 0 ? compareKpis.cpaCostSpend / comparePaidCpaKpis.apps : 0
 
