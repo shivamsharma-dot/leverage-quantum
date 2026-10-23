@@ -430,18 +430,25 @@ async function handleSlackChannelHistory(req, res) {
       } while (cursor)
       if (!id) return res.status(404).json({ error: 'The bot cannot see a channel named "' + want + '" (it is private and the bot was not added, or the name is different).' })
     }
-    const days = Math.max(0, Math.min(90, parseInt(req.body?.days || req.query?.days || '0', 10) || 0))
+    // Any timeline, no redeploy: `days` (look back N days, up to 400), or an explicit
+    // `from` / `to` (YYYY-MM-DD, India time; `to` is inclusive). Paged, up to 2000 messages.
+    const istDay = (d, endOfDay) => Math.floor(new Date(d + (endOfDay ? 'T23:59:59' : 'T00:00:00') + '+05:30').getTime() / 1000)
+    const fromStr = String(req.body?.from || req.query?.from || '')
+    const toStr = String(req.body?.to || req.query?.to || '')
+    const days = Math.max(0, Math.min(400, parseInt(req.body?.days || req.query?.days || '0', 10) || 0))
     const h = { ok: true, messages: [] }
-    if (days > 0) {
-      // Page back through history until `days` ago (max 600 messages).
-      const oldest = String(Math.floor(Date.now() / 1000) - days * 86400)
+    let oldest = '', latest = ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fromStr)) oldest = String(istDay(fromStr, false))
+    else if (days > 0) oldest = String(Math.floor(Date.now() / 1000) - days * 86400)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(toStr)) latest = String(istDay(toStr, true))
+    if (oldest || latest) {
       let cursor = ''
       do {
-        const d = await call('conversations.history', { channel: id, limit: '200', oldest, ...(cursor ? { cursor } : {}) })
+        const d = await call('conversations.history', { channel: id, limit: '200', ...(oldest ? { oldest } : {}), ...(latest ? { latest } : {}), ...(cursor ? { cursor } : {}) })
         if (!d.ok) return res.status(502).json({ error: d.error || 'conversations.history failed', channel: name, id })
         h.messages.push(...(d.messages || []))
         cursor = d.response_metadata?.next_cursor || ''
-      } while (cursor && h.messages.length < 600)
+      } while (cursor && h.messages.length < 2000)
     } else {
       const d = await call('conversations.history', { channel: id, limit: String(limit) })
       if (!d.ok) return res.status(502).json({ error: d.error || 'conversations.history failed', channel: name, id })
@@ -460,12 +467,17 @@ async function handleSlackChannelHistory(req, res) {
         at: new Date(parseFloat(m.ts) * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
         from: m.bot_id || m.subtype === 'bot_message' ? (m.username || m.bot_profile?.name || 'bot') : await who(m.user),
         isBot: !!(m.bot_id || m.subtype === 'bot_message'),
-        text: String(m.text || '').slice(0, 1500),
+        text: String(m.text || '').slice(0, Math.max(40, Math.min(4000, parseInt(req.body?.chars || req.query?.chars || '1500', 10) || 1500))),
         replies: m.reply_count || 0,
         files: (m.files || []).map(f => f.name || f.title).filter(Boolean),
       })
     }
-    return res.status(200).json({ ok: true, channel: name, id, count: messages.length, messages })
+    const fromUser = String(req.body?.fromUser || req.query?.fromUser || '').toLowerCase()
+    const contains = String(req.body?.contains || req.query?.contains || '').toLowerCase()
+    const out = messages.filter(m => (!fromUser || m.from.toLowerCase().includes(fromUser)) && (!contains || m.text.toLowerCase().includes(contains)))
+    const byAuthor = {}
+    out.forEach(m => { byAuthor[m.from] = (byAuthor[m.from] || 0) + 1 })
+    return res.status(200).json({ ok: true, channel: name, id, total: messages.length, count: out.length, byAuthor, messages: out.reverse() })
   } catch (e) {
     return res.status(502).json({ error: 'Slack request failed: ' + e.message })
   }
