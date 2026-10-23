@@ -1034,6 +1034,9 @@ function summaryValue(g, key) {
   // contributes zero to both this numerator and to paidLeads/paidQL/paidApps below, so
   // its spend and leads never distort a blended CPL/CPQL/CPA, while `spend` itself (the
   // real total, used everywhere else on this row) is completely unaffected.
+  // A Month row whose excluded-campaign spend has not loaded yet shows a dash, never a number
+  // that still contains the excluded spend (see monthExclAdj).
+  if (g.exclPending && (key === 'cpl' || key === 'cpql' || key === 'cpa')) return null
   if (key === 'cpl') return (g.cplCostSpend > 0 && g.paidLeads > 0) ? g.cplCostSpend / g.paidLeads : null
   if (key === 'cpql') return (g.costSpend > 0 && g.paidQL > 0) ? g.costSpend / g.paidQL : null
   if (key === 'cpa') return (g.cpaCostSpend > 0 && g.paidApps > 0) ? g.cpaCostSpend / g.paidApps : null
@@ -3159,6 +3162,39 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (!sourceIsAll) rs = rs.filter(matchesSource)
     return rs
   }, [bqActive, summaryMonthBqRows, affiliateManual, nonDateRows, sourceIsAll, selectedSources])
+  // Month tab in BigQuery mode reads the campaign-less agg table, so the Settings cost-metric
+  // exclusions (MBBS / VAS / TOF ...) cannot be removed from it directly. Same fix the Slack
+  // Scorecard uses: fetch ONLY the excluded campaigns' rows (a small read), one month at a time,
+  // newest first, and subtract them per month. Until a month's rows are in, that month's
+  // CPL / CPQL / CPA read a dash (exclPending) rather than a number that still contains the
+  // excluded spend.
+  const monthExclRef = useRef({ key: '', byMk: {} })
+  const [monthExclVer, setMonthExclVer] = useState(0)
+  const monthExclKey = useMemo(() => JSON.stringify(costExclusions.map(x => x.pattern)), [costExclusions])
+  const monthExclMks = useMemo(() => bqActive
+    ? [...new Set(summaryMonthBqRows.map(r => r.mk).filter(mk => mk != null))].sort((a, b) => b - a)
+    : [], [bqActive, summaryMonthBqRows])
+  useEffect(() => {
+    if (!bqActive || grpBy !== 'month' || !costExclusions.length || !monthExclMks.length) return
+    const ref = monthExclRef.current
+    if (ref.key !== monthExclKey) { ref.key = monthExclKey; ref.byMk = {} }
+    let dead = false
+    ;(async () => {
+      for (const mk of monthExclMks) {
+        if (dead) return
+        if (ref.byMk[mk]) continue
+        try {
+          const got = (await retryFetch(() => fetchOverallBqCampaignRows({
+            since: dayKey(monthStartDate(mk)), until: dayKey(monthEndDate(mk)), patterns: costExclusions.map(x => x.pattern),
+          }))).map(mapRow)
+          if (dead) return
+          ref.byMk[mk] = got
+          setMonthExclVer(v => v + 1)
+        } catch (e) { console.warn('Month tab: could not load the excluded campaigns for', monthLabel(mk), e) }
+      }
+    })()
+    return () => { dead = true }
+  }, [bqActive, grpBy, costExclusions, monthExclKey, monthExclMks])
   // Whether the Month tab is silently ignoring a Corridor/campaign-search/Advanced
   // filter the user has active elsewhere on the page -- surfaced in the table's own
   // subtitle rather than left implicit.
@@ -3273,7 +3309,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (paidSources.has(r.source)) { if (cplEligible) e.paidLeads += r.leads; if (cpaEligible) e.paidApps += r.apps; if (costEligible) e.paidQL += r.totalQL }
       m.set(key, e)
     })
-    return [...m.values()].sort((a, b) => b.key.localeCompare(a.key))
+    // A day is a whole period: its CPQL divides by ALL that day's QLs (the KPI card's definition),
+    // so paidQL is set to totalQL here. Source / campaign / corridor rows stay paid-only.
+    return [...m.values()].map(e => ({ ...e, paidQL: e.totalQL })).sort((a, b) => b.key.localeCompare(a.key))
   }, [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
 
   // CPQL vs. Volume efficiency map -- high CPQL is a red flag regardless of volume; low
@@ -3321,22 +3359,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // spend/paid* from the date-scoped `filtered` here would silently zero them out
       // for any month outside the currently-selected date window.
       const full = summaryMonthRows.filter(r => r.mk === m.mk)
+      // BigQuery mode: the agg rows carry no campaign, so the excluded campaigns' own rows (fetched
+      // separately, see monthExclRef) are subtracted here. Sheet mode already has campaigns in `full`.
+      const exLoaded = bqActive ? monthExclRef.current.byMk[m.mk] : null
+      const exRows = (bqActive && exLoaded) ? (sourceIsAll ? exLoaded : exLoaded.filter(matchesSource)) : []
+      const exSum = (test, k, paidOnly) => exRows.reduce((t, r) => t + (test(r) && (!paidOnly || paidSources.has(r.source)) ? r[k] : 0), 0)
       return {
         label:m.label, mk:m.mk, leads:m.leads, queued:m.queued, floorQueued:m.floorQueued, futworkHumanQ:m.futworkHumanQ, futworkAiQ:m.futworkAiQ, superbotQ:m.superbotQ, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
         spend: full.reduce((t, r) => t + r.spend, 0),
         // Same numerator as `costSpend` everywhere else on this page -- see summaryValue()
-        costSpend: full.reduce((t, r) => t + (isCostExcluded(r) ? 0 : r.spend), 0),
-        // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-        cplCostSpend: full.reduce((t, r) => t + (isCplCostExcluded(r) ? 0 : r.spend), 0),
-        cpaCostSpend: full.reduce((t, r) => t + (isCpaCostExcluded(r) ? 0 : r.spend), 0),
-        paidLeads: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCplCostExcluded(r) ? r.leads : 0), 0),
-        paidQL: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCostExcluded(r) ? r.totalQL : 0), 0),
-        paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCpaCostExcluded(r) ? r.apps : 0), 0),
+        costSpend: full.reduce((t, r) => t + (isCostExcluded(r) ? 0 : r.spend), 0) - exSum(isCostExcluded, 'spend'),
+        // paid-only denominators for CPL/CPA -- see the paidKpis note above
+        cplCostSpend: full.reduce((t, r) => t + (isCplCostExcluded(r) ? 0 : r.spend), 0) - exSum(isCplCostExcluded, 'spend'),
+        cpaCostSpend: full.reduce((t, r) => t + (isCpaCostExcluded(r) ? 0 : r.spend), 0) - exSum(isCpaCostExcluded, 'spend'),
+        paidLeads: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCplCostExcluded(r) ? r.leads : 0), 0) - exSum(isCplCostExcluded, 'leads', true),
+        // A month is a whole period: CPQL divides by ALL its QLs (the KPI card's definition).
+        paidQL: m.totalQL,
+        paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCpaCostExcluded(r) ? r.apps : 0), 0) - exSum(isCpaCostExcluded, 'apps', true),
+        exclPending: bqActive && costExclusions.length > 0 && !exLoaded,
       }
     })
-  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, summaryMonthRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
+  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, summaryMonthRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded, bqActive, costExclusions, monthExclVer, sourceIsAll, matchesSource])
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
@@ -3502,6 +3547,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     })
     // TOTAL row only: CPQL is blended, so its denominator is every QL, not just paid-source QLs.
     if (label === 'TOTAL') t.paidQL = t.totalQL
+    t.exclPending = rows.some(g => g.exclPending)
     t.roas = t.spend > 0 ? t.actSrRevenue / t.spend : 0
     t.estimatedRoas = t.spend > 0 ? t.estSrRevenue / t.spend : 0
     return t
@@ -3964,7 +4010,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return s
   }, [prevFiltered])
 
-  const aggReport = useCallback((list, keyFn, paidSet) => {
+  // `blended` = CPQL divides by ALL QLs (the KPI card's definition) instead of paid-source QLs only.
+  // Used for rows that are a whole period (a day, a month, the TOTAL); source / band rows stay paid-only.
+  const aggReport = useCallback((list, keyFn, paidSet, blended = false) => {
     const m = new Map()
     list.forEach(r => {
       const k = keyFn(r)
@@ -3981,12 +4029,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (paidSet.has(r.source)) { if (cplEligible) e.paidLeads += r.leads; if (cpaEligible) e.paidApps += r.apps; if (costEligible) e.paidQL += r.totalQL }
       m.set(k, e)
     })
-    return [...m.values()].map(e => ({
-      ...e,
-      cpl: e.paidLeads > 0 ? e.cplCostSpend / e.paidLeads : null,
-      cpql: e.paidQL > 0 ? e.costSpend / e.paidQL : null,
-      cpa: e.paidApps > 0 ? e.cpaCostSpend / e.paidApps : null,
-    }))
+    return [...m.values()].map(e => {
+      const qlDen = blended ? e.totalQL : e.paidQL
+      return {
+        ...e,
+        paidQL: qlDen,
+        cpl: e.paidLeads > 0 ? e.cplCostSpend / e.paidLeads : null,
+        cpql: qlDen > 0 ? e.costSpend / qlDen : null,
+        cpa: e.paidApps > 0 ? e.cpaCostSpend / e.paidApps : null,
+      }
+    })
   }, [isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
 
   // A row with no match in the previous period carries prev:null, which the report
@@ -4112,7 +4164,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (paidSet.has(r.source)) { if (cplEligible) e.paidLeads += r.leads; if (cpaEligible) e.paidApps += r.apps; if (costEligible) e.paidQL += r.totalQL }
       m.set(k, e)
     })
-    return [...m.values()]
+    const out = [...m.values()]
+    // a month or a day is a whole period: CPQL divides by all QLs, like the KPI card
+    if (dim === 'month' || dim === 'day') out.forEach(e => { e.paidQL = e.totalQL })
+    return out
   }, [isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
   // Every additive field summed across a list of aggReportByDim-shaped entries --
   // used for bucket totals (Trend, month/day dimension) where there is no further
@@ -4120,6 +4175,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const sumDeepEntries = list => {
     const t = { leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0, cplCostSpend:0, cpaCostSpend:0, paidLeads:0, paidQL:0, paidApps:0 }
     list.forEach(e => { Object.keys(t).forEach(k => { t[k] += e[k] || 0 }) })
+    // a bucket total is a whole period: CPQL divides by all QLs
+    t.paidQL = t.totalQL
     return t
   }
 
@@ -4429,9 +4486,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const pc = paidOf(curRows)
     const pp = paidOf(prevRows)
     const band = (label, keep) => {
-      const c = aggReport(curRows.filter(keep), () => label, pc)
+      const blended = label === 'TOTAL'
+      const c = aggReport(curRows.filter(keep), () => label, pc, blended)
       if (!c.length) return null
-      return joinPrev(c, aggReport(prevRows.filter(keep), () => label, pp))[0]
+      return joinPrev(c, aggReport(prevRows.filter(keep), () => label, pp, blended))[0]
     }
     const srcs = joinPrev(aggReport(curRows, r => r.source, pc), aggReport(prevRows, r => r.source, pp))
     const out = []
@@ -4484,10 +4542,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const e = daySeries[i]
       if (!inWindow.has(e.key)) continue
       const label = dayLabelOf(e.date)
-      const c = aggReport(e.rows, () => label, paidOf(e.rows))
+      const c = aggReport(e.rows, () => label, paidOf(e.rows), true)
       if (!c.length) continue
       const pr = daySeries[i - 1] || null
-      const g = joinPrev(c, pr ? aggReport(pr.rows, () => label, paidOf(pr.rows)) : [])[0]
+      const g = joinPrev(c, pr ? aggReport(pr.rows, () => label, paidOf(pr.rows), true) : [])[0]
       out.push({ label, key: e.key, g })
     }
     return out.reverse().slice(0, 31)
@@ -4496,7 +4554,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // Cost per QL month on month. byMonth carries volume only, so the
   // cost series is aggregated separately over the same filtered rows.
   const costByMonth = useMemo(() => {
-    const rows = aggReport(filtered, r => (r.mk == null ? null : r.mk), paidSources)
+    const rows = aggReport(filtered, r => (r.mk == null ? null : r.mk), paidSources, true)
     return rows.map(r => ({
       mk: Number(r.label), label: monthLabel(Number(r.label)), spend: r.spend,
       cpql: r.cpql == null ? null : Math.round(r.cpql),
@@ -4513,7 +4571,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .sort((a, b) => a.key.localeCompare(b.key))
       .map(d => ({
         label: d.label,
-        cpql: d.paidQL > 0 ? Math.round(d.costSpend / d.paidQL) : null,
+        cpql: d.totalQL > 0 ? Math.round(d.costSpend / d.totalQL) : null,
         cpl: d.paidLeads > 0 ? Math.round(d.cplCostSpend / d.paidLeads) : null,
         cpa: d.paidApps > 0 ? Math.round(d.cpaCostSpend / d.paidApps) : null
       }))
