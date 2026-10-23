@@ -437,7 +437,7 @@ function deltaNote(ctx) {
   if (!ctx.hasPrev) return ':information_source: No comparable previous period is loaded, so no movement is shown.'
   return ':information_source: *How to read the \u25b2\u25bc* ' + DASH + ' *' + ctx.periodLabel + '* against *' + ctx.prevLabel
     + '*, ' + (ctx.prevIsCalendarShift ? 'the same days in the month before it' : 'the same-length period immediately before it')
-    + ', on the same Source and Corridor filters. CPL and CPQL divide spend by PAID leads and PAID QLs only, so free channels never make acquisition look cheaper than it was.'
+    + ', on the same Source and Corridor filters. CPL divides spend by paid leads only. CPQL on a total or a single day divides the spend that counts for cost by all QLs; on a source or channel row it divides by that row\'s own paid QLs.'
 }
 
 // The KPI grid: two columns, ten cells, every one carrying its own previous-period
