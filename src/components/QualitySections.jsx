@@ -128,8 +128,13 @@ export function CpqlBySource({ cmp, prevLabel, fmtINR, fmtINRShort }) {
   const totQL = rows.reduce((t, r) => t + (r.totalQL || 0), 0)
   const pSpend = rows.reduce((t, r) => t + ((r.prev && r.prev.spend) || 0), 0)
   const pQL = rows.reduce((t, r) => t + ((r.prev && r.prev.totalQL) || 0), 0)
-  const blended = totQL > 0 ? totSpend / totQL : null
-  const pBlended = pQL > 0 && pSpend > 0 ? pSpend / pQL : null
+  // ALL PAID follows the Funnel Summary's PAID CHANNELS row (cost-metric exclusions applied, Branding
+  // left out). Falls back to the plain sum of the rows below only if that band is not available.
+  const band = cmp && cmp.paidBand
+  const blended = band ? (band.cpql == null ? null : band.cpql) : (totQL > 0 ? totSpend / totQL : null)
+  const pBlended = band ? (band.prev && band.prev.cpql != null ? band.prev.cpql : null) : (pQL > 0 && pSpend > 0 ? pSpend / pQL : null)
+  const allSpend = band ? band.spend : totSpend
+  const allQL = band ? band.totalQL : totQL
   const maxCpql = Math.max(1, ...rows.map(r => r.cpql || 0))
   const head = (
     <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '0 12px', paddingBottom: 8, borderBottom: '1px solid #EEF1F6' }}>
@@ -152,9 +157,9 @@ export function CpqlBySource({ cmp, prevLabel, fmtINR, fmtINRShort }) {
       {head}
       <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '0 12px', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid #EEF1F6', background: 'transparent' }}>
         <Cell a="left" strong col={C.navy}>ALL PAID</Cell>
-        <Cell strong hint={fmtINRShort(totSpend)}>{fmtINR(totSpend)}</Cell>
+        <Cell strong hint={fmtINRShort(allSpend)}>{fmtINR(allSpend)}</Cell>
         <Cell col={C.muted}>100.0%</Cell>
-        <Cell strong>{fmtN(totQL)}</Cell>
+        <Cell strong>{fmtN(allQL)}</Cell>
         <Cell col={C.muted}>100.0%</Cell>
         <Cell strong>{blended == null ? DASH : fmtINR(Math.round(blended))}</Cell>
         <div style={{ textAlign: 'right' }}><Vs now={blended} prev={pBlended} invert fmt={v => fmtINR(Math.round(v))} /></div>

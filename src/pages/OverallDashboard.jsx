@@ -4075,6 +4075,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       ads: joinPrev(
         tagCorridor(aggReport(filtered, r => r.campaign, paidSources)),
         aggReport(prevFiltered, r => r.campaign, prevPaidSources)),
+      // The PAID CHANNELS band, built exactly like the Funnel Summary's PAID CHANNELS row (Branding is its
+      // own band, cost-metric exclusions applied), so the Insights "ALL PAID" line can never disagree with it.
+      paidBand: joinPrev(
+        aggReport(filtered.filter(r => isPaidSource(r.source)), () => 'ALL PAID', paidSources),
+        aggReport(prevFiltered.filter(r => isPaidSource(r.source)), () => 'ALL PAID', prevPaidSources))[0] || null,
       corridorScope: CORRIDOR_SCOPE_LABEL,
     }
   }, [filtered, prevFiltered, paidSources, prevPaidSources, aggReport, joinPrev, corridorScopeSet])
