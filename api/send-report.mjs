@@ -2885,6 +2885,16 @@ async function handleSlackReport(req, res) {
       if (m.imageIsMessage) { imageInitialComment = m.text; continue }
       const ts = await slackPostReportMessage(hook.token, hook.channel, m)
       if (m.attach && !attachTs) attachTs = ts
+      // A picture that belongs to THIS message goes into THIS message's own thread
+      // (one picture under each team's table, say), not into one shared thread.
+      if (m.threadPng && m.threadPng.base64 && ts) {
+        const f = await slackUploadFile(hook.token, {
+          filename: String(m.threadPng.name || 'image').replace(/[^a-z0-9._-]+/gi, '-') + '.png',
+          buffer: Buffer.from(m.threadPng.base64, 'base64'),
+          title: String(m.threadPng.title || m.threadPng.name || 'Image').slice(0, 120),
+        })
+        await slackCompleteUpload(hook.token, { files: [f], channel: hook.channel, threadTs: ts, initialComment: null })
+      }
     }
     const extraPngs = Array.isArray(pngs) ? pngs.filter(x => x && x.base64).slice(0, 8) : []
     if (pngBase64 || csv || extraPngs.length) {
