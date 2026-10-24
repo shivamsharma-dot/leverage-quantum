@@ -8,6 +8,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // ever be reached via a dynamic import()).
 import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
+import { readEbitdaView, parseEbitdaView, buildEbitdaReport } from '../lib/ebitdaManagerReport.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -2927,6 +2928,90 @@ async function handleSlackReport(req, res) {
     return res.status(500).json({ error: e.message })
   }
 }
+
+// Manager-level EBITDA report (AC, SR, VAS, Offline), read straight off the 'EBITDA View' tab of the ops sheet
+// and posted through the Quantum bot: header + one native table per team, and a picture of each team in that
+// team's own thread (lib/ebitdaManagerReport.mjs). Meant for the 3 PM IST schedule, but an admin can run it by
+// hand too.
+//   Destination: app_preferences.ebitda_report_destination (a Slack channel id). Until it is set the scheduled run
+//   does NOT post anywhere (it reports skipped), so wiring the schedule up can never send by accident. A channel
+//   the CEO is in (the guarded ones) is refused here, same rule as Browse Channel: those need the PIN flow.
+//   Admin-only overrides in the body: destination:'test' (the sandbox channel), dryRun:true (parse + report the
+//   numbers, post nothing).
+async function handleEbitdaManagerReport(req, res) {
+  const bearer = req.headers.authorization || ''
+  const isCron = !!process.env.CRON_SECRET && (bearer === 'Bearer ' + process.env.CRON_SECRET || req.headers['x-cron-secret'] === process.env.CRON_SECRET)
+  let triggeredBy = 'cron'
+  let isAdmin = false
+  if (!isCron) {
+    const { getSessionUser } = await import('../lib/auth.mjs')
+    const me = getSessionUser(req)
+    if (!me) return res.status(401).json({ error: 'Not signed in' })
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    triggeredBy = me.email
+    isAdmin = true
+  }
+  const body = req.body || {}
+  const dryRun = isAdmin && body.dryRun === true
+  try {
+    const grid = await readEbitdaView()
+    const parsed = parseEbitdaView(grid)
+    // IST "yesterday" and the month fraction the sheet itself uses (days elapsed / days in month).
+    const ist = new Date(Date.now() + 5.5 * 3600 * 1000)
+    const y = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() - 1))
+    const mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
+    const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
+    const proRata = y.getUTCDate() + '/' + daysInMonth
+    const report = buildEbitdaReport(parsed, { dateLabel, proRata })
+    if (dryRun) {
+      return res.status(200).json({ ok: true, dryRun: true, dateLabel, proRata, totals: report.totals, recon: parsed.recon, teams: parsed.teams.map(t => ({ team: t.key, managers: t.rows.length, revenue: t.rev, cost: t.cost, ebitda: t.ebitda })) })
+    }
+
+    const cfg = await getReportConfig()
+    let target = null
+    let label = ''
+    if (isAdmin && body.destination === 'test') {
+      target = 'test'
+    } else {
+      let dest = ''
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.ebitda_report_destination`, {
+          headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+        })
+        const rows = await r.json()
+        dest = rows && rows[0] && rows[0].value ? String(rows[0].value).trim() : ''
+      } catch (e) { /* treated as not set */ }
+      if (!dest) {
+        return res.status(200).json({ ok: true, skipped: true, reason: 'No destination set (app_preferences.ebitda_report_destination). Nothing was posted.' })
+      }
+      target = 'raw:' + dest.replace(/^#/, '')
+      label = dest
+    }
+    const hook = resolveSlackTarget(cfg, target, { allowGuarded: false, rawLabel: label })
+    if (hook.mode !== 'bot' || !hook.channel) {
+      return res.status(400).json({ error: hook.missing || 'The EBITDA report destination could not be resolved.' })
+    }
+    // Sequential on purpose: Slack orders by arrival.
+    for (const m of report.messages) {
+      const ts = await slackPostReportMessage(hook.token, hook.channel, m)
+      if (m.threadPng && ts) {
+        const f = await slackUploadFile(hook.token, {
+          filename: String(m.threadPng.name || 'image').replace(/[^a-z0-9._-]+/gi, '-') + '.png',
+          buffer: Buffer.from(m.threadPng.base64, 'base64'),
+          title: String(m.threadPng.title || 'Image').slice(0, 120),
+        })
+        await slackCompleteUpload(hook.token, { files: [f], channel: hook.channel, threadTs: ts, initialComment: null })
+      }
+    }
+    await logReport({ report_type: 'slack ebitda manager report (' + (hook.label || target) + ')', recipients: ['slack:' + (hook.label || target)], status: 'sent', triggered_by: triggeredBy })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: report.messages.length, totals: report.totals })
+  } catch (e) {
+    await logReport({ report_type: 'slack ebitda manager report', recipients: ['slack'], status: 'failed', error: e.message, triggered_by: triggeredBy })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -3078,6 +3163,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_report') {
     return handleSlackReport(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'ebitda_manager_report') {
+    return handleEbitdaManagerReport(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'unassigned_leads') {
     return handleUnassignedLeadsReport(req, res)

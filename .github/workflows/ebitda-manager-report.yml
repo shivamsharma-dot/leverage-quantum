@@ -1,0 +1,37 @@
+name: EBITDA Manager Report (Slack)
+
+# Posts the manager-level EBITDA report (AC, SR, VAS, Offline) to Slack through the Quantum bot, built from
+# the 'EBITDA View' tab of the ops sheet (see lib/ebitdaManagerReport.mjs and the ebitda_manager_report type in
+# api/send-report.mjs). Intended for 3 PM IST every day.
+#
+# The destination is app_preferences.ebitda_report_destination (a Slack channel id). While that is not set this
+# run posts NOTHING and says so, so it is safe to schedule before the channel is decided.
+#
+# Trigger it from cron-job.org -> workflow_dispatch (same as the other syncs), not from GitHub's own schedule.
+# Needs the CRON_SECRET repository Actions secret (already set).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ebitda-manager-report
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Post the EBITDA report
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" -d '{"type":"ebitda_manager_report"}')
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          if [ "$(echo "$JSON" | jq -r '.skipped // false')" = "true" ]; then
+            echo "::warning::No destination is set, so nothing was posted: $(echo "$JSON" | jq -r '.reason')"
+            exit 0
+          fi
+          if [ "$(echo "$JSON" | jq -r '.ok')" != "true" ]; then echo "ok is not true -- failing"; exit 1; fi
+          echo "Posted $(echo "$JSON" | jq -r '.posted') messages to $(echo "$JSON" | jq -r '.channel')."
