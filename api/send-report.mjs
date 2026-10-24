@@ -2821,7 +2821,7 @@ async function handleSlackReport(req, res) {
 
   // Same per-page gate as every other Slack path: a real PAGE_LIST id from the
   // caller, and admin-only when an older caller sends none.
-  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, csv, pixelRatio, rowCount, ceoPin, confirm, rawChannelName } = req.body || {}
+  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, pngs, csv, pixelRatio, rowCount, ceoPin, confirm, rawChannelName } = req.body || {}
   if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -2886,12 +2886,18 @@ async function handleSlackReport(req, res) {
       const ts = await slackPostReportMessage(hook.token, hook.channel, m)
       if (m.attach && !attachTs) attachTs = ts
     }
-    if (pngBase64 || csv) {
+    const extraPngs = Array.isArray(pngs) ? pngs.filter(x => x && x.base64).slice(0, 8) : []
+    if (pngBase64 || csv || extraPngs.length) {
       const stamp = new Date().toISOString().slice(0, 10)
       const base = String(filename || 'overall').replace(/[^a-z0-9._-]+/gi, '-')
       const files = []
       if (pngBase64) files.push(await slackUploadFile(hook.token, {
         filename: base + '-' + stamp + '.png', buffer: Buffer.from(pngBase64, 'base64'), title: 'PM summary table',
+      }))
+      // Several pictures in one thread (one per team, for example). Each is a
+      // { name, title, base64 }; they ride the same thread as the first attach message.
+      for (const x of extraPngs) files.push(await slackUploadFile(hook.token, {
+        filename: String(x.name || 'image').replace(/[^a-z0-9._-]+/gi, '-') + '.png', buffer: Buffer.from(x.base64, 'base64'), title: String(x.title || x.name || 'Image').slice(0, 120),
       }))
       if (csv) files.push(await slackUploadFile(hook.token, {
         filename: base + '-' + stamp + '.csv', buffer: Buffer.from(String(csv), 'utf8'), title: 'PM summary (full data)',
