@@ -2973,6 +2973,10 @@ async function handleEbitdaManagerReport(req, res) {
     let label = ''
     if (isAdmin && body.destination === 'test') {
       target = 'test'
+    } else if (isAdmin && typeof body.destinationChannel === 'string' && /^C[A-Z0-9]{8,}$/.test(body.destinationChannel.trim())) {
+      // One-off send by an admin to a specific channel id (still never a CEO-guarded room: resolveSlackTarget refuses those).
+      target = 'raw:' + body.destinationChannel.trim()
+      label = String(body.destinationLabel || body.destinationChannel).replace(/^#/, '')
     } else {
       let dest = ''
       try {
