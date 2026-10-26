@@ -4943,16 +4943,7 @@ async function handleBigQuery(req, res, me) {
             // uses the exact same filter so a truncated chunk finishes on the same basis.
             if (table === 'overall_bq_daily') path += '&or=' + encodeURIComponent(OVERALL_BQ_NONZERO_OR)
             if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
-            // One page failing (a transient 500 / statement timeout, seen live 2026-10-26 on both the
-            // filtered and unfiltered read) used to throw away everything this chunk had already read.
-            // Retry that single page up to 3 times with a short backoff before giving up.
-            let r = null
-            for (let attempt = 0; attempt < 3; attempt++) {
-              r = await supabaseAdmin(path)
-              if (r.ok) break
-              if (r.status < 500 && r.status !== 429) break
-              await new Promise(res2 => setTimeout(res2, 400 * (attempt + 1)))
-            }
+            const r = await supabaseAdmin(path)
             if (!r.ok) {
               const detail = await r.text().catch(() => '')
               throw new Error(table + ' read failed (' + r.status + '): ' + detail.slice(0, 300))
