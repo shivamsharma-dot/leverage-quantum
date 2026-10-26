@@ -3016,6 +3016,63 @@ async function handleEbitdaManagerReport(req, res) {
   }
 }
 
+// Admin-only clean-up of messages the Quantum bot posted (used to pull back a report that went out too early).
+// Only the bot's OWN messages can be deleted (Slack enforces that for chat.delete), and anything a person wrote,
+// including replies in the threads, is left alone. For each parent `ts` it removes the bot's thread replies first
+// (pictures: files.delete, then chat.delete) and then the parent. dryRun:true only lists what would go.
+async function handleSlackDeleteBotMessages(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+  const channel = String(req.body?.channel || '').trim()
+  const list = Array.isArray(req.body?.ts) ? req.body.ts.map(String).filter(t => /^\d+\.\d+$/.test(t)).slice(0, 40) : []
+  const dryRun = req.body?.dryRun === true
+  if (!/^[CG][A-Z0-9]{8,}$/.test(channel) || !list.length) return res.status(400).json({ error: 'channel (id) and ts (array) are required' })
+  const post = async (method, params) => {
+    const r = await fetch('https://slack.com/api/' + method, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params).toString() })
+    return r.json()
+  }
+  const get = async (method, params) => {
+    const r = await fetch('https://slack.com/api/' + method + '?' + new URLSearchParams(params).toString(), { headers: { Authorization: `Bearer ${token}` } })
+    return r.json()
+  }
+  try {
+    const auth = await get('auth.test', {})
+    const botUser = auth.user_id
+    const out = []
+    for (const ts of list) {
+      const item = { ts, parent: null, repliesDeleted: 0, filesDeleted: 0, repliesKept: 0 }
+      const rep = await get('conversations.replies', { channel, ts, limit: '100' })
+      if (!rep.ok) { item.parent = 'error: ' + rep.error; out.push(item); continue }
+      const msgs = rep.messages || []
+      const parent = msgs[0]
+      if (!parent || parent.user !== botUser) { item.parent = 'skipped (not a bot message)'; out.push(item); continue }
+      for (const m of msgs.slice(1)) {
+        if (m.user !== botUser) { item.repliesKept++; continue }
+        if (dryRun) { item.repliesDeleted++; item.filesDeleted += (m.files || []).length; continue }
+        for (const f of (m.files || [])) {
+          const d = await post('files.delete', { file: f.id })
+          if (d.ok) item.filesDeleted++
+        }
+        const d = await post('chat.delete', { channel, ts: m.ts })
+        if (d.ok || d.error === 'message_not_found') item.repliesDeleted++
+      }
+      if (dryRun) { item.parent = 'would delete' } else {
+        const d = await post('chat.delete', { channel, ts })
+        item.parent = d.ok ? 'deleted' : 'error: ' + d.error
+      }
+      out.push(item)
+    }
+    if (!dryRun) await logReport({ report_type: 'slack delete bot messages', recipients: ['slack:' + channel], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, dryRun, results: out })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -3167,6 +3224,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_report') {
     return handleSlackReport(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_delete_bot_messages') {
+    return handleSlackDeleteBotMessages(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'ebitda_manager_report') {
     return handleEbitdaManagerReport(req, res)
