@@ -2614,7 +2614,11 @@ async function buildFrappCoachList(creds) {
       if (live) country = live
       else noCountry.push(u.email)
     }
-    coaches.push({ name: u.name, mobile, email: u.email, country })
+    // Futwork (2026-10-26): "10 digits only without any sign" -- a leading + or - turns into a formula in their Excel
+    // ("+91-8069..." became "-8069..."). Region was already checked above on the raw value, so strip to the last 10 digits here.
+    const mobile10 = mobile.replace(/\D/g, '').slice(-10)
+    if (mobile10.length !== 10) { skippedNoMobile.push(u.email); return }
+    coaches.push({ name: u.name, mobile: mobile10, email: u.email, country })
   })
   return {
     coaches,
