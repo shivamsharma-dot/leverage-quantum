@@ -3016,6 +3016,43 @@ async function handleEbitdaManagerReport(req, res) {
   }
 }
 
+// Admin-only: remove lines starting with a given prefix from the text blocks of ONE message the bot posted, in place
+// (chat.update, everything else in the message stays as it was). dryRun:true only reports what would change.
+async function handleSlackEditBotMessage(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+  const channel = String(req.body?.channel || '').trim()
+  const ts = String(req.body?.ts || '').trim()
+  const prefix = String(req.body?.removeLinesStartingWith || '')
+  const dryRun = req.body?.dryRun === true
+  if (!/^[CG][A-Z0-9]{8,}$/.test(channel) || !/^\d+\.\d+$/.test(ts) || prefix.length < 5) return res.status(400).json({ error: 'channel, ts and removeLinesStartingWith (5+ chars) are required' })
+  try {
+    const auth = await (await fetch('https://slack.com/api/auth.test', { headers: { Authorization: `Bearer ${token}` } })).json()
+    const h = await (await fetch('https://slack.com/api/conversations.history?' + new URLSearchParams({ channel, latest: ts, inclusive: 'true', limit: '1' }).toString(), { headers: { Authorization: `Bearer ${token}` } })).json()
+    const msg = h.ok && h.messages && h.messages[0]
+    if (!msg || msg.ts !== ts) return res.status(404).json({ error: 'message not found: ' + (h.error || '') })
+    if (msg.user !== auth.user_id) return res.status(403).json({ error: 'Not a bot message' })
+    let removed = 0
+    const fix = t => String(t).split('\n').filter(l => { if (l.startsWith(prefix)) { removed++; return false } return true }).join('\n')
+    const blocks = (msg.blocks || []).map(b => {
+      if (b.type === 'context') return { ...b, elements: (b.elements || []).map(e => (e.type === 'mrkdwn' || e.type === 'plain_text') ? { ...e, text: fix(e.text) } : e) }
+      if (b.type === 'section' && b.text) return { ...b, text: { ...b.text, text: fix(b.text.text) } }
+      return b
+    })
+    if (!removed) return res.status(200).json({ ok: true, removed: 0, note: 'nothing matched' })
+    if (dryRun) return res.status(200).json({ ok: true, dryRun, removed })
+    await slackUpdateBlocks(token, channel, ts, msg.text || 'Report', blocks)
+    await logReport({ report_type: 'slack edit bot message', recipients: ['slack:' + channel], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, removed })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 // Admin-only clean-up of messages the Quantum bot posted (used to pull back a report that went out too early).
 // Only the bot's OWN messages can be deleted (Slack enforces that for chat.delete), and anything a person wrote,
 // including replies in the threads, is left alone. For each parent `ts` it removes the bot's thread replies first
@@ -3224,6 +3261,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_report') {
     return handleSlackReport(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_edit_bot_message') {
+    return handleSlackEditBotMessage(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'slack_delete_bot_messages') {
     return handleSlackDeleteBotMessages(req, res)
