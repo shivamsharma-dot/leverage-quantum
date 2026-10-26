@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Legend, ScatterChart, Scatter, ZAxis, LabelList, Cell,
+  CartesianGrid, Legend,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
@@ -53,6 +53,7 @@ const PRESETS = [
   { id: 'ld', label: 'Last Day' },
   { id: 'l7d', label: 'Last 7D' },
   { id: 'mtd', label: 'MTD' },
+  { id: 'ytd', label: 'Since Jan' },
 ]
 
 // One row per (date, campaign, source, sub-source), for any window -- shared by
@@ -214,20 +215,6 @@ function FunnelColumn({ title, note, stages, accent }) {
   )
 }
 
-// A single stage-to-stage conversion rate. Same visual grammar as the Marketing
-// Performance agent's KPI tiles (uppercase micro-label, one big number, one line
-// of definition underneath) so the two pages read as the same product.
-function StepTile({ label, value, sub, color }) {
-  return (
-    <div style={{ border: '0.5px solid var(--card-border)', borderRadius: 12, padding: '11px 13px', background: 'var(--card)', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
-      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.muted, marginTop: 3 }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: color, marginTop: 4, letterSpacing: '-0.3px', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>
-    </div>
-  )
-}
-
 // Per-field filter bar, same pattern as AI QL Detail: a removable chip per active field
 // (re-editable multi-select) plus one "+ Filter" that picks a field, then its values.
 // Picks within a field are OR, fields combine as AND.
@@ -351,27 +338,6 @@ function AddFilterButton({ allFields, activeFilters, filterOptions, open, onTogg
 // Stamps every row with its program (see src/lib/careersPrograms.js for the rule).
 function tagRows(rows, programs) {
   return (rows || []).map(r => ({ ...r, program: classifyProgram(r.name, programs) }))
-}
-
-// A program counts as low volume when too little has happened to read a rate from:
-// under 10 Won or under 1,000 leads. It is a caution flag next to the program name,
-// never a reason to hide the row.
-const isLowVolume = g => g.leads > 0 && (g.won < 10 || g.leads < 1000)
-
-const PROGRAM_COLORS = [C.navy, C.blue, C.cyan, C.green, '#3A5BA0', '#5BCAD2', '#7A8FB8']
-
-function ProgramEfficiencyTooltip({ active, payload }) {
-  if (!active || !payload || !payload.length) return null
-  const d = payload[0].payload
-  return (
-    <div style={{ background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 10, padding: '9px 13px', fontFamily: FONT, boxShadow: '0 8px 24px rgba(15,23,42,0.12)' }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{d.name}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6 }}>
-        Paid spend {fmtINR(d.spend)}<br />Won (Funnel) {fmtN(d.won)}<br />Cost per won {fmtINR(d.cps)}<br />Cost per lead {fmtINR(d.cpl)}
-        {d.lowVolume ? <><br /><span style={{ color: C.muted }}>low volume - read with care</span></> : null}
-      </div>
-    </div>
-  )
 }
 
 function sortRowsBy(arr, sort) {
@@ -538,6 +504,9 @@ export default function LeverageCareersDashboard() {
   const [synced, setSynced] = useState(null)
 
   const [tableDim, setTableDim] = useState('program')
+  const [analyzeOpen, setAnalyzeOpen] = useState(false)
+  const [yearRows, setYearRows] = useState(null) // January to today, for the Month tab only
+  const [yearNonce, setYearNonce] = useState(0)
   // Advanced filters. These are page-level, not table-level: every KPI, the funnel,
   // the cohort table, the charts, the exports and Compare all read the SAME filters object via
   // applyFilters(), so a filtered CPI on a card can never disagree with a filtered
@@ -575,10 +544,11 @@ export default function LeverageCareersDashboard() {
     if (preset === 'custom' && customFrom && customTo) {
       return customFrom <= customTo ? { from: customFrom, to: customTo } : { from: customTo, to: customFrom }
     }
+    if (preset === 'ytd') return { from: d1.slice(0, 4) + '-01-01', to: d1 }
     return { from: d1.slice(0, 8) + '01', to: d1 } // mtd
   }, [preset, d1, customFrom, customTo])
 
-  const windowLabel = preset === 'ld' ? 'Last Day' : preset === 'l7d' ? 'Last 7D' : preset === 'custom' ? (customFrom + ' → ' + customTo) : 'MTD'
+  const windowLabel = preset === 'ld' ? 'Last Day' : preset === 'l7d' ? 'Last 7D' : preset === 'custom' ? (customFrom + ' → ' + customTo) : preset === 'ytd' ? 'Since Jan' : 'MTD'
 
   // force=true only for an explicit Refresh click -- a plain mount (including
   // navigating back from another dashboard) reuses whatever this session already
@@ -586,6 +556,7 @@ export default function LeverageCareersDashboard() {
   // the cache read every single visit.
   const load = useCallback(async (force) => {
     const cacheKey = 'careers_v2:' + activeWindow.from + ':' + activeWindow.to
+    if (force) { setSession('careers_v2_year:' + ist(0).slice(0, 4) + '-01-01', null); setYearNonce(n => n + 1) }
     if (!force) {
       const cached = getSession(cacheKey)
       if (cached) { setDayRows(cached.data.rows); setSynced(cached.data.synced); setLoading(false); setError(''); return }
@@ -651,7 +622,26 @@ export default function LeverageCareersDashboard() {
     { stage: 'Won', count: totals.won },
   ]), [totals])
 
-  const tableRowsRaw = useMemo(() => groupRows(rows, tableDim), [rows, tableDim])
+  // Month tab: always January to today, whatever date window is picked, so earlier months are never
+  // hidden behind MTD or Last 7D. Own fetch, cached for the session; same tagging and filters as the page.
+  const yearFrom = d1.slice(0, 4) + '-01-01'
+  useEffect(() => {
+    if (tableDim !== 'month') return undefined
+    const key = 'careers_v2_year:' + yearFrom
+    const cached = getSession(key)
+    if (cached && cached.data) { setYearRows(cached.data); return undefined }
+    let cancelled = false
+    fetchGranular(yearFrom, d1)
+      .then(r => { if (!cancelled) { setYearRows(r); setSession(key, r) } })
+      .catch(() => { if (!cancelled) setYearRows([]) })
+    return () => { cancelled = true }
+  }, [tableDim, yearFrom, d1, yearNonce]) // eslint-disable-line react-hooks/exhaustive-deps
+  const yearRowsF = useMemo(() => (yearRows ? applyFilters(tagRows(yearRows, programs), filters) : null), [yearRows, programs, filters])
+  useEffect(() => { setTableSort(tableDim === 'month' ? { key: 'key', dir: 'desc' } : { key: 'spend', dir: 'desc' }) }, [tableDim])
+  const tableRowsRaw = useMemo(
+    () => (tableDim === 'month' ? (yearRowsF ? groupRows(yearRowsF, 'month') : []) : groupRows(rows, tableDim)),
+    [rows, tableDim, yearRowsF]
+  )
   const tableRows = useMemo(() => sortRowsBy(tableRowsRaw, tableSort), [tableRowsRaw, tableSort])
   // Source view: Paid / Non-Paid bands, each listing its Sources; clicking a Source
   // reveals its Sub Sources, clicking a Sub Source reveals its Campaigns -- the same
@@ -696,7 +686,7 @@ export default function LeverageCareersDashboard() {
     const items = []
     sortRowsBy(groupRows(rows, 'program'), tableSort).forEach(pg => {
       const open = expandedPrograms.has(pg.key)
-      items.push({ kind: 'source', key: 'prog:' + pg.key, label: pg.label, depth: 0, open, lowVolume: isLowVolume(pg), toggle: () => toggleIn(setExpandedPrograms, pg.key), ...pg })
+      items.push({ kind: 'source', key: 'prog:' + pg.key, label: pg.label, depth: 0, open, toggle: () => toggleIn(setExpandedPrograms, pg.key), ...pg })
       if (!open) return
       const pgRows = rows.filter(r => r.program === pg.key)
       ;[['Paid', isPaidSource], ['Non-Paid', v => !isPaidSource(v)]].forEach(([lab, test]) => {
@@ -714,15 +704,6 @@ export default function LeverageCareersDashboard() {
     return items
   }, [tableDim, rows, tableSort, expandedPrograms, expandedProgPB])
   const treeItems = tableDim === 'source' ? sourceTreeItems : (tableDim === 'program' ? programTreeItems : null)
-  // Efficiency chart: paid campaigns only (free outreach leads would make a program look cheaper
-  // than it is), one point per program that has paid spend and at least one Won.
-  const programEfficiency = useMemo(() => {
-    const out = []
-    groupRows(rows.filter(r => isPaidSource(r.source)), 'program').forEach(g => {
-      if (g.spend > 0 && g.won > 0 && g.cps != null) out.push({ name: g.label, spend: g.spend, won: g.won, cps: g.cps, cpl: g.cpl, lowVolume: isLowVolume(g) })
-    })
-    return out.sort((a, b) => b.spend - a.spend)
-  }, [rows])
   const tableTotals = useMemo(() => sumTotals(tableRows), [tableRows])
   const toggleSort = key => setTableSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
 
@@ -786,14 +767,6 @@ export default function LeverageCareersDashboard() {
     { key: 'interested', label: 'Interested', value: totals.interested, color: '#5BCAD2' },
     { key: 'won', label: 'Won', value: totals.won, color: C.green },
   ]), [totals])
-  // Every stage-to-stage rate is recomputed from the summed totals, never averaged
-  // from per-day rates -- same rule the table's TOTAL row follows.
-  const stepTiles = useMemo(() => ([
-    { label: 'Interested rate', value: pct(totals.interested, totals.leads), sub: 'interested / leads', color: C.cyan },
-    { label: 'Won rate', value: pct(totals.won, totals.interested), sub: 'Won / interested', color: C.green },
-    { label: 'Lead \u2192 Won', value: pct(totals.won, totals.leads), sub: 'end to end', color: C.navy },
-  ]), [totals])
-
   // ---- Chart series ----
   // Built off `rows` (post-filter), so every chart moves with the filter bar in
   // lockstep with the KPIs and the table.
@@ -957,6 +930,11 @@ export default function LeverageCareersDashboard() {
             </div>
 
             <Button
+              size="sm" variant="secondary" onClick={() => setAnalyzeOpen(true)}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="6" y1="20" x2="6" y2="11" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="14" /></svg>}
+            >Analyze</Button>
+
+            <Button
               size="sm" variant="secondary" onClick={() => setCompareOpen(true)}
               icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m0 8v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3m0-8V5a2 2 0 00-2-2h-3" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
             >Compare</Button>
@@ -1004,37 +982,116 @@ export default function LeverageCareersDashboard() {
                   Filtered view: {fmtN(rows.length)} of {fmtN((dayRows || []).length)} day-campaign rows.
                 </div>
               )}
-              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
+              <div className={styles.kpi12}>
                 <PremKPI label="SPEND" value={fmtINR(totals.spend)} sub={windowLabel} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label="LEADS" value={fmtN(totals.leads)} sub={campaignRows.length + ' campaigns'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
                 <PremKPI label="INTERESTED" value={fmtN(totals.interested)} sub={pct(totals.interested, totals.leads) + ' of leads'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
                 <PremKPI label="WON (FUNNEL)" value={fmtN(totals.won)} sub={pct(totals.won, totals.interested) + ' of interested'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label="WON (SNAPSHOT)" value={fmtN(totals.wonSnapshot)} sub="snapshot view, not part of the funnel" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-              </div>
-              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
+                <PremKPI label="LEAD TO WON" value={pct(totals.won, totals.leads)} sub="end to end" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label="CPL" value={fmtINR(totals.cpl)} sub="spend / leads" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPI" value={fmtINR(totals.cpi)} sub="spend / interested" accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPS" value={fmtINR(totals.cps)} sub="spend / Won" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} invert />
+                <PremKPI label="COST PER WON (SNAPSHOT)" value={fmtINR(totals.wonSnapshot > 0 ? totals.spend / totals.wonSnapshot : 0)} sub="spend / Won (Snapshot)" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} invert />
+                <PremKPI label="INTERESTED RATE" value={pct(totals.interested, totals.leads)} sub="interested / leads" accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+                <PremKPI label="WON RATE" value={pct(totals.won, totals.interested)} sub="Won / interested" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
               </div>
 
+              <Card
+                action={
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {TABLE_TABS.map(([v, l]) => (
+                      <button key={v} onClick={() => setTableDim(v)} style={{ padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (tableDim === v ? C.navy : 'var(--card-border)'), background: tableDim === v ? C.navy : 'var(--card)', color: tableDim === v ? '#fff' : 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>{l}</button>
+                    ))}
+                  </div>
+                }
+              >
+                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), (tableDim === 'month' ? 'January to today, not scoped to the date window' : windowLabel) + (tableDim === 'source' ? ' - click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'program' ? ' - campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <Button
+                      size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
+                      icon={<SlackIcon size={13} />}
+                    >Send to Slack</Button>
+                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack />
+                  </div>
+                </div>
+                <div ref={tableRef} style={{ overflowX: 'auto' }}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        {[
+                          ['label', GROUP_LABEL[tableDim]],
+                          ['spend', 'Spend'], ['leads', 'Leads'], ['interested', 'Interested'], ['won', 'Won (Funnel)'], ['wonSnapshot', 'Won (Snapshot)'],
+                          ['cpl', 'CPL'], ['cpi', 'CPI'], ['cps', 'CPS'],
+                        ].map(([key, label]) => (
+                          <th key={key} onClick={() => toggleSort(key)} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            {label}{tableSort.key === key ? (tableSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ fontWeight: 800 }}>
+                        <td>TOTAL</td>
+                        <td>{fmtINR(tableTotals.spend)}</td><td>{fmtN(tableTotals.leads)}</td><td>{fmtN(tableTotals.interested)}</td><td>{fmtN(tableTotals.won)}</td><td>{fmtN(tableTotals.wonSnapshot)}</td>
+                        <td>{fmtINR(tableTotals.cpl)}</td><td>{fmtINR(tableTotals.cpi)}</td><td>{fmtINR(tableTotals.cps)}</td>
+                      </tr>
+                      {(treeItems ? treeItems.length === 0 : tableRows.length === 0) ? (
+                        <tr><td colSpan={9} className={styles.empty}>{tableDim === 'month' ? (yearRows === null ? 'Loading the months...' : 'No data since January.') : 'No data in this window.'}</td></tr>
+                      ) : treeItems ? treeItems.map(it => (
+                        <tr key={it.key} style={it.kind === 'band' ? { fontWeight: 800, background: 'var(--navy-tint)' } : (it.kind === 'campaign' ? { color: 'var(--text2)' } : undefined)}>
+                          <td
+                            onClick={it.toggle}
+                            style={{ cursor: it.toggle ? 'pointer' : 'default', paddingLeft: 12 + (it.depth || 0) * 20, fontWeight: it.kind === 'band' ? 800 : (it.kind === 'source' ? 700 : 500), ...(it.kind === 'campaign' ? null : { whiteSpace: 'nowrap', maxWidth: 'none' }) }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                              {it.toggle ? <TreeChevron open={it.open} /> : null}
+                              {it.label}
+                            </span>
+                          </td>
+                          <td>{fmtINR(it.spend)}</td><td>{fmtN(it.leads)}</td><td>{fmtN(it.interested)}</td><td>{fmtN(it.won)}</td><td>{fmtN(it.wonSnapshot)}</td>
+                          <td>{fmtINR(it.cpl)}</td><td>{fmtINR(it.cpi)}</td><td>{fmtINR(it.cps)}</td>
+                        </tr>
+                      )) : tableRows.map(r => (
+                        <tr key={r.key}>
+                          <td style={tableDim === 'campaign' ? undefined : { whiteSpace: 'nowrap', maxWidth: 'none' }}>{labelForDim(tableDim, r.label)}</td>
+                          <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td><td>{fmtN(r.wonSnapshot)}</td>
+                          <td>{fmtINR(r.cpl)}</td><td>{fmtINR(r.cpi)}</td><td>{fmtINR(r.cps)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {analyzeOpen && (
+        <div className={styles.analyzeScrim} onClick={() => setAnalyzeOpen(false)}>
+          <div className={styles.analyzePanel} role="dialog" aria-modal="true" aria-label="Analyze" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT }}>Analyze</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontFamily: FONT }}>{windowLabel}, with the filters you have set</div>
+              </div>
+              <button type="button" onClick={() => setAnalyzeOpen(false)} aria-label="Close" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 22, lineHeight: 1 }}>×</button>
+            </div>
               {/* FUNNEL VIEW */}
               <Card
                 title="Conversion funnel"
                 sub={windowLabel + ' - leads \u2192 Interested \u2192 Won'}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 14 }}>
-                  <FunnelColumn title="Pipeline" note="what LeadSquared did with the leads" stages={pipelineStages} accent={C.green} />
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(146px, 1fr))', gap: 10, alignContent: 'start' }}>
-                    {stepTiles.map(s => <StepTile key={s.label} {...s} />)}
-                  </div>
-                </div>
+                <FunnelColumn title="Pipeline" note="what LeadSquared did with the leads" stages={pipelineStages} accent={C.green} />
               </Card>
 
               <div style={{ height: 16 }} />
 
               {/* CHARTS -- Marketing Performance agent chart treatment: one hue per series,
                   gradient bar fill, hairline horizontal-only grid, circle legend, no flat fills. */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 14 }}>
+              <div className={styles.chartGrid}>
                 <Card title="Spend and leads" sub={windowLabel + ' - by day'} noPad>
                   <div style={{ padding: '12px 16px 6px' }}>
                     <ResponsiveContainer width="100%" height={230}>
@@ -1113,29 +1170,6 @@ export default function LeverageCareersDashboard() {
               </div>
 
               <div style={{ height: 16 }} />
-              <Card title="Program efficiency" sub={windowLabel + ' - paid only. Right = more Won, lower = cheaper per Won, bubble = spend. Faded = low volume'}>
-                {programEfficiency.length === 0 ? (
-                  <div className={styles.empty}>No paid program has both spend and a Won in this window.</div>
-                ) : (
-                  <div style={{ height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart margin={{ top: 16, right: 24, bottom: 8, left: 8 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" />
-                        <XAxis type="number" dataKey="won" name="Won" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} />
-                        <YAxis type="number" dataKey="cps" name="Cost per won" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} tickFormatter={v => '\u20b9' + Math.round(v / 1000) + 'k'} width={52} />
-                        <ZAxis type="number" dataKey="spend" range={[160, 1400]} />
-                        <Tooltip content={<ProgramEfficiencyTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                        <Scatter data={programEfficiency}>
-                          {programEfficiency.map((d, i) => <Cell key={d.name} fill={PROGRAM_COLORS[i % PROGRAM_COLORS.length]} fillOpacity={d.lowVolume ? 0.35 : 0.85} />)}
-                          <LabelList dataKey="name" position="top" style={{ fontSize: 10.5, fill: C.muted, fontFamily: FONT }} />
-                        </Scatter>
-                      </ScatterChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </Card>
-
-              <div style={{ height: 16 }} />
               {/* COHORT VIEW -- lead arrival cohorts, followed through to Won. */}
               <Card
                 title="Cohort view"
@@ -1199,80 +1233,9 @@ export default function LeverageCareersDashboard() {
                 )}
               </Card>
 
-              <div style={{ height: 16 }} />
-
-              <Card
-                action={
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {TABLE_TABS.map(([v, l]) => (
-                      <button key={v} onClick={() => setTableDim(v)} style={{ padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (tableDim === v ? C.navy : 'var(--card-border)'), background: tableDim === v ? C.navy : 'var(--card)', color: tableDim === v ? '#fff' : 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>{l}</button>
-                    ))}
-                  </div>
-                }
-              >
-                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + (tableDim === 'source' ? ' - click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'program' ? ' - campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                    <Button
-                      size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
-                      icon={<SlackIcon size={13} />}
-                    >Send to Slack</Button>
-                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack />
-                  </div>
-                </div>
-                <div ref={tableRef} style={{ overflowX: 'auto' }}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        {[
-                          ['label', GROUP_LABEL[tableDim]],
-                          ['spend', 'Spend'], ['leads', 'Leads'], ['interested', 'Interested'], ['won', 'Won (Funnel)'], ['wonSnapshot', 'Won (Snapshot)'],
-                          ['cpl', 'CPL'], ['cpi', 'CPI'], ['cps', 'CPS'],
-                        ].map(([key, label]) => (
-                          <th key={key} onClick={() => toggleSort(key)} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                            {label}{tableSort.key === key ? (tableSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ fontWeight: 800 }}>
-                        <td>TOTAL</td>
-                        <td>{fmtINR(tableTotals.spend)}</td><td>{fmtN(tableTotals.leads)}</td><td>{fmtN(tableTotals.interested)}</td><td>{fmtN(tableTotals.won)}</td><td>{fmtN(tableTotals.wonSnapshot)}</td>
-                        <td>{fmtINR(tableTotals.cpl)}</td><td>{fmtINR(tableTotals.cpi)}</td><td>{fmtINR(tableTotals.cps)}</td>
-                      </tr>
-                      {(treeItems ? treeItems.length === 0 : tableRows.length === 0) ? (
-                        <tr><td colSpan={9} className={styles.empty}>No data in this window.</td></tr>
-                      ) : treeItems ? treeItems.map(it => (
-                        <tr key={it.key} style={it.kind === 'band' ? { fontWeight: 800, background: 'var(--navy-tint)' } : (it.kind === 'campaign' ? { color: 'var(--text2)' } : undefined)}>
-                          <td
-                            onClick={it.toggle}
-                            style={{ cursor: it.toggle ? 'pointer' : 'default', paddingLeft: 12 + (it.depth || 0) * 20, fontWeight: it.kind === 'band' ? 800 : (it.kind === 'source' ? 700 : 500) }}
-                          >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                              {it.toggle ? <TreeChevron open={it.open} /> : null}
-                              {it.label}
-                              {it.lowVolume ? <span title="Under 10 Won or under 1,000 leads: read the rates with care" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: C.muted, border: '0.5px solid var(--card-border)', borderRadius: 99, padding: '1px 7px' }}>low volume</span> : null}
-                            </span>
-                          </td>
-                          <td>{fmtINR(it.spend)}</td><td>{fmtN(it.leads)}</td><td>{fmtN(it.interested)}</td><td>{fmtN(it.won)}</td><td>{fmtN(it.wonSnapshot)}</td>
-                          <td>{fmtINR(it.cpl)}</td><td>{fmtINR(it.cpi)}</td><td>{fmtINR(it.cps)}</td>
-                        </tr>
-                      )) : tableRows.map(r => (
-                        <tr key={r.key}>
-                          <td>{labelForDim(tableDim, r.label)}</td>
-                          <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td><td>{fmtN(r.wonSnapshot)}</td>
-                          <td>{fmtINR(r.cpl)}</td><td>{fmtINR(r.cpi)}</td><td>{fmtINR(r.cps)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {compareOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setCompareOpen(false)}>
