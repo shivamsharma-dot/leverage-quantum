@@ -23,17 +23,13 @@ export const FW_SR_GROUP = 'online team - student recruitment'
 export const FW_DUBAI_GROUP = 'online team - dubai'
 export const FW_MBBS_GROUP = 'online team - mbbs'
 export const FW_CANADA_GROUP = 'online team - canada'
-export const FW_OFFLINE_GROUPS = new Set([
-  'offline - assam guwahati', 'offline - delhi nehru place', 'offline - noida 126 + 18',
-  'offline - delhi model town', 'offline - delhi nsp', 'offline - indore mp',
-  'offline - mumbai nashik center', 'offline - punjab chandigarh sector -34',
-  'offline - delhi rajouri garden', 'offline - mumbai churchgate center',
-  'offline - rajasthan jaipur center', 'offline - gurgaon - galleria',
-  'offline - west bengal kolkata', 'offline - bengaluru centre',
-  'offline - kerala thiruvananthapuram', 'offline - maharasthra - pune',
-  'offline - mumbai andheri (distribution)', 'offline - gujarat ahmedabad',
-  'offline - gujarat surat',
-])
+// Any LeadSquared Sales Group named "Offline - <centre>" is an offline centre
+// (2026-10-26, explicit instruction: drop the fixed 19-centre list and use
+// whatever LeadSquared has). "Offline Team" (no dash) is a parent group, not a
+// centre, so it does not match.
+export function isOfflineCentreGroup(name) {
+  return /^offline\s*-\s*\S/i.test(String(name || '').trim())
+}
 
 // The city/centre part of an Offline group's real name, e.g.
 // "Offline - Assam Guwahati" -> "Assam Guwahati" -- used for the Futwork
@@ -59,7 +55,7 @@ export function classifyFutworkProject(groups) {
   if (norm.includes(FW_DUBAI_GROUP)) parts.push('Online Team Dubai')
   if (norm.includes(FW_CANADA_GROUP)) parts.push('Online Team Canada')
   norm.forEach((g, i) => {
-    if (FW_OFFLINE_GROUPS.has(g)) {
+    if (isOfflineCentreGroup(g)) {
       const centre = offlineCentreLabel(raw[i])
       if (centre && !parts.includes(centre)) parts.push(centre)
     }
@@ -119,7 +115,7 @@ export function liveCountryFor(groups) {
   if (norm.includes(FW_CANADA_GROUP)) return 'Canada'
   const offlineExact = []
   norm.forEach((g, i) => {
-    if (FW_OFFLINE_GROUPS.has(g)) {
+    if (isOfflineCentreGroup(g)) {
       const orig = String(raw[i] || '').trim()
       if (orig && !offlineExact.includes(orig)) offlineExact.push(orig)
     }
