@@ -71,6 +71,23 @@ export function writeBqBeta(on) {
   try { window.dispatchEvent(new CustomEvent(BQ_BETA_EVENT, { detail: { on: !!on } })) } catch (_) {}
 }
 
+// fmt=2 asks the server for the compact answer (text values once in a dictionary, each row an array);
+// decodeCompact rebuilds the same row objects the page has always received. A plain answer (no `fmt`)
+// is still understood, so an older server response can never break the page.
+function decodeCompact(j) {
+  const text = j.textCols || [], num = j.numCols || [], nt = text.length
+  return (j.rows || []).map(line => {
+    const o = {}
+    for (let k = 0; k < nt; k++) { const idx = line[k]; o[text[k]] = idx < 0 ? null : j.dict[text[k]][idx] }
+    for (let k = 0; k < num.length; k++) o[num[k]] = line[nt + k]
+    return o
+  })
+}
+// Same all-zero-rows filter as the server's overall_bq_rows read (api/crm-leads.js OVERALL_BQ_NONZERO_OR).
+const NONZERO_OR = '(' + ['Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI',
+  'Queued on Superbot', 'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL', 'Total_Spends', 'Total Apps',
+  'Total Offers', 'Total Deposits', 'Total RAUs'].map(c => (c.includes(' ') ? '"' + c + '"' : c) + '.gt.0').join(',') + ')'
+
 async function apiGet(mode, params, signal) {
   const qs = new URLSearchParams(Object.assign({ mode }, params || {}))
   const r = await fetch(API + '&' + qs.toString(), signal ? { signal } : undefined)
@@ -117,6 +134,7 @@ async function fetchTailDirect({ table, columns, since, until, sources, cursor, 
     p.append('lead_date_iso', 'lte.' + until)
     const list = (sources || []).filter(s => s && s !== 'All')
     if (list.length) p.set('Source', 'in.' + inList(list))
+    if (table === 'overall_bq_daily') p.set('or', NONZERO_OR)
     if (cur != null) p.set('row_key', 'gt.' + cur)
     const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + p.toString(), signal ? { headers, signal } : { headers })
     if (!r.ok) throw new Error(table + ' fallback read failed (' + r.status + ')')
@@ -142,8 +160,8 @@ async function fetchTailDirect({ table, columns, since, until, sources, cursor, 
 // newer bqSince/bqUntil supersedes it.
 async function fetchRowsWithFallback(mode, table, columns, { since, until, sources, signal }) {
   const list = (sources || []).filter(s => s && s !== 'All')
-  const j = await apiGet(mode, { since, until, sources: list.join(',') }, signal)
-  const rows = Array.isArray(j.rows) ? j.rows : []
+  const j = await apiGet(mode, { since, until, sources: list.join(','), fmt: '2' }, signal)
+  const rows = j.fmt === 2 ? decodeCompact(j) : (Array.isArray(j.rows) ? j.rows : [])
   if (!j.truncated) return rows
   // The server now fetches the requested range as several calendar-month chunks IN
   // PARALLEL (2026-09-19, to cut the page's load time) instead of one long sequential

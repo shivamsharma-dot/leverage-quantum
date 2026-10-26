@@ -4601,6 +4601,35 @@ async function handleCoachNps(req, res, me) {
 // the point is cutting REPEATED identical fetches within a short window, not a global
 // guarantee.
 const OVERALL_BQ_CACHE_TTL_MS = 5 * 60 * 1000
+// Rows where all 13 number columns are 0 carry no information (see the filter in the overall_bq_rows
+// read). PostgREST `or` syntax; names with spaces must be double-quoted.
+const OVERALL_BQ_NONZERO_OR = '(' + ['Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI',
+  'Queued on Superbot', 'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL', 'Total_Spends', 'Total Apps',
+  'Total Offers', 'Total Deposits', 'Total RAUs'].map(c => (c.includes(' ') ? '"' + c + '"' : c) + '.gt.0').join(',') + ')'
+const OVERALL_BQ_TEXT_COLS = ['lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name']
+// Compact answer (fmt=2): every distinct text value is sent ONCE in `dict`, each row is a short array
+// (text columns as dictionary positions, -1 = missing, then the numbers). The browser rebuilds the same
+// row objects (decodeCompact in src/lib/overallBqCache.js). About 10x smaller than 18 repeated keys.
+function overallBqCompact(rows, columns) {
+  const textCols = OVERALL_BQ_TEXT_COLS.filter(c => columns.includes(c))
+  const numCols = columns.filter(c => !textCols.includes(c))
+  const dict = {}, lookup = {}
+  textCols.forEach(c => { dict[c] = []; lookup[c] = new Map() })
+  const out = []
+  for (const r of rows) {
+    const line = []
+    for (const c of textCols) {
+      const v = r[c]
+      if (v == null) { line.push(-1); continue }
+      let i = lookup[c].get(v)
+      if (i === undefined) { i = dict[c].length; dict[c].push(v); lookup[c].set(v, i) }
+      line.push(i)
+    }
+    for (const c of numCols) line.push(r[c])
+    out.push(line)
+  }
+  return { fmt: 2, textCols, numCols, dict, rows: out }
+}
 const overallBqCache = new Map() // key -> { at, data }
 function overallBqCacheGet(key) {
   const hit = overallBqCache.get(key)
@@ -4793,7 +4822,8 @@ async function handleBigQuery(req, res, me) {
     const { supabaseAdmin } = await import('../lib/auth.mjs')
     const { since, until, sources } = req.query || {}
     const sourceList = String(sources || '').split(',').map(s => s.trim()).filter(s => s && s !== 'All')
-    const cacheKey = JSON.stringify([mode, since || '', until || '', sourceList])
+    const wantCompact = String((req.query || {}).fmt || '') === '2'
+    const cacheKey = JSON.stringify([mode, since || '', until || '', sourceList, wantCompact ? 2 : 1])
     const cached = overallBqCacheGet(cacheKey)
     if (cached) return res.status(200).json(Object.assign({}, cached, { fromCache: true }))
 
@@ -4906,6 +4936,12 @@ async function handleBigQuery(req, res, me) {
               const list = '(' + sourceList.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
               path += '&Source=in.' + encodeURIComponent(list)
             }
+            // Raw table only: leave out rows where EVERY number is 0 -- they add nothing to any sum
+            // (checked 2026-10-26: totals for 1-7 Oct identical with and without them) but were
+            // about half of the rows read for that week (6,777 vs 3,488), and the unfiltered read
+            // also hit real 500s the filtered one did not. overallBqCache.js's direct-read fallback
+            // uses the exact same filter so a truncated chunk finishes on the same basis.
+            if (table === 'overall_bq_daily') path += '&or=' + encodeURIComponent(OVERALL_BQ_NONZERO_OR)
             if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
             const r = await supabaseAdmin(path)
             if (!r.ok) {
@@ -4939,8 +4975,8 @@ async function handleBigQuery(req, res, me) {
         // didn't finish and where each left off, so the client's fallback can resume
         // precisely there instead of re-fetching (and re-billing egress for) rows this
         // call already retrieved.
-        if (remainingRanges.length) return res.status(200).json({ rows, truncated: true, remainingRanges, fromCache: false })
-        payload = { rows }
+        if (remainingRanges.length) return res.status(200).json(Object.assign(wantCompact ? overallBqCompact(rows, columns) : { rows }, { truncated: true, remainingRanges, fromCache: false }))
+        payload = wantCompact ? overallBqCompact(rows, columns) : { rows }
       }
       overallBqCacheSet(cacheKey, payload)
       return res.status(200).json(Object.assign({}, payload, { fromCache: false }))
