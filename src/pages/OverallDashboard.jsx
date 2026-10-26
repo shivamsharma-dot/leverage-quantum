@@ -2770,7 +2770,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       try {
         const idbHit = await idbGet(IDB_BQ_ROWS_KEY)
         if (dead) return
-        if (idbHit && idbHit.cacheKey === cacheKey && (Date.now() - idbHit.ts) < IDB_BQ_ROWS_TTL) {
+        // An EMPTY snapshot is never trusted (an earlier empty read must not keep painting zeros).
+        if (idbHit && idbHit.cacheKey === cacheKey && Array.isArray(idbHit.raw) && idbHit.raw.length > 0 && (Date.now() - idbHit.ts) < IDB_BQ_ROWS_TTL) {
           paint(idbHit.raw, idbHit.sourceOpts)
           setBqBusy(false)
           setLoading(false)
@@ -2825,13 +2826,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         // filtered fetch never recomputes the dropdown, per the comment above) -- and a
         // filtered cache entry is never read back into setBqSourceOpts on a hit (guarded
         // by `if (sourceIsAll)` there too), so null here is simply "not applicable."
-        cache.set(cacheKey, { raw, sourceOpts })
+        if (raw.length > 0) cache.set(cacheKey, { raw, sourceOpts }) // never keep an empty read as a cache hit
         while (cache.size > BQ_ROWS_CACHE_MAX) cache.delete(cache.keys().next().value)
         // Only ever persisted for an unfiltered (sourceIsAll) read -- a Source-filtered
         // fetch's own sourceOpts is null (see above), and painting a filtered snapshot
         // back on a later COLD load, before the user has picked that same filter again,
         // would show a silently-narrowed page with no filter chip explaining why.
-        if (sourceIsAll) idbSet(IDB_BQ_ROWS_KEY, { cacheKey, raw, sourceOpts, ts: Date.now() })
+        if (sourceIsAll && raw.length > 0) idbSet(IDB_BQ_ROWS_KEY, { cacheKey, raw, sourceOpts, ts: Date.now() })
       } catch (e) {
         if (dead || (e && e.name === 'AbortError')) return
         // Fall back to the sheet instead of showing a broken page. loadData() is
