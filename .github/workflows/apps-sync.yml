@@ -1,28 +1,21 @@
 name: Apps BigQuery Cache Sync
 
-# Refreshes public.apps_feed (see supabase/sql/apps_feed_setup.sql) by calling
-# the apps_sync mode on api/crm-leads.js -- that endpoint owns the BigQuery
-# query (APPS_SQL, mirroring Settings > Data > BigQuery Console's "appv2"
-# saved query, minus one unused join that risked duplicate rows -- see the
-# comment on APPS_SQL itself), the Supabase upsert, and the prune step, so
-# this workflow is just the scheduled trigger. Every run lands in
-# bigquery_jobs automatically the same way any other BigQuery call does.
+# Refreshes public.apps_feed (supabase/sql/apps_feed_setup.sql) straight from BigQuery
+# on a GitHub runner. 2026-10-27: moved OFF the Vercel apps_sync endpoint. That query
+# now scans ~30 GB and takes longer than the endpoint's 45 s wait, so since 23 Oct it
+# came back "0 rows" (jobComplete=false) every day while the run still showed green, and
+# its prune never finished, which left 8 full copies of the table (488k rows, 268 MB).
 #
-# Once/day only, per explicit instruction ("no real time refresh") -- not
-# 3x/day like Leverage Careers.
+# This runner waits for the job to finish (up to 20 min), refuses to write on 0 rows,
+# upserts with 3 parallel batches, and removes old copies ONE sync_id AT A TIME so no
+# single delete is large enough to time out. Keep the SQL below in step with APPS_SQL in
+# api/crm-leads.js (the old endpoint stays as a manual fallback).
 #
-# Requires the CRON_SECRET repository Actions secret (already used by the
-# report workflows and the Leverage Careers sync) and the BIGQUERY_*/
-# SUPABASE_* env vars already set in Vercel -- nothing new to configure there.
+# Required repository secrets (same as monthly-qls-sync.yml): SUPABASE_SERVICE_ROLE_KEY
+# or SUPABASE_ANON_KEY, BIGQUERY_CLIENT_ID, BIGQUERY_CLIENT_SECRET, BIGQUERY_REFRESH_TOKEN.
+# THE REPO IS PUBLIC: never inline any of these.
 #
-# Triggered by cron-job.org -> workflow_dispatch, 9:30 AM IST (2026-09-12) --
-# NOT GitHub's own `schedule:` trigger, which this repo has repeatedly found
-# fires unpredictably on a low-activity repo (silently dropped runs, multi-
-# hour delays -- see overall-bq-sync.yml's and overall-funnel-sync.yml's own
-# history). 9:30 sits right after Overall BQ sync's own 9:00 run and
-# alongside Monthly QLs sync, per the user's own request to have every
-# dashboard-updating sync land on the same handful of fixed daily checkpoints
-# (9:00 / 9:30 / 10:00 / 10:30 IST) instead of scattered, unreliable times.
+# Triggered by cron-job.org -> workflow_dispatch (9:30 AM IST), unchanged.
 on:
   workflow_dispatch:
 
@@ -33,20 +26,349 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
-      - name: Trigger the Apps cache sync
+      - name: Query BigQuery and upsert into apps_feed
+        env:
+          SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
+          SB_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_ANON_KEY }}
+          BQ_CLIENT_ID: ${{ secrets.BIGQUERY_CLIENT_ID }}
+          BQ_CLIENT_SECRET: ${{ secrets.BIGQUERY_CLIENT_SECRET }}
+          BQ_REFRESH_TOKEN: ${{ secrets.BIGQUERY_REFRESH_TOKEN }}
+          BQ_PROJECT: leverage-production
+          BQ_LOCATION: asia-south1
+          PYTHONUNBUFFERED: "1"
         run: |
-          BODY=$(curl -s -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=apps_sync" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
-          STATUS=$(echo "$BODY" | tail -n1)
-          JSON=$(echo "$BODY" | sed '$d')
-          echo "HTTP Status: $STATUS"
-          echo "Response: $JSON"
-          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
-          OK=$(echo "$JSON" | jq -r '.ok')
-          ROWCOUNT=$(echo "$JSON" | jq -r '.rowCount')
-          if [ "$OK" != "true" ]; then echo "Response body reports ok=$OK -- failing"; exit 1; fi
-          if [ "$ROWCOUNT" = "0" ]; then
-            echo "::warning::apps_sync returned 0 rows this run -- likely a transient BigQuery hiccup. api/crm-leads.js now skips the prune step in this case, so apps_feed keeps its last good data rather than being wiped. Re-run manually if this persists."
-          fi
-          echo "Apps cache synced ($ROWCOUNT rows)."
+          python3 << 'PYEOF'
+          import json, os, re, time, hashlib
+          import urllib.request, urllib.parse, urllib.error
+          from concurrent.futures import ThreadPoolExecutor
+          from datetime import datetime, timezone
+
+          SB_URL = os.environ['SB_URL']
+          SB_KEY = os.environ['SB_KEY']
+          TABLE = 'apps_feed'
+          CLIENT_ID = os.environ.get('BQ_CLIENT_ID', '')
+          CLIENT_SECRET = os.environ.get('BQ_CLIENT_SECRET', '')
+          REFRESH_TOKEN = os.environ.get('BQ_REFRESH_TOKEN', '')
+          PROJECT = os.environ.get('BQ_PROJECT') or 'leverage-production'
+          LOCATION = os.environ.get('BQ_LOCATION') or 'asia-south1'
+
+          if not (CLIENT_ID and CLIENT_SECRET and REFRESH_TOKEN):
+              raise SystemExit('BigQuery secrets are missing. Nothing was read and nothing was written.')
+
+          SQL = '''
+          WITH v1 AS (
+           SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY prospectid ORDER BY opportunity_created_date DESC) AS r_num
+           FROM `leverage_direct.source_attribution_v3`
+          ),
+          v3 AS (
+
+           SELECT * FROM v1 WHERE r_num = 1
+          )
+          SELECT
+           dma.user_id_uuid,
+           dma.destination_country,
+           dma.destination_country_group,
+           dma.destination_country_original,
+           dma.intake_category,
+           dma.intake_date,
+           dma.school_name,
+           dma.course_name,
+           FORMAT_DATE('%Y-%m-%d', DATE(dma.first_app_submitted_at)) AS First_App_Submitted_At,
+           FORMAT_DATE("%b'%y", DATE(dma.first_app_submitted_at)) AS First_App_Month,
+           FORMAT_DATE('%d-%b-%y', DATE(dma.first_app_submitted_at)) AS First_App_Date,
+           v2.prospect_id,
+           v3.opportunity_id,
+           -- Source and campaign use the SAME rules as the Overall query (OVERALL_BQ_SQL), applied to
+           -- v3.source (same labels as Overall's source_1) and v3.opp_first_campaign_name. 2026-10-10.
+           CASE
+           WHEN LOWER(v3.source) = 'branding'
+           OR STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'tof_youtube')
+           OR STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'branding_')
+           OR STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'organic_branding') THEN 'Branding'
+           WHEN STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'remarketing_')
+           AND LOWER(v3.source) IN ('lead source na', 'others', 'offline') THEN 'Remarketing'
+           WHEN STARTS_WITH(LOWER(v3.opp_first_campaign_name), 'pmx_fb')
+           AND LOWER(v3.source) IN ('lead source na', 'others', 'offline') THEN 'Facebook'
+           WHEN LOWER(v3.source) IN ('affiliate partner') THEN 'Affiliate'
+           WHEN LOWER(v3.source) IN ('content+brand') THEN 'Organic'
+           WHEN LOWER(v3.source) IN ('lead source na', 'others', 'offline') THEN 'Others'
+           ELSE v3.source
+           END AS source,
+           case when v3.Country2 in ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') then 'SR' else 'AC' END AS Vertical,
+           v3.country2,
+           case when v3.last_disposition_from_futwork is not null then 'Human_QL' else 'Floor' END as Futwork_Human,
+           case when v3.last_disposition_ai_futwork is not null then 'AI_QL' else 'Floor' END as Futwork_AI,
+           v3.sub_source,
+           CASE LOWER(TRIM(v3.opp_first_campaign_name))
+           WHEN 'study-abroad-consultant-mbbs' THEN 'PMX_Search_Study_MBBS_call'
+           WHEN 'study-abroad-consultant-dubai' THEN 'PMX_Search_Study_Dubai_call'
+           ELSE CASE WHEN STARTS_WITH(LOWER(TRIM(v3.opp_first_campaign_name)), 'study-abroad-consultant') THEN 'PMX_Search_Study_Abroad_All_call' ELSE v3.opp_first_campaign_name END
+           END AS opp_first_campaign_name,
+          FROM
+           `leverage_direct.direct_monthly_apps` dma
+          LEFT JOIN
+           `leverage_direct.enrolled_students_funnel_v2` v2 ON dma.user_id_uuid = v2.user_id_uuid
+          LEFT JOIN
+           v3 ON v2.prospect_id = v3.prospectid
+          WHERE
+           date(dma.first_app_submitted_at) > '2022-12-31'
+          '''
+
+          EXPECTED = [
+              'user_id_uuid', 'destination_country', 'destination_country_group',
+              'destination_country_original', 'intake_category', 'intake_date',
+              'school_name', 'course_name', 'First_App_Submitted_At', 'First_App_Month',
+              'First_App_Date', 'prospect_id', 'opportunity_id', 'source', 'Vertical',
+              'country2', 'Futwork_Human', 'Futwork_AI', 'sub_source',
+              'opp_first_campaign_name',
+          ]
+          # apps_feed column for each BigQuery column, same mapping as apps_sync in api/crm-leads.js.
+          COLMAP = [
+              ('user_id_uuid', 'user_id_uuid'), ('destination_country', 'destination_country'),
+              ('destination_country_group', 'destination_country_group'),
+              ('destination_country_original', 'destination_country_original'),
+              ('intake_category', 'intake_category'), ('intake_date', 'intake_date'),
+              ('school_name', 'school_name'), ('course_name', 'course_name'),
+              ('First_App_Submitted_At', 'first_app_submitted_at'),
+              ('First_App_Month', 'first_app_month'), ('First_App_Date', 'first_app_date'),
+              ('prospect_id', 'prospect_id'), ('opportunity_id', 'opportunity_id'),
+              ('source', 'source'), ('Vertical', 'vertical'), ('country2', 'country2'),
+              ('Futwork_Human', 'futwork_human'), ('Futwork_AI', 'futwork_ai'),
+              ('sub_source', 'sub_source'), ('opp_first_campaign_name', 'opp_first_campaign_name'),
+          ]
+
+          TOKEN_URL = 'https://oauth2.googleapis.com/token'
+          BQ = 'https://bigquery.googleapis.com/bigquery/v2'
+          PAGE = 20000
+          BATCH = 500
+
+
+          def access_token():
+              body = urllib.parse.urlencode({
+                  'client_id': CLIENT_ID, 'client_secret': CLIENT_SECRET,
+                  'refresh_token': REFRESH_TOKEN, 'grant_type': 'refresh_token',
+              }).encode('utf-8')
+              req = urllib.request.Request(TOKEN_URL, data=body, method='POST',
+                                           headers={'Content-Type': 'application/x-www-form-urlencoded'})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      d = json.loads(r.read().decode('utf-8'))
+              except urllib.error.HTTPError as e:
+                  raise SystemExit('BigQuery token refresh failed: HTTP %s' % e.code)
+              tok = d.get('access_token')
+              if not tok:
+                  raise SystemExit('BigQuery token refresh failed: no access_token returned.')
+              return tok
+
+
+          def bq(url, token, payload=None):
+              last = None
+              for attempt in range(3):
+                  headers = {'Authorization': 'Bearer ' + token}
+                  if payload is None:
+                      req = urllib.request.Request(url, headers=headers)
+                  else:
+                      headers['Content-Type'] = 'application/json'
+                      req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'),
+                                                   method='POST', headers=headers)
+                  try:
+                      with urllib.request.urlopen(req, timeout=180) as r:
+                          return json.loads(r.read().decode('utf-8'))
+                  except urllib.error.HTTPError as e:
+                      detail = ''
+                      try:
+                          detail = e.read().decode('utf-8')[:500]
+                      except Exception:
+                          pass
+                      last = 'HTTP %s %s' % (e.code, detail)
+                      if e.code < 500 and e.code != 429:
+                          raise SystemExit('BigQuery request failed: ' + last)
+                  except Exception as e:
+                      last = repr(e)
+                  time.sleep(2 * (attempt + 1))
+              raise SystemExit('BigQuery request failed after 3 attempts: ' + str(last))
+
+
+          token = access_token()
+          print('Running the Apps query against', PROJECT, 'in', LOCATION, '...')
+          res = bq(BQ + '/projects/' + urllib.parse.quote(PROJECT) + '/queries', token, {
+              'query': SQL, 'useLegacySql': False, 'location': LOCATION,
+              'timeoutMs': 55000, 'maxResults': PAGE,
+          })
+          job = res.get('jobReference') or {}
+          job_id = job.get('jobId')
+          job_loc = job.get('location') or LOCATION
+
+
+          def results_page(page_token=None):
+              u = (BQ + '/projects/' + urllib.parse.quote(PROJECT) + '/queries/' + urllib.parse.quote(job_id)
+                   + '?location=' + urllib.parse.quote(job_loc) + '&maxResults=' + str(PAGE) + '&timeoutMs=55000')
+              if page_token:
+                  u += '&pageToken=' + urllib.parse.quote(page_token)
+              return bq(u, token)
+
+
+          waited = 0
+          while not res.get('jobComplete', True):
+              if waited >= 1200:
+                  raise SystemExit('BigQuery job %s did not complete within 20 minutes.' % job_id)
+              time.sleep(5)
+              waited += 5
+              res = results_page()
+
+          total_rows = int(res.get('totalRows') or 0)
+          print('job', job_id, '| totalRows', total_rows, '| bytesProcessed', res.get('totalBytesProcessed'),
+                '| cacheHit', res.get('cacheHit'))
+          fields = [f.get('name') for f in ((res.get('schema') or {}).get('fields') or [])]
+          if fields != EXPECTED:
+              raise SystemExit('Schema drift. BigQuery returned %r, expected %r. Refusing to write.' % (fields, EXPECTED))
+
+          raw = []
+          page = res
+          n_pages = 0
+          while True:
+              n_pages += 1
+              for row in (page.get('rows') or []):
+                  raw.append([(c or {}).get('v') for c in (row.get('f') or [])])
+              next_token = page.get('pageToken')
+              print('  page', n_pages, '-> cumulative rows', len(raw))
+              if not next_token:
+                  break
+              page = results_page(next_token)
+          if total_rows and len(raw) != total_rows:
+              raise SystemExit('Pagination drop: collected %d rows but BigQuery reported %d. Refusing to write.'
+                               % (len(raw), total_rows))
+          # A 0-row result must never write or prune. Fail loudly so it shows red, not green.
+          if len(raw) == 0:
+              raise SystemExit('BigQuery returned 0 rows. Nothing was written or deleted; apps_feed keeps its last good data.')
+
+          sync_id = (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + str(os.environ.get('GITHUB_RUN_ID') or 'manual'))
+          now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+          idx = {n: i for i, n in enumerate(EXPECTED)}
+          records = []
+          for n, vals in enumerate(raw):
+              rec = {}
+              for bq_col, sb_col in COLMAP:
+                  v = vals[idx[bq_col]]
+                  rec[sb_col] = v if (v is not None and v != '') else None
+              key = '|'.join([rec['user_id_uuid'] or '', rec['opportunity_id'] or '', rec['prospect_id'] or '', str(n)])
+              rec['row_key'] = hashlib.md5(key.encode('utf-8')).hexdigest()
+              rec['sync_id'] = sync_id
+              rec['synced_at'] = now_iso
+              records.append(rec)
+          print('Built', len(records), 'records. sync_id =', sync_id)
+
+
+          def sb(url, method, data=None, extra=None):
+              headers = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
+              if data is not None:
+                  headers['Content-Type'] = 'application/json'
+              if extra:
+                  headers.update(extra)
+              return urllib.request.Request(url, data=data, method=method, headers=headers)
+
+
+          upsert_url = SB_URL + '/rest/v1/' + TABLE + '?on_conflict=row_key'
+          failed_batches = []
+
+
+          def upsert(i):
+              body = json.dumps(records[i:i + BATCH]).encode('utf-8')
+              for attempt in range(8):
+                  try:
+                      req = sb(upsert_url, 'POST', body, {'Prefer': 'resolution=merge-duplicates,return=minimal'})
+                      with urllib.request.urlopen(req, timeout=120) as r:
+                          r.read()
+                      return True
+                  except Exception as e:
+                      detail = ''
+                      try:
+                          if hasattr(e, 'read'):
+                              detail = ' | body: ' + e.read().decode('utf-8')[:300]
+                      except Exception:
+                          pass
+                      print('batch', i, 'attempt', attempt, 'failed:', repr(e) + detail)
+                      time.sleep(min(3 * (2 ** attempt), 60))
+              failed_batches.append(i)
+              return False
+
+
+          # At most 3 at once: 16 at once caused real "statement timeout" errors on overall_bq_daily.
+          with ThreadPoolExecutor(max_workers=3) as ex:
+              list(ex.map(upsert, range(0, len(records), BATCH)))
+          if failed_batches:
+              raise SystemExit('%d batch(es) failed after retries. Not pruning, so no good row is lost.' % len(failed_batches))
+          print('Upserted', len(records), 'rows.')
+
+
+          def request_json(url, extra=None):
+              req = sb(url, 'GET', None, extra)
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  return json.loads(r.read().decode('utf-8'))
+
+
+          def delete_with_retry(url):
+              for attempt in range(6):
+                  try:
+                      req = sb(url, 'DELETE', None, {'Prefer': 'return=minimal'})
+                      with urllib.request.urlopen(req, timeout=180) as r:
+                          r.read()
+                      return True
+                  except Exception as e:
+                      print('delete attempt', attempt, 'failed:', repr(e))
+                      time.sleep(min(5 * (2 ** attempt), 60))
+              return False
+
+
+          # Remove old copies ONE sync_id at a time (about 61k rows each) instead of one huge
+          # "every row that is not this sync" delete, which timed out and let 8 copies pile up.
+          removed_ids = 0
+          pruned_ok = True
+          for _ in range(100):
+              rows = request_json(SB_URL + '/rest/v1/' + TABLE + '?select=sync_id&sync_id=neq.'
+                                  + urllib.parse.quote(sync_id) + '&limit=1')
+              if not rows:
+                  break
+              old = rows[0]['sync_id']
+              if not delete_with_retry(SB_URL + '/rest/v1/' + TABLE + '?sync_id=eq.' + urllib.parse.quote(old)):
+                  pruned_ok = False
+                  print('Could not remove old copy', old, '- will be retried on the next run.')
+                  break
+              removed_ids += 1
+              print('Removed old copy', old)
+          # Rows with a NULL sync_id (never stamped) sit outside the loop above.
+          delete_with_retry(SB_URL + '/rest/v1/' + TABLE + '?sync_id=is.null')
+          print('Old copies removed:', removed_ids)
+
+          try:
+              req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1', 'GET', None,
+                       {'Prefer': 'count=exact', 'Range': '0-0'})
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  r.read()
+                  content_range = r.headers.get('Content-Range') or ''
+              after = content_range.split('/')[-1]
+              print('Rows in', TABLE, 'after sync:', after, '| expected:', len(records))
+              if pruned_ok and after.isdigit() and int(after) != len(records):
+                  raise SystemExit('Post-sync row count mismatch: table holds %s, expected %d.' % (after, len(records)))
+          except SystemExit:
+              raise
+          except Exception as e:
+              print('count check failed (non-fatal):', repr(e))
+
+          try:
+              job_log = json.dumps({
+                  'job_id': job_id, 'project_id': PROJECT, 'location': job_loc, 'mode': 'apps_sync',
+                  'dashboard_id': 'apps', 'user_email': None,
+                  'total_bytes_processed': int(res.get('totalBytesProcessed') or 0),
+                  'total_rows': total_rows, 'cache_hit': bool(res.get('cacheHit')), 'latency_ms': None,
+              }).encode('utf-8')
+              req = sb(SB_URL + '/rest/v1/bigquery_jobs', 'POST', job_log, {'Prefer': 'return=minimal'})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  r.read()
+          except Exception as e:
+              print('bigquery_jobs log failed (non-fatal):', repr(e))
+          print('Sync complete.')
+          PYEOF
