@@ -33,6 +33,11 @@ name: Monthly QLs BigQuery Cache Sync
 # Vercel-endpoint sync the way careers_sync/apps_sync work.
 on:
   workflow_dispatch:
+    inputs:
+      full_resync:
+        description: 'Recompute the whole 6-month window (default: only last month + this month)'
+        type: boolean
+        default: false
 
 # One sync at a time. Two overlapping runs would interleave their sync_id
 # stamps and the loser's prune step would delete the winner's freshly written
@@ -55,6 +60,7 @@ jobs:
           BQ_REFRESH_TOKEN: ${{ secrets.BIGQUERY_REFRESH_TOKEN }}
           BQ_PROJECT: leverage-production
           BQ_LOCATION: asia-south1
+          FULL_RESYNC: ${{ inputs.full_resync && '1' || '' }}
         run: |
           python3 << 'PYEOF'
           import json, os, re, time, hashlib
@@ -96,6 +102,20 @@ jobs:
           # 5 months back from whenever this actually runs -- so the Monthly
           # QLs page always shows the trailing 6 calendar months (current
           # partial month included) with zero maintenance going forward.
+          # Windowed run (2026-10-27): the full 6-month recompute grew from ~4 min to
+          # 30+ min (cancelled at the job limit on 24-27 Oct). Months older than
+          # last month never change, so a normal run recomputes only last month +
+          # this month; the saved rows for older months are left untouched.
+          # Tick full_resync on a manual run to rebuild all 6 months.
+          FULL = os.environ.get('FULL_RESYNC') == '1'
+          BACK = 5 if FULL else 1
+          _now = datetime.now(timezone.utc)
+          _y, _m = _now.year, _now.month - BACK
+          while _m < 1:
+              _m += 12; _y -= 1
+          WINDOW_START = '%04d-%02d-01' % (_y, _m)
+          print('Full resync' if FULL else 'Windowed run', '- recomputing from', WINDOW_START)
+
           SQL = '''
           WITH v3 as (select * from leverage_direct.source_attribution_v3),
           opp_agg AS (
@@ -230,6 +250,7 @@ jobs:
           LEFT JOIN futwork_ai_queued faq ON faq.act_date = d.date AND faq.source = d.source
           LEFT JOIN futwork_ai_qual faiq ON faiq.act_date = d.date AND faiq.source = d.source
           '''
+          SQL = SQL.replace('INTERVAL 5 MONTH', 'INTERVAL %d MONTH' % BACK)
 
           EXPECTED = [
               'period', 'date', 'source', 'opp_count', 'floor_queued',
@@ -522,14 +543,14 @@ jobs:
           # NOTE the PostgREST gotcha documented in CLAUDE.md: filter values are
           # percent-encoded and NOT wrapped in double quotes -- quotes are
           # matched as literal characters and would silently make this a no-op.
-          prune_url = (SB_URL + '/rest/v1/' + TABLE + '?or=(sync_id.neq.'
-                       + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
+          prune_url = (SB_URL + '/rest/v1/' + TABLE + '?lead_date_iso=gte.' + WINDOW_START
+                       + '&or=(sync_id.neq.' + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
           delete_with_retry(prune_url, TABLE)
-          print('Pruned every row not stamped with this sync_id.')
+          print('Pruned every row in the window not stamped with this sync_id.')
 
           # Final proof, server-side: the table must now hold exactly as many
           # rows as this run built.
-          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1', 'GET',
+          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&lead_date_iso=gte.' + WINDOW_START + '&limit=1', 'GET',
                    None, {'Prefer': 'count=exact', 'Range': '0-0'})
           with urllib.request.urlopen(req, timeout=60) as r:
               r.read()
