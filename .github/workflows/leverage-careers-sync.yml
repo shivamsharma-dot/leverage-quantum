@@ -30,6 +30,9 @@ name: Leverage Careers BigQuery Cache Sync
 # refreshes anyway), 2:00 PM (was 2:15), 10:00 PM (was 9:30 PM -- merges into
 # Overall BQ sync's own existing 10 PM slot instead of sitting 30 minutes
 # apart from it for no reason).
+# 2026-10-27: now ONE run a day, 9:30 AM IST. The 2 PM and 10 PM cron-job.org
+# jobs were switched off (still listed, Inactive) at the owner's request; the
+# 3x/day reasoning above no longer applies.
 on:
   workflow_dispatch:
 
