@@ -40,14 +40,26 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
       - name: Trigger the Leverage Careers cache sync
         run: |
-          BODY=$(curl -s -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=careers_sync" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
-          STATUS=$(echo "$BODY" | tail -n1)
-          JSON=$(echo "$BODY" | sed '$d')
-          echo "HTTP Status: $STATUS"
-          echo "Response: $JSON"
-          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
-          echo "Leverage Careers cache synced."
+          # A 0-row BigQuery read (transient upstream blip, seen 2026-10-26 2pm and
+          # 2026-10-27 9:30am) returns HTTP 200 but writes nothing, so the page
+          # silently stays on old data. Retry a few times, a few minutes apart,
+          # and fail the run if it never gets rows.
+          for ATTEMPT in 1 2 3 4; do
+            BODY=$(curl -s -m 120 -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=careers_sync" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+            STATUS=$(echo "$BODY" | tail -n1)
+            JSON=$(echo "$BODY" | sed '$d')
+            echo "Attempt $ATTEMPT HTTP Status: $STATUS"
+            echo "Response: $JSON"
+            ROWS=$(echo "$JSON" | jq -r '.rowCount // 0' 2>/dev/null || echo 0)
+            if [ "$STATUS" = "200" ] && [ "$ROWS" -gt 0 ]; then
+              echo "Leverage Careers cache synced ($ROWS rows)."
+              exit 0
+            fi
+            [ "$ATTEMPT" -lt 4 ] && sleep 180
+          done
+          echo "::error::Leverage Careers sync got no rows or failed after 4 attempts"
+          exit 1
