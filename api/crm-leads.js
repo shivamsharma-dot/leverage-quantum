@@ -4929,9 +4929,15 @@ async function handleBigQuery(req, res, me) {
           let truncated = false
           for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
             if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break }
-            let path = table + '?select=' + encodeURIComponent(select + ',row_key')
+            // 2026-10-27: the raw table is read in (lead_date_iso, row_key) order, not row_key alone.
+            // Ordered by row_key (an md5, so random) Postgres walked the primary key and threw away
+            // 25,000 rows to find 1,000 (8,500 disk reads, 15 to 18 s, then statement timeouts); ordered
+            // by date it uses the date index and the same page takes about 7 ms (measured with EXPLAIN
+            // ANALYZE). The cursor is 'YYYY-MM-DD|row_key'. The small agg table keeps row_key order.
+            const byDate = table === 'overall_bq_daily'
+            let path = table + '?select=' + encodeURIComponent(select + ',row_key' + (byDate ? ',lead_date_iso' : ''))
               + '&lead_date_iso=gte.' + chunkSince + '&lead_date_iso=lte.' + chunkUntil
-              + '&order=row_key.asc&limit=' + PAGE
+              + '&order=' + (byDate ? 'lead_date_iso.asc,row_key.asc' : 'row_key.asc') + '&limit=' + PAGE
             if (sourceList.length) {
               const list = '(' + sourceList.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
               path += '&Source=in.' + encodeURIComponent(list)
@@ -4941,8 +4947,15 @@ async function handleBigQuery(req, res, me) {
             // about half of the rows read for that week (6,777 vs 3,488), and the unfiltered read
             // also hit real 500s the filtered one did not. overallBqCache.js's direct-read fallback
             // uses the exact same filter so a truncated chunk finishes on the same basis.
-            if (table === 'overall_bq_daily') path += '&or=' + encodeURIComponent(OVERALL_BQ_NONZERO_OR)
-            if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
+            if (byDate) {
+              const ci = cursor ? String(cursor).indexOf('|') : -1
+              if (ci > 0) {
+                const cd = String(cursor).slice(0, ci), ck = String(cursor).slice(ci + 1)
+                path += '&and=' + encodeURIComponent('(or' + OVERALL_BQ_NONZERO_OR + ',or(lead_date_iso.gt.' + cd + ',and(lead_date_iso.eq.' + cd + ',row_key.gt.' + ck + ')))')
+              } else {
+                path += '&or=' + encodeURIComponent(OVERALL_BQ_NONZERO_OR)
+              }
+            } else if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
             const r = await supabaseAdmin(path)
             if (!r.ok) {
               const detail = await r.text().catch(() => '')
@@ -4950,9 +4963,10 @@ async function handleBigQuery(req, res, me) {
             }
             const page = await r.json()
             if (!Array.isArray(page) || page.length === 0) break
-            for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+            for (const row of page) { const { row_key, lead_date_iso, ...rest } = row; rows.push(rest) }
             if (page.length < PAGE) break
-            cursor = page[page.length - 1].row_key
+            const lastRow = page[page.length - 1]
+            cursor = byDate ? (lastRow.lead_date_iso + '|' + lastRow.row_key) : lastRow.row_key
           }
           return { since: chunkSince, until: chunkUntil, rows, truncated, cursor: truncated ? cursor : null }
         }

@@ -129,21 +129,33 @@ async function fetchTailDirect({ table, columns, since, until, sources, cursor, 
   const rows = []
   let cur = cursor || null
   for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
-    const p = new URLSearchParams({ select: select + ',row_key', order: 'row_key.asc', limit: String(PAGE) })
+    // Raw table: read in (lead_date_iso, row_key) order, cursor 'YYYY-MM-DD|row_key'. Ordered by row_key
+    // alone the database scanned the primary key and discarded ~25,000 rows per page (15 to 18 s, timeouts);
+    // by date it uses the date index (~7 ms). See the same note in api/crm-leads.js.
+    const byDate = table === 'overall_bq_daily'
+    const p = new URLSearchParams({ select: select + ',row_key' + (byDate ? ',lead_date_iso' : ''), order: byDate ? 'lead_date_iso.asc,row_key.asc' : 'row_key.asc', limit: String(PAGE) })
     p.set('lead_date_iso', 'gte.' + since)
     p.append('lead_date_iso', 'lte.' + until)
     const list = (sources || []).filter(s => s && s !== 'All')
     if (list.length) p.set('Source', 'in.' + inList(list))
-    if (table === 'overall_bq_daily') p.set('or', NONZERO_OR)
-    if (cur != null) p.set('row_key', 'gt.' + cur)
+    if (byDate) {
+      const ci = cur != null ? String(cur).indexOf('|') : -1
+      if (ci > 0) {
+        const cd = String(cur).slice(0, ci), ck = String(cur).slice(ci + 1)
+        p.set('and', '(or' + NONZERO_OR + ',or(lead_date_iso.gt.' + cd + ',and(lead_date_iso.eq.' + cd + ',row_key.gt.' + ck + ')))')
+      } else {
+        p.set('or', NONZERO_OR)
+      }
+    } else if (cur != null) p.set('row_key', 'gt.' + cur)
     const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + p.toString(), signal ? { headers, signal } : { headers })
     if (!r.ok) throw new Error(table + ' fallback read failed (' + r.status + ')')
     const page = await r.json()
     if (!Array.isArray(page)) throw new Error(table + ' returned a non-array response')
     if (!page.length) break
-    for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+    for (const row of page) { const { row_key, lead_date_iso, ...rest } = row; rows.push(rest) }
     if (page.length < PAGE) break
-    cur = page[page.length - 1].row_key
+    const lastRow = page[page.length - 1]
+    cur = byDate ? (lastRow.lead_date_iso + '|' + lastRow.row_key) : lastRow.row_key
   }
   return rows
 }
