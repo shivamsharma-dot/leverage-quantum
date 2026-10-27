@@ -3029,13 +3029,49 @@ async function handleSlackEditBotMessage(req, res) {
   const ts = String(req.body?.ts || '').trim()
   const prefix = String(req.body?.removeLinesStartingWith || '')
   const dryRun = req.body?.dryRun === true
-  if (!/^[CG][A-Z0-9]{8,}$/.test(channel) || !/^\d+\.\d+$/.test(ts) || prefix.length < 5) return res.status(400).json({ error: 'channel, ts and removeLinesStartingWith (5+ chars) are required' })
+  // setTableRows: array of rows (array of strings) that replaces the TEXT of the cells of the message's native table,
+  // keeping every cell's style (bold, alignment) and the header row. Used to correct figures without deleting the post.
+  const setRows = Array.isArray(req.body?.setTableRows) ? req.body.setTableRows.map(r => Array.isArray(r) ? r.map(c => String(c)) : null) : null
+  if (setRows && setRows.some(r => !r)) return res.status(400).json({ error: 'setTableRows must be an array of arrays of strings' })
+  if (!/^[CG][A-Z0-9]{8,}$/.test(channel) || !/^\d+\.\d+$/.test(ts) || (!setRows && prefix.length < 5)) return res.status(400).json({ error: 'channel, ts and removeLinesStartingWith (5+ chars) or setTableRows are required' })
   try {
     const auth = await (await fetch('https://slack.com/api/auth.test', { headers: { Authorization: `Bearer ${token}` } })).json()
     const h = await (await fetch('https://slack.com/api/conversations.history?' + new URLSearchParams({ channel, latest: ts, inclusive: 'true', limit: '1' }).toString(), { headers: { Authorization: `Bearer ${token}` } })).json()
     const msg = h.ok && h.messages && h.messages[0]
     if (!msg || msg.ts !== ts) return res.status(404).json({ error: 'message not found: ' + (h.error || '') })
     if (msg.user !== auth.user_id) return res.status(403).json({ error: 'Not a bot message' })
+    if (setRows) {
+      const setCellText = (cell, text) => {
+        if (!cell || typeof cell !== 'object') return cell
+        if (cell.type === 'raw_text') return { ...cell, text }
+        let done = false
+        const walk = n => {
+          if (Array.isArray(n)) return n.map(walk)
+          if (!n || typeof n !== 'object') return n
+          if (n.type === 'text') { const t = done ? '' : text; done = true; return { ...n, text: t } }
+          const out = { ...n }
+          if (Array.isArray(n.elements)) out.elements = walk(n.elements)
+          return out
+        }
+        return walk(cell)
+      }
+      const before = []
+      let changedTable = false
+      const nb = (msg.blocks || []).map(b => {
+        if (b.type !== 'table' || changedTable) return b
+        changedTable = true
+        const old = b.rows || []
+        before.push(...old.slice(0, 3).map(r => r.map(c => JSON.stringify(c).slice(0, 160))))
+        if (setRows.length !== old.length - 1) throw new Error('row count mismatch: message has ' + (old.length - 1) + ' body rows, got ' + setRows.length)
+        const rows = [old[0], ...setRows.map((vals, i) => old[i + 1].map((c, j) => setCellText(c, vals[j] != null ? vals[j] : '')))]
+        return { ...b, rows }
+      })
+      if (!changedTable) return res.status(404).json({ error: 'no table block in that message' })
+      if (dryRun) return res.status(200).json({ ok: true, dryRun, sampleOldCells: before, newFirstRow: setRows[0] })
+      await slackUpdateBlocks(token, channel, ts, msg.text || 'Report', nb)
+      await logReport({ report_type: 'slack edit bot message (table figures)', recipients: ['slack:' + channel], status: 'sent', triggered_by: me.email })
+      return res.status(200).json({ ok: true, updatedRows: setRows.length })
+    }
     let removed = 0
     const fix = t => String(t).split('\n').filter(l => { if (l.startsWith(prefix)) { removed++; return false } return true }).join('\n')
     const blocks = (msg.blocks || []).map(b => {
