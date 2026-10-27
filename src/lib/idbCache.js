@@ -24,22 +24,37 @@ function openDb() {
     if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB not available')); return }
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE_NAME)) req.result.createObjectStore(STORE_NAME) }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      // Let a pending deleteDatabase / version change proceed: close this connection and reopen on next use.
+      // Without it, one tab clearing the cache (or any blocked delete) makes every other tab's open() wait forever.
+      db.onversionchange = () => { try { db.close() } catch (_) { /* ignore */ } dbPromise = null }
+      resolve(db)
+    }
     req.onerror = () => reject(req.error)
   })
   return dbPromise
 }
 
+// A hung IndexedDB must never hold a page hostage: after this long the call gives up (get returns null, set is skipped)
+// and the caller carries on with a normal network read.
+const IDB_TIMEOUT_MS = 2000
+function withTimeout(p, fallback) {
+  return Promise.race([p, new Promise(res => setTimeout(() => res(fallback), IDB_TIMEOUT_MS))])
+}
+
 // Returns the stored value for `key`, or null if absent/on any failure.
 export async function idbGet(key) {
   try {
-    const db = await openDb()
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly')
-      const req = tx.objectStore(STORE_NAME).get(key)
-      req.onsuccess = () => resolve(req.result === undefined ? null : req.result)
-      req.onerror = () => reject(req.error)
-    })
+    return await withTimeout((async () => {
+      const db = await openDb()
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly')
+        const req = tx.objectStore(STORE_NAME).get(key)
+        req.onsuccess = () => resolve(req.result === undefined ? null : req.result)
+        req.onerror = () => reject(req.error)
+      })
+    })(), null)
   } catch (_) {
     return null
   }
@@ -50,13 +65,15 @@ export async function idbGet(key) {
 // that already succeeded.
 export async function idbSet(key, value) {
   try {
-    const db = await openDb()
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite')
-      tx.objectStore(STORE_NAME).put(value, key)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
+    await withTimeout((async () => {
+      const db = await openDb()
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite')
+        tx.objectStore(STORE_NAME).put(value, key)
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+      })
+    })(), undefined)
   } catch (_) { /* best effort only */ }
 }
 
