@@ -2977,6 +2977,16 @@ async function handleEbitdaManagerReport(req, res) {
       // One-off send by an admin to a specific channel id (still never a CEO-guarded room: resolveSlackTarget refuses those).
       target = 'raw:' + body.destinationChannel.trim()
       label = String(body.destinationLabel || body.destinationChannel).replace(/^#/, '')
+    } else if (isAdmin && typeof body.destinationUser === 'string' && /^U[A-Z0-9]{8,}$/.test(body.destinationUser.trim())) {
+      // One-off send by an admin as a direct message from the bot to one person (needs the bot's im:write scope).
+      const dm = await (await fetch('https://slack.com/api/conversations.open', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + (process.env.SLACK_BOT_TOKEN || ''), 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({ users: body.destinationUser.trim() }),
+      })).json().catch(() => ({}))
+      if (!dm.ok || !dm.channel || !dm.channel.id) return res.status(400).json({ error: 'Could not open a direct message: ' + (dm.error || 'unknown') })
+      target = 'raw:' + dm.channel.id
+      label = String(body.destinationLabel || 'direct message').replace(/^#/, '')
     } else {
       let dest = ''
       try {
