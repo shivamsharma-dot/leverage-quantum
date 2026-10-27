@@ -93,11 +93,13 @@ export default async function handler(req, res) {
   const SECRET_KEYS = new Set(['slack_ceo_pin'])
   // Large values that have their own dedicated GET branch above and would
   // otherwise ride along with every ordinary Settings preferences load.
-  const LARGE_KEYS = new Set(['gazette_html'])
+  const LARGE_KEYS = new Set(['gazette_html', 'overall_bq_prewarm_default'])
 
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
-      'app_preferences?select=key,value,updated_at&key=not.like.mr_snap_*&limit=200',
+      // overall_bq_prewarm_default is a ~10 MB cache row read only by its own crm-leads mode; keep it out of this
+      // bulk read so it is never pulled from the database or sent with every page load.
+      'app_preferences?select=key,value,updated_at&key=not.like.mr_snap_*&key=neq.overall_bq_prewarm_default&limit=200',
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
     const rows = ((await r.json()) || []).filter(row => !SECRET_KEYS.has(row.key) && !LARGE_KEYS.has(row.key))

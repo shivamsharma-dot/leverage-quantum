@@ -1,5 +1,6 @@
 {
   "installCommand": "npm install",
+  "regions": ["sin1"],
   "headers": [
     {
       "source": "/(.*)",
