@@ -295,6 +295,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
             chartPng: chartPng(x.chart) || null,
             label: x.label || null, attach: !!x.attach,
             blocks: x.blocks || null, metadata: x.metadata || null,
+            threadPng: x.threadPng || null,
             imageIsMessage: !!x.imageIsMessage,
           })),
           pngBase64: files ? files.pngBase64 : null,
@@ -438,6 +439,12 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                 {m.chart && <ChartImage chart={m.chart} />}
                 {m.context && (
                   <div style={{ fontSize:10.5, lineHeight:1.65, color:C.muted, marginTop:11, paddingTop:9, borderTop:`1px solid ${C.border}` }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.context) }} />
+                )}
+                {m.threadPng && (
+                  <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginTop:11, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>
+                    <span style={{ fontSize:10.5, color:C.muted, fontWeight:700 }}>In this message's thread:</span>
+                    <span style={{ fontSize:10.5, color:C.sub, background:'#F1F5F9', padding:'2px 7px', borderRadius:5 }}>{m.threadPng.title || 'table picture'} (PNG)</span>
+                  </div>
                 )}
                 {m.attach && (
                   <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginTop:11, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>

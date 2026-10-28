@@ -44,6 +44,7 @@ export const VIEWER_MUST_BE_GRANTED = [
   'marketing_performance',
   'ceo_b2c_pnl',
   'ceo_b2c_cashflow',
+  'ceo_b2c_manager_ebitda',
   'marketing_review',
   'team_mapping',
   'super_tracker',

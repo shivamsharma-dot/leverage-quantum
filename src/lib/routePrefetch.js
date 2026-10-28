@@ -35,6 +35,7 @@ export const COMPONENT_IMPORTS = {
   AgentsDashboard: () => import('../pages/AgentsDashboard'),
   MarketingPerformanceReport: () => import('../pages/MarketingPerformanceReport'),
   CeoB2CDashboard: () => import('../pages/CeoB2CDashboard'),
+  ManagerEbitdaDashboard: () => import('../pages/ManagerEbitdaDashboard'),
   MarketingReviewDashboard: () => import('../pages/MarketingReviewDashboard'),
   SettingsPage: () => import('../pages/SettingsPage'),
 }
@@ -71,6 +72,7 @@ const ROUTE_COMPONENT = {
   '/dashboard/marketing-performance': 'MarketingPerformanceReport',
   '/dashboard/ceo-b2c-pnl': 'CeoB2CDashboard',
   '/dashboard/ceo-b2c-cashflow': 'CeoB2CDashboard',
+  '/dashboard/manager-ebitda': 'ManagerEbitdaDashboard',
   '/dashboard/marketing-review': 'MarketingReviewDashboard',
   '/settings': 'SettingsPage',
   '/settings/reports/email': 'SettingsPage',

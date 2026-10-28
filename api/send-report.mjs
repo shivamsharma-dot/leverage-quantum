@@ -8,7 +8,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // ever be reached via a dynamic import()).
 import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
-import { readEbitdaView, parseEbitdaView, buildEbitdaReport } from '../lib/ebitdaManagerReport.mjs'
+import { readEbitdaView, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages } from '../lib/ebitdaManagerReport.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -3026,6 +3026,39 @@ async function handleEbitdaManagerReport(req, res) {
   }
 }
 
+// Manager EBITDA page (B2C > Manager EBITDA): the EBITDA View tab exactly as the sheet holds it right now, plus the
+// finished Slack messages (header + one native table per team, with each team's picture) so the page's Send to Slack
+// preview and the real post are the same thing. Read fresh from the sheet through the service account on every
+// call, never cached, so a change on the sheet shows on the page and in the report the next time either loads.
+async function handleEbitdaManagerView(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'ceo_b2c_manager_ebitda')) return res.status(403).json({ error: 'Forbidden' })
+  try {
+    const grid = await readEbitdaView()
+    const parsed = parseEbitdaView(grid)
+    const ist = new Date(Date.now() + 5.5 * 3600 * 1000)
+    const y = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() - 1))
+    const mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
+    const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
+    const proRata = y.getUTCDate() + '/' + daysInMonth
+    const report = buildEbitdaReport(parsed, { dateLabel, proRata })
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({
+      ok: true,
+      readAt: new Date().toISOString(),
+      dateLabel, proRata,
+      totals: report.totals,
+      sheet: extractEbitdaViewSections(grid),
+      messages: materialiseMessages(report.messages),
+    })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 // Admin-only: remove lines starting with a given prefix from the text blocks of ONE message the bot posted, in place
 // (chat.update, everything else in the message stays as it was). dryRun:true only reports what would change.
 async function handleSlackEditBotMessage(req, res) {
@@ -3313,6 +3346,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_delete_bot_messages') {
     return handleSlackDeleteBotMessages(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'ebitda_manager_view') {
+    return handleEbitdaManagerView(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'ebitda_manager_report') {
     return handleEbitdaManagerReport(req, res)
