@@ -50,7 +50,7 @@ function buildEbitdaManager(ctx) {
     return {
       key, label: m.text,
       text: '*' + m.text + '*' + (cx && cx.elements && cx.elements[0] ? '\n' + arrows(cx.elements[0].text) : ''),
-      table: rows.length ? { columns: rows[0], rows: rows.slice(1) } : null,
+      table: rows.length ? { columns: rows[0], rows: rows.slice(1), arrowCols: [rows[0].length - 1] } : null,
       blocks: m.blocks,
       threadPng: m.threadPng || null,
     }

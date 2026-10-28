@@ -11,11 +11,9 @@ import { getSession, setSession } from '../lib/sessionLoad'
 // Manager EBITDA -- the 'EBITDA View' tab of the ops sheet "Manager and SM-level EBITDA", read
 // fresh through the service account (api/send-report.mjs, type=ebitda_manager_view). The page and
 // the Slack report come from the same read, so they can never disagree. The sheet is the single
-// source: this page keeps no copy, and re-reads on load, on Refresh, on window focus, every 2
-// minutes while open, and right before the Send to Slack preview opens.
+// source: this page keeps no copy, and re-reads only on a fresh page load and when Refresh is clicked.
 
 const CACHE_KEY = 'lq_manager_ebitda_v1'
-const POLL_MS = 120000
 
 async function fetchView() {
   const r = await fetch('/api/send-report?type=ebitda_manager_view', { method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -101,17 +99,9 @@ export default function ManagerEbitdaDashboard() {
 
   useEffect(() => {
     load(!!cached)
-    const onFocus = () => load(true)
-    window.addEventListener('focus', onFocus)
-    const t = setInterval(() => { if (document.visibilityState === 'visible') load(true) }, POLL_MS)
-    return () => { window.removeEventListener('focus', onFocus); clearInterval(t) }
   }, [load]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The preview must show what the sheet says right now, so read again before it opens.
-  const openSlack = async () => {
-    await load(true)
-    setSlackOpen(true)
-  }
+  const openSlack = () => setSlackOpen(true)
 
   const buildContext = useCallback(() => ({ messages: (data && data.messages) || [] }), [data])
   const captureFiles = useCallback(async () => ({ pngBase64: null, pixelRatio: null, csv: null }), [])

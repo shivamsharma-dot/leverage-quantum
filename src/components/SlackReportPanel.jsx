@@ -772,7 +772,16 @@ function TablePreview({ table }) {
         <tbody>
           {(table.rows || []).map((r, ri) => (
             <tr key={ri} style={{ background: strong.has(ri) ? 'rgba(31,60,132,0.035)' : '#fff' }}>
-              {r.map((v, ci) => <td key={ci} style={cell(v, ci, strong.has(ri))}>{v}</td>)}
+              {r.map((v, ci) => {
+                const st = cell(v, ci, strong.has(ri))
+                // Opt-in (table.arrowCols): a leading up / down arrow colours the cell green / red, like the real post.
+                if ((table.arrowCols || []).includes(ci)) {
+                  const t = String(v).trim()
+                  if (t.startsWith('\u25b2')) { st.color = '#2F8F55'; st.fontWeight = 800 }
+                  else if (t.startsWith('\u25bc')) { st.color = '#B91C1C'; st.fontWeight = 800 }
+                }
+                return <td key={ci} style={st}>{v}</td>
+              })}
             </tr>
           ))}
         </tbody>
