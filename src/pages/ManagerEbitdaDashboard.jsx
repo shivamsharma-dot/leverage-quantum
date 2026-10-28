@@ -4,7 +4,7 @@ import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { SlackIcon } from '../components/icons/BrandIcons'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
-import { C, FONT, Card } from '../ui/dashboardKit'
+import { C, FONT } from '../ui/dashboardKit'
 import { EBITDA_MANAGER_VERSIONS } from '../lib/ebitdaManagerReportVersion'
 import { getSession, setSession } from '../lib/sessionLoad'
 
@@ -23,6 +23,14 @@ async function fetchView() {
   if (!r.ok || !d.ok) throw new Error(d.error || 'Failed to read the EBITDA View sheet')
   return d
 }
+
+// A plain section box; the shared dashboard Card clips tall tables, these must show in full.
+const Card = ({ title, children }) => (
+  <div style={{ background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 12, padding: '14px 16px', boxShadow: '0 1px 4px rgba(15,23,42,0.04)', flexShrink: 0 }}>
+    <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 10 }}>{title}</div>
+    {children}
+  </div>
+)
 
 const fmtNum = v => {
   if (typeof v !== 'number') return v === undefined || v === null ? '' : String(v)
@@ -131,7 +139,7 @@ export default function ManagerEbitdaDashboard() {
   const sheet = data.sheet || {}
   const totals = data.totals || {}
   const readAt = data.readAt ? new Date(data.readAt) : null
-  const reconOk = sheet.recon && sheet.recon.rows.every(r => r.slice(1).every(v => typeof v !== 'number' || Math.abs(v) < 1))
+  const reconOk = sheet.recon && sheet.recon.rows.every(r => typeof r[r.length - 1] !== 'number' || Math.abs(r[r.length - 1]) < 1)
 
   return shell(
     <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
