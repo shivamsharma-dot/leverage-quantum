@@ -359,11 +359,15 @@ async function deliverToSlack(hook, payload) {
 async function handleSlackChannelList(req, res) {
   const { getSessionUser } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
-  if (!me) return res.status(401).json({ error: 'Not signed in' })
-  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  if (!me) { await logSlackBlocked(null, 'channel list', 'Not signed in'); return res.status(401).json({ error: 'Not signed in' }) }
+  // Open to every signed-in user (was admin-only until 2026-10-29, direct instruction:
+  // anyone can send a report to any channel in the dropdown). Only channel names and ids
+  // are returned, never a credential. The two CEO-guarded channels still need the phrase and
+  // PIN: resolveSlackTarget refuses them for a Browse-picked channel, so this list cannot be
+  // used to reach a locked room.
 
   const token = process.env.SLACK_BOT_TOKEN
-  if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+  if (!token) { await logSlackBlocked(me, 'channel list', 'SLACK_BOT_TOKEN is not configured'); return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' }) }
 
   const channels = []
   let cursor = ''
@@ -385,7 +389,9 @@ async function handleSlackChannelList(req, res) {
           not_authed: 'SLACK_BOT_TOKEN is missing',
           missing_scope: `the app is missing a scope conversations.list needs (channels:read, and groups:read for private channels)`,
         }
-        return res.status(502).json({ error: hints[data.error] || data.error || 'Slack conversations.list failed' })
+        const why = hints[data.error] || data.error || 'Slack conversations.list failed'
+        await logSlackBlocked(me, 'channel list', why)
+        return res.status(502).json({ error: why })
       }
       for (const c of data.channels || []) {
         channels.push({ id: c.id, name: c.name, isPrivate: !!c.is_private, isMember: !!c.is_member, numMembers: c.num_members || 0 })
@@ -393,6 +399,7 @@ async function handleSlackChannelList(req, res) {
       cursor = data.response_metadata?.next_cursor || ''
     } while (cursor)
   } catch (e) {
+    await logSlackBlocked(me, 'channel list', 'Slack request failed: ' + e.message)
     return res.status(502).json({ error: 'Slack request failed: ' + e.message })
   }
 
@@ -867,6 +874,20 @@ async function logReport({ report_type, recipients, status, error = null, trigge
       body: JSON.stringify({ report_type, recipients, status, error, triggered_by, sent_at: new Date().toISOString() })
     })
   } catch {}
+}
+
+// A refused or failed Slack send used to leave no trace (a 403 returns before anything is written
+// to report_logs), so "why can't X send" could not be answered. Every refusal on the Slack send path
+// now writes one row: report_type 'slack blocked: <why>', status 'failed', the real reason in `error`,
+// the caller in triggered_by. (Status 'failed' because that is a value report_logs already holds.)
+async function logSlackBlocked(me, why, detail) {
+  await logReport({
+    report_type: 'slack blocked: ' + why,
+    recipients: null,
+    status: 'failed',
+    error: String(detail || why).slice(0, 400),
+    triggered_by: (me && me.email) || 'not signed in',
+  })
 }
 
 // ── Unassigned Leads (Human + AI) daily ops alert ────────────────────────────
@@ -2818,17 +2839,20 @@ async function handleSlackViewSubmission(payload) {
 async function handleSlackReport(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
-  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!me) { await logSlackBlocked(null, 'send', 'Not signed in'); return res.status(401).json({ error: 'Not signed in' }) }
 
   // Same per-page gate as every other Slack path: a real PAGE_LIST id from the
   // caller, and admin-only when an older caller sends none.
   const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, pngs, csv, pixelRatio, rowCount, ceoPin, confirm, rawChannelName } = req.body || {}
   if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
+    await logSlackBlocked(me, 'send', dashboardId
+      ? 'No access to page "' + dashboardId + '" (role ' + String(me.role).slice(0, 40) + '), version ' + (versionId || '-') + ', target ' + (slackTarget || '-')
+      : 'No dashboardId sent and caller is not admin, target ' + (slackTarget || '-'))
     return res.status(403).json({ error: 'Forbidden' })
   }
   const list = Array.isArray(messages) ? messages.filter(m => m && m.text) : []
-  if (!list.length) return res.status(400).json({ error: 'Nothing to post' })
-  if (list.length > 6) return res.status(400).json({ error: 'A report is capped at 6 messages' })
+  if (!list.length) { await logSlackBlocked(me, 'send', 'Nothing to post (' + (dashboardId || '-') + ', version ' + (versionId || '-') + ')'); return res.status(400).json({ error: 'Nothing to post' }) }
+  if (list.length > 6) { await logSlackBlocked(me, 'send', 'More than 6 messages (' + list.length + ') from ' + (dashboardId || '-')); return res.status(400).json({ error: 'A report is capped at 6 messages' }) }
 
   // A guarded channel is one the CEO is in, and it is the only kind that is gated.
   // Two things have to be true, checked here on the server: the caller sent the
@@ -2846,6 +2870,7 @@ async function handleSlackReport(req, res) {
   const wantsCeo = !!(guardSpec && guardSpec.guarded)
   if (wantsCeo) {
     if (!phraseMatches(guardFam, confirm)) {
+      await logSlackBlocked(me, 'send', 'Confirmation phrase missing or wrong for ' + guardFam + ' (' + (dashboardId || '-') + ')')
       return res.status(400).json({ error: 'Type ' + confirmPhrase(guardFam) + ' to confirm this send.', code: 'need_confirm' })
     }
     const chk = await verifyCeoPin(ceoPin, me.email)
@@ -2862,6 +2887,7 @@ async function handleSlackReport(req, res) {
   const cfg = await getReportConfig()
   const hook = resolveSlackTarget(cfg, slackTarget, { allowGuarded: wantsCeo, rawLabel: rawChannelName })
   if (hook.mode !== 'bot' || !hook.channel) {
+    await logSlackBlocked(me, 'send', 'Destination not usable: ' + (hook.missing || ('mode ' + hook.mode + ', no channel')) + ' target ' + (slackTarget || '-'))
     return res.status(400).json({ error: 'Posting a report needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
   }
 

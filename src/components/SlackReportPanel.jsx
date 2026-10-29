@@ -115,8 +115,9 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 940)
 
   // Browse Channel -- any channel the bot is actually in, not just the fixed
-  // named destinations below. Same admin-only endpoint Settings > Reports >
-  // Slack already uses (slack_channel_list -> conversations.list). Picking
+  // named destinations below. Same endpoint Settings > Reports >
+  // Slack already uses (slack_channel_list -> conversations.list); open to every
+  // signed-in user since 2026-10-29. Picking
   // one sets an AD-HOC target ('raw:<id>') -- never saved anywhere, just used
   // for this one send -- and the server independently refuses it if it
   // happens to resolve to one of the two CEO-guarded channels (see
