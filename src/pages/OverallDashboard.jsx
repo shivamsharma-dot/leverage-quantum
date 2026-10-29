@@ -3713,15 +3713,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // A scorecard built WITHOUT the cost-metric exclusions (their lookup failed) is not cached for
   // the day: it is retried once per panel opening. This ref stops that retry from looping.
   const degradedRetryUsed = useRef(false)
-  useEffect(() => { if (!slackPanelOpen) degradedRetryUsed.current = false }, [slackPanelOpen])
+  // 2026-10-29: the scorecard is now rebuilt from live data EVERY time the panel is opened. It used to be
+  // kept for the whole calendar day, so a panel first opened before the morning sync kept showing that
+  // morning's spend and QLs all day ("the report is not picking up updated spend").
+  const fetchedThisOpen = useRef(false)
+  useEffect(() => { if (!slackPanelOpen) { degradedRetryUsed.current = false; fetchedThisOpen.current = false } }, [slackPanelOpen])
   useEffect(() => {
     if (!slackPanelOpen) return
     const now = new Date()
     const todayKey = dayKey(now)
-    if (mtdScorecard && mtdScorecard.computedForDay === todayKey) {
+    if (fetchedThisOpen.current && mtdScorecard) {
       if (!(mtdScorecard.degraded && !degradedRetryUsed.current)) return
       degradedRetryUsed.current = true
     }
+    fetchedThisOpen.current = true
     let dead = false
     const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
     const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
@@ -3742,7 +3747,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // Retried, and null (not an empty prefs object) on final failure so a failed lookup can be told
       // apart from "no exclusions configured" -- it also carries affiliate_spend_manual below.
       retryFetch(() => fetch('/api/preferences', { credentials: 'include' }).then(r => { if (!r.ok) throw new Error('preferences ' + r.status); return r.json() })).catch(() => null),
-    ]).then(async ([raw, appsCount, qlSplitRaw, prefsResp]) => {
+      // The QL Split sheet (a live BigQuery-backed sheet, Day x Provider x Vertical x Count): the
+      // trusted source for the Overall SR / AC / Total QL (2026-10-29: Monthly QLs stopped syncing on
+      // 23 Oct, so it can no longer be the source of those numbers).
+      fetch('/api/crm-leads?source=bigquery&mode=ql_split_totals&since=' + monthStart + '&until=' + until, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(async ([raw, appsCount, qlSplitRaw, prefsResp, qlSplitSheet]) => {
       if (dead) return
       // Settings > Cost-metric exclusions, applied to this report's CPL/CPQL the same way the
       // dashboard does (2026-10-05). The agg table above has no campaign_name, so the rows of
@@ -3809,29 +3818,45 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // srQl + acQl now equals this row's own Futwork QL total EXACTLY, by
       // construction, every time, rather than approximately most of the time.
       let superbotQl = 0
-      if (Array.isArray(qlSplitRaw)) {
-        const qlBucket = filterFn => qlSplitRaw.filter(filterFn).reduce((a, r) => ({
-          sr: a.sr + r.futwork_qualified_sr + r.futwork_ai_qualified_sr,
-          ac: a.ac + r.futwork_qualified_ac + r.futwork_ai_qualified_ac,
-        }), { sr: 0, ac: 0 })
-        // 2026-10-12: Total QL / SR / AC for every row now come straight from Monthly QLs'
-        // own per-source counts (Human + AI, Superbot excluded), so SR + AC equals Total QL
-        // on every row and the rows add up to Overall. The QL Split sheet and the ratio
-        // estimate are gone (Monthly QLs now uses the same SR rule as that sheet).
-        const applySplit = (row, filterFn) => {
-          const s = qlBucket(filterFn)
-          row.srQl = s.sr
-          row.acQl = s.ac
-          row.totalQL = s.sr + s.ac
-        }
-        applySplit(overallRow, () => true)
-        applySplit(paidRow, r => isPaidSource(r.source))
-        applySplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source))
-        applySplit(referralRow, r => r.source === 'Referral')
-        superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
+      // Overall Total QL / SR / AC: the QL Split sheet, used only when it covers every complete day.
+      const sheetOk = !!(qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) >= daysDone && qlSplitSheet.totalQL > 0)
+      const sheetSrShare = sheetOk ? qlSplitSheet.srQl / (qlSplitSheet.srQl + qlSplitSheet.acQl) : null
+      // Monthly QLs rows give a per-channel SR:AC ratio, but only if they reach the last complete day.
+      const monthlyFresh = Array.isArray(qlSplitRaw) && qlSplitRaw.length > 0 && qlSplitRaw.reduce((m, r) => (r.iso && r.iso > m ? r.iso : m), '') >= until
+      const qlBucket = filterFn => (monthlyFresh ? qlSplitRaw : []).filter(filterFn).reduce((a, r) => ({
+        sr: a.sr + r.futwork_qualified_sr + r.futwork_ai_qualified_sr,
+        ac: a.ac + r.futwork_qualified_ac + r.futwork_ai_qualified_ac,
+      }), { sr: 0, ac: 0 })
+      let bucketRatioFallback = false
+      // A bucket's own Futwork QL total (Human + AI, Superbot excluded) is split by the best ratio on
+      // hand, so SR + AC equals that row's Total QL exactly: the channel's own Monthly QLs ratio when
+      // that data is current, otherwise the overall SR share from the sheet.
+      const applyBucketSplit = (row, filterFn) => {
+        const futworkTotal = row.humanQL + row.futworkAiQl
+        row.totalQL = futworkTotal
+        if (futworkTotal <= 0) { row.srQl = 0; row.acQl = 0; return }
+        const s2 = qlBucket(filterFn)
+        const observed = s2.sr + s2.ac
+        let share = null
+        if (observed > 0) share = s2.sr / observed
+        else if (sheetSrShare != null) { share = sheetSrShare; bucketRatioFallback = true }
+        if (share == null) { row.srQl = null; row.acQl = null; return }
+        row.srQl = Math.round(futworkTotal * share)
+        row.acQl = futworkTotal - row.srQl
       }
+      applyBucketSplit(paidRow, r => isPaidSource(r.source))
+      applyBucketSplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source))
+      applyBucketSplit(referralRow, r => r.source === 'Referral')
+      if (sheetOk) {
+        overallRow.totalQL = qlSplitSheet.totalQL
+        overallRow.srQl = qlSplitSheet.srQl
+        overallRow.acQl = qlSplitSheet.acQl
+      } else {
+        applyBucketSplit(overallRow, () => true)
+      }
+      if (Array.isArray(qlSplitRaw)) superbotQl = qlSplitRaw.reduce((a, r) => a + r.superbot_qualified, 0)
 
-      const qlSource = Array.isArray(qlSplitRaw) ? 'monthly' : 'bigquery'
+      const qlSource = sheetOk ? (bucketRatioFallback ? 'sheet-overall-ratio' : 'sheet') : 'bigquery'
 
       // Per-bucket CPL / CPQL inputs, computed EXACTLY like the dashboard (summaryValue):
       //  - numerator = the bucket's spend minus the spend of campaigns excluded for that
@@ -3879,7 +3904,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         rows: buckets,
         totalQL: overallRow.totalQL, totalApps, dailyRunRate, daysDone,
         srQl: overallRow.srQl, acQl: overallRow.acQl, superbotQl,
-        qlSplitAvailable: Array.isArray(qlSplitRaw),
+        qlSplitAvailable: sheetOk || monthlyFresh,
         qlSource,
         exclusionsApplied, degraded: !exclusionsApplied,
         computedForDay: todayKey,

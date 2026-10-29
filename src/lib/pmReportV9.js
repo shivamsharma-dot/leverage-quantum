@@ -136,15 +136,19 @@ export function buildV9(ctx) {
   const excludedSpend = overallRow && overallRow.cpqlSpend != null ? overallRow.spend - overallRow.cpqlSpend : 0
   const exclNote = s.exclusionsApplied === false
     ? '_Spend is unadjusted: the excluded campaigns could not be loaded just now._'
-    : '_Spend excludes ' + moneyCompact(excludedSpend) + ' of campaigns not counted for cost (TOF YouTube branding, MBBS, VAS). QLs from Monthly QLs._'
+    : '_Spend excludes ' + moneyCompact(excludedSpend) + ' of campaigns not counted for cost (TOF YouTube branding, MBBS, VAS). Total QL and SR / AC from the QL Split sheet._'
   // Overall row's Total QL / SR / AC come from the QL Split sheet only once it is filled through the
   // whole window; otherwise BigQuery counts are used and the reader is told (2026-10-05).
-  const qlNote = s.qlSource === 'bigquery' ? '_Total QL / SR / AC: BigQuery counts - the Monthly QLs data could not be loaded just now._' : null
+  // 2026-10-29: Total QL and SR / AC come from the QL Split sheet (Monthly QLs stopped syncing on 23 Oct).
+  const qlNote = s.qlSource === 'bigquery'
+    ? '_Total QL / SR / AC: BigQuery counts - the QL Split sheet is not filled through ' + s.throughLabel + ' yet._'
+    : (s.qlSource === 'sheet-overall-ratio' ? '_Paid and Organic SR / AC use the overall SR:AC ratio - the per-channel split data is behind._' : null)
   const one = [
     testLine(ctx),
     '*:bar_chart: Marketing Efficiency - ' + s.monthLabel + '*',
     dateLine,
     exclNote,
+    s.qlSource === 'sheet-overall-ratio' ? '_Paid and Organic SR / AC use the overall SR:AC ratio - the per-channel split data is behind._' : null,
   ]
   msgs.push({
     key: 'scorecard', label: 'Marketing Efficiency',

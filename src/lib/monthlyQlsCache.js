@@ -34,7 +34,7 @@ const SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const TABLE = 'monthly_qls_daily'
 const SELECT = [
-  'period', 'lead_date', 'source',
+  'period', 'lead_date', 'lead_date_iso', 'source',
   'opp_count', 'floor_queued', 'futwork_queued', 'superbot_queued', 'futwork_ai_queued',
   'futwork_qualified', 'futwork_qualified_sr', 'futwork_qualified_ac',
   'superbot_qualified',
@@ -132,6 +132,7 @@ export async function fetchMonthlyQlsRowsSince(sinceIso, untilIso) {
   return rows.map(r => ({
     period: r.period || '',
     date: r.lead_date || '',
+    iso: r.lead_date_iso || '',
     source: r.source || '',
     futwork_qualified_sr: Number(r.futwork_qualified_sr) || 0,
     futwork_qualified_ac: Number(r.futwork_qualified_ac) || 0,
