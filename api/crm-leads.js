@@ -5340,32 +5340,6 @@ async function handleBigQuery(req, res, me) {
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
       return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
-    if (mode === 'tmp_pivot_fix_suraj') { // TEMPORARY one-off pivot edit + note, removed right after use
-      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-      const tk = await sheetsWriteToken()
-      const H = { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }
-      const TAB = 'Mapping Summary + People Costs'
-      const chk = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent("'" + TAB + "'!A315:D315")}?valueRenderOption=FORMULA`, { headers: H })).json()
-      const row = (chk.values && chk.values[0]) || []
-      if (row[0] !== 'Swati Sharma' || Number(row[1]) !== 5 || Number(row[2]) !== 295305) return res.status(409).json({ error: 'Row 315 is not the expected Swati Sharma 5 / 295305 row', row })
-      const meta = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=sheets.properties`, { headers: H })).json()
-      const sh = (meta.sheets || []).map(x => x.properties).find(x => x.title === TAB)
-      if (!sh) return res.status(404).json({ error: 'tab not found' })
-      const wv = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent("'" + TAB + "'!B315:C315")}?valueInputOption=USER_ENTERED`, { method: 'PUT', headers: H, body: JSON.stringify({ values: [[4, 236244]] }) })
-      const wvBody = await wv.json().catch(() => ({}))
-      if (!wv.ok) return res.status(200).json({ step: 'values', status: wv.status, body: wvBody })
-      const noteText = '@Shubham Bansal (shubham.bansal@leverageedu.com): Suraj Kumar (suraj.kumar4@leverageedu.com, AC, reporting to Swati Sharma under Himanshu Gupta) was removed from Team Mapping on 30 Oct 2026. His salary was found inside this row: Swati Sharma\'s team showed 5 people and Rs 2,95,305 (Rs 59,061 per head). We deducted his Rs 59,061, so the row is now 4 people and Rs 2,36,244, which is still Rs 59,061 per head for the 4 who remain. The Grand Total drops by Rs 59,061, so the shared remainder (P&L people cost minus all team costs, split equally over everyone) rises by that amount and his cost is not lost. Reconciliation reads 0.'
-      const wn = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}:batchUpdate`, { method: 'POST', headers: H, body: JSON.stringify({ requests: [{ updateCells: { range: { sheetId: sh.sheetId, startRowIndex: 314, endRowIndex: 315, startColumnIndex: 4, endColumnIndex: 5 }, rows: [{ values: [{ note: noteText }] }], fields: 'note' } }] }) })
-      return res.status(200).json({ values: { status: wv.status, body: wvBody }, note: { status: wn.status, body: await wn.json().catch(() => ({})) }, before: row })
-    }
-    if (mode === 'tmp_sheet_probe') { // TEMPORARY read-only probe, removed right after use
-      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-      const tokenP = await sheetsWriteToken()
-      const rr = String((req.query && req.query.range) || '')
-      const render = (req.query && req.query.render) === 'F' ? 'FORMULA' : 'UNFORMATTED_VALUE'
-      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent(rr)}?valueRenderOption=${render}`, { headers: { Authorization: `Bearer ${tokenP}` } })
-      return res.status(200).json(await rp.json())
-    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
