@@ -26,6 +26,7 @@ import { getSession, setSession, hasLoaded } from '../lib/sessionLoad'
 import { idbGet, idbSet } from '../lib/idbCache'
 import { consumePrefetchedOverallCsv } from '../lib/overallPrefetch'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
+import { googleCampaignType } from '../lib/googleCampaignType'
 import { isCostExcludedCampaign, isCplCostExcludedCampaign, isCpaCostExcludedCampaign } from '../lib/costExclusions'
 import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H } from '../ui/dashboardKit'
 // Data source: BigQuery -- see src/lib/overallBqCache.js for the why. Which
@@ -3277,6 +3278,30 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return [...m.values()].sort((a, b) => b.leads - a.leads)
   }, [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
 
+  // Google campaign type view (2026-10-30): Google-source rows only, grouped by the type named in the
+  // campaign name (Search, Performance Max, Demand Gen, YouTube / Video, Display, App, Call, Other).
+  const byGoogleType = useMemo(() => {
+    const m = new Map()
+    filtered.forEach(r => {
+      if (r.source !== 'Google') return
+      const label = googleCampaignType(r.campaign)
+      const e = m.get(label) || { googleType:label, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0, cplCostSpend:0, cpaCostSpend:0 }
+      e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
+      e.floorQueued += r.floorQueued; e.futworkHumanQ += r.futworkHumanQ; e.futworkAiQ += r.futworkAiQ; e.superbotQ += r.superbotQ
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      const costEligible = !isCostExcluded(r)
+      const cplEligible = !isCplCostExcluded(r)
+      const cpaEligible = !isCpaCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
+      if (cplEligible) e.cplCostSpend += r.spend
+      if (cpaEligible) e.cpaCostSpend += r.spend
+      if (paidSources.has(r.source)) { if (cplEligible) e.paidLeads += r.leads; if (cpaEligible) e.paidApps += r.apps; if (costEligible) e.paidQL += r.totalQL }
+      m.set(label, e)
+    })
+    return [...m.values()].sort((a, b) => b.spend - a.spend)
+  }, [filtered, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded])
+
   // Full day-level breakdown (all metrics, no 30-day cap) for the summary table's Day
   // grouping - distinct from `byDay` above, which is the chart's lighter/capped version.
   const byDayFull = useMemo(() => {
@@ -3341,6 +3366,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (grpBy === 'corridor') return byCorridor.map(c => ({
       label:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, floorQueued:c.floorQueued, futworkHumanQ:c.futworkHumanQ, futworkAiQ:c.futworkAiQ, superbotQ:c.superbotQ, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend, costSpend:c.costSpend, cplCostSpend:c.cplCostSpend, cpaCostSpend:c.cpaCostSpend,
     }))
+    if (grpBy === 'googleType') return byGoogleType.map(c => ({
+      label:c.googleType, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, floorQueued:c.floorQueued, futworkHumanQ:c.futworkHumanQ, futworkAiQ:c.futworkAiQ, superbotQ:c.superbotQ, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend, costSpend:c.costSpend, cplCostSpend:c.cplCostSpend, cpaCostSpend:c.cpaCostSpend,
+    }))
     if (grpBy === 'day') return byDayFull.map(d => ({
       label:d.label, dateKey:d.key, paidLeads:d.paidLeads, paidQL:d.paidQL, paidApps:d.paidApps, leads:d.leads, queued:d.queued, floorQueued:d.floorQueued, futworkHumanQ:d.futworkHumanQ, futworkAiQ:d.futworkAiQ, superbotQ:d.superbotQ, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend, costSpend:d.costSpend, cplCostSpend:d.cplCostSpend, cpaCostSpend:d.cpaCostSpend,
     }))
@@ -3372,9 +3400,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         exclPending: bqActive && costExclusions.length > 0 && !exLoaded,
       }
     })
-  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, summaryMonthRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded, bqActive, costExclusions, monthExclVer, sourceIsAll, matchesSource])
+  }, [grpBy, bySource, byCampaign, byCorridor, byGoogleType, byDayFull, byMonth, summaryMonthRows, paidSources, isCostExcluded, isCplCostExcluded, isCpaCostExcluded, bqActive, costExclusions, monthExclVer, sourceIsAll, matchesSource])
 
-  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
+  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'googleType' ? 'Google campaign type' : grpBy === 'day' ? 'Date' : 'Month'
 
   // SR Revenue - Estimated (Deposits × rate) and Actual (RAUs × rate). Both rates are
   // user-configurable in the toolbar below and persist to localStorage.
@@ -5362,7 +5390,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <Card
               action={
                 <div style={{ display:'flex', gap:6 }}>
-                  {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
+                  {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['googleType', 'Google type'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
                     <button key={v} onClick={() => { setGrpBy(v); setTablePage(0); if (v === 'day' || v === 'month') { setSortKey('label'); setSortDir('desc') } else if (sortKey === 'label') { setSortKey('leads'); setSortDir('desc') } }} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : 'var(--card-border,#E5E7EB)'), background: grpBy === v ? C.navy : 'var(--card,#fff)', color: grpBy === v ? '#fff' : 'var(--text2,#374151)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>

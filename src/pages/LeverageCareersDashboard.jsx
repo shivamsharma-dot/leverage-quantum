@@ -16,6 +16,7 @@ import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RAD
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
 import { careersV2Windows, comparableSpan, buildCareersV2Ctx, isPaidSource } from '../lib/careersReportV2'
 import { buildCareersV3Ctx } from '../lib/careersReportV3'
+import { googleCampaignType } from '../lib/googleCampaignType'
 import { DEFAULT_PROGRAMS, classifyProgram, normalizePrograms } from '../lib/careersPrograms'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
@@ -53,7 +54,6 @@ const PRESETS = [
   { id: 'ld', label: 'Last Day' },
   { id: 'l7d', label: 'Last 7D' },
   { id: 'mtd', label: 'MTD' },
-  { id: 'ytd', label: 'Since Jan' },
 ]
 
 // One row per (date, campaign, source, sub-source), for any window -- shared by
@@ -91,6 +91,7 @@ function keyForDim(r, dim) {
   if (dim === 'source') return r.source
   if (dim === 'subSource') return r.subSource
   if (dim === 'program') return r.program
+  if (dim === 'googleType') return r.gtype
   if (dim === 'day') return r.date
   return monthKeyOf(r.date)
 }
@@ -337,7 +338,7 @@ function AddFilterButton({ allFields, activeFilters, filterOptions, open, onTogg
 
 // Stamps every row with its program (see src/lib/careersPrograms.js for the rule).
 function tagRows(rows, programs) {
-  return (rows || []).map(r => ({ ...r, program: classifyProgram(r.name, programs) }))
+  return (rows || []).map(r => ({ ...r, program: classifyProgram(r.name, programs), gtype: r.source === 'Google' ? googleCampaignType(r.name) : null }))
 }
 
 function sortRowsBy(arr, sort) {
@@ -362,11 +363,11 @@ function TreeChevron({ open }) {
   )
 }
 
-const TABLE_TABS = [['program', 'Program'], ['campaign', 'Campaign'], ['source', 'Source'], ['subSource', 'Sub Source'], ['month', 'Month'], ['day', 'Day']]
+const TABLE_TABS = [['program', 'Program'], ['campaign', 'Campaign'], ['source', 'Source'], ['subSource', 'Sub Source'], ['googleType', 'Google type'], ['month', 'Month'], ['day', 'Day']]
 // First-column header per grouping tab, reused by the table AND the exports so a
 // downloaded CSV always names its group column the same way the screen does.
-const GROUP_LABEL = { program: 'Program', campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
-const EXPORT_KEY = { program: 'Program', campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', month: 'Month', day: 'Date' }
+const GROUP_LABEL = { program: 'Program', campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', googleType: 'Google campaign type', month: 'Month', day: 'Date' }
+const EXPORT_KEY = { program: 'Program', campaign: 'Campaign', source: 'Source', subSource: 'Sub Source', googleType: 'Google campaign type', month: 'Month', day: 'Date' }
 function labelForDim(dim, key) {
   if (dim === 'day') return dayLabelOf(key)
   if (dim === 'month') return monthLabelOf(key)
@@ -580,17 +581,19 @@ export default function LeverageCareersDashboard() {
   useEffect(() => { load(false) }, [activeWindow.from, activeWindow.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- main-page aggregates ----
+  const [searchText, setSearchText] = useState('') // campaign-name search, applies to the whole page
+  const searchQ = useDebouncedValue(searchText, 250)
   const filters = useMemo(
     () => {
       const g = k => activeFilters[k] || []
       const keyOf = (opts, labels) => labels.map(l => (opts.find(o => o.label === l) || {}).value).filter(Boolean)
       return { program: g('program'), source: g('source'), subSource: g('subSource'), name: g('name'),
-        conv: keyOf(CONV_OPTIONS, g('conv')), cost: keyOf(COST_OPTIONS, g('cost')), query: '' }
+        conv: keyOf(CONV_OPTIONS, g('conv')), cost: keyOf(COST_OPTIONS, g('cost')), query: searchQ }
     },
-    [activeFilters]
+    [activeFilters, searchQ]
   )
   const filterCount = Object.values(activeFilters).filter(v => v && v.length).length
-  const resetFilters = useCallback(() => setActiveFilters({}), [])
+  const resetFilters = useCallback(() => { setActiveFilters({}); setSearchText('') }, [])
   const toggleFilterValue = (field, val) => setActiveFilters(prev => {
     const cur = prev[field] || []
     const nx = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]
@@ -639,7 +642,7 @@ export default function LeverageCareersDashboard() {
   const yearRowsF = useMemo(() => (yearRows ? applyFilters(tagRows(yearRows, programs), filters) : null), [yearRows, programs, filters])
   useEffect(() => { setTableSort(tableDim === 'month' ? { key: 'key', dir: 'desc' } : { key: 'spend', dir: 'desc' }) }, [tableDim])
   const tableRowsRaw = useMemo(
-    () => (tableDim === 'month' ? (yearRowsF ? groupRows(yearRowsF, 'month') : []) : groupRows(rows, tableDim)),
+    () => (tableDim === 'month' ? (yearRowsF ? groupRows(yearRowsF, 'month') : []) : tableDim === 'googleType' ? groupRows(rows.filter(r => r.source === 'Google'), 'googleType') : groupRows(rows, tableDim)),
     [rows, tableDim, yearRowsF]
   )
   const tableRows = useMemo(() => sortRowsBy(tableRowsRaw, tableSort), [tableRowsRaw, tableSort])
@@ -929,6 +932,14 @@ export default function LeverageCareersDashboard() {
               </div>
             </div>
 
+            <Dropdown
+              label="Source"
+              options={['All', ...sourceOptions]}
+              value={(activeFilters.source || []).length > 1 ? (activeFilters.source || []).length + ' sources' : ((activeFilters.source || [])[0] || 'All')}
+              onChange={v => { if (v === 'All') removeFilter('source'); else setActiveFilters(prev => ({ ...prev, source: [v] })) }}
+              minWidth={150}
+            />
+
             <Button
               size="sm" variant="secondary" onClick={() => setAnalyzeOpen(true)}
               icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="6" y1="20" x2="6" y2="11" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="14" /></svg>}
@@ -963,6 +974,19 @@ export default function LeverageCareersDashboard() {
                   funnel, table, exports) and both modals read the same applyFilters()
                   predicate off this one filters object. */}
               <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {/* Campaign search -- the main way to find things on this page. Filters the KPIs, the
+                    charts and every table below, on the campaign name (several words must all match). */}
+                <div style={{ position: 'relative', flex: '1 1 320px', maxWidth: 520, minWidth: 240 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', pointerEvents: 'none' }}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                  <input
+                    value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="Search campaigns, e.g. nursing, pmx, 24aug"
+                    aria-label="Search campaigns" autoComplete="off" spellCheck={false}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 34px 9px 36px', borderRadius: 10, border: '0.5px solid ' + (searchText ? C.blue : 'var(--card-border)'), background: 'var(--card)', color: 'var(--text)', fontSize: 13, fontFamily: FONT, outline: 'none' }}
+                  />
+                  {searchText ? (
+                    <button type="button" onClick={() => setSearchText('')} aria-label="Clear search" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: 11, border: 'none', background: 'var(--bg2)', color: 'var(--text3)', cursor: 'pointer', fontSize: 14, lineHeight: '20px', padding: 0 }}>×</button>
+                  ) : null}
+                </div>
                 {Object.keys(activeFilters).map(key => {
                   const field = FILTER_FIELDS.find(f => f.key === key)
                   if (!field) return null
@@ -975,9 +999,9 @@ export default function LeverageCareersDashboard() {
                 <AddFilterButton allFields={FILTER_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
                   open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(openFilterKey === '__add' ? null : '__add')}
                   onToggleValue={toggleFilterValue} />
-                {filterCount > 0 && <Button size="sm" variant="secondary" onClick={resetFilters}>Clear all</Button>}
+                {(filterCount > 0 || searchText) && <Button size="sm" variant="secondary" onClick={resetFilters}>Clear all</Button>}
               </div>
-              {filterCount > 0 && (
+              {(filterCount > 0 || searchQ) && (
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
                   Filtered view: {fmtN(rows.length)} of {fmtN((dayRows || []).length)} day-campaign rows.
                 </div>
@@ -1006,7 +1030,7 @@ export default function LeverageCareersDashboard() {
                   </div>
                 }
               >
-                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), (tableDim === 'month' ? 'January to today, not scoped to the date window' : windowLabel) + (tableDim === 'source' ? ' - click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'program' ? ' - campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
+                {sectionTitle('By ' + GROUP_LABEL[tableDim].toLowerCase(), (tableDim === 'month' ? 'January to today, not scoped to the date window' : windowLabel) + (tableDim === 'source' ? ' - click a source to see its sub sources, then a sub source to see its campaigns' : (tableDim === 'googleType' ? ' - Google campaigns only, grouped by the type named in the campaign name (Search, Performance Max, Demand Gen, YouTube / Video, Display, App, Call). Anything that names none of these shows as Other.' : tableDim === 'program' ? ' - campaigns grouped by keywords in the campaign name (first match wins, edit in Settings > Data). Click a program for its Paid and Non-Paid split, then for its campaigns. Unmatched campaigns show as Other.' : '')))}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                     <Button
@@ -1038,7 +1062,7 @@ export default function LeverageCareersDashboard() {
                         <td>{fmtINR(tableTotals.cpl)}</td><td>{fmtINR(tableTotals.cpi)}</td><td>{fmtINR(tableTotals.cps)}</td>
                       </tr>
                       {(treeItems ? treeItems.length === 0 : tableRows.length === 0) ? (
-                        <tr><td colSpan={9} className={styles.empty}>{tableDim === 'month' ? (yearRows === null ? 'Loading the months...' : 'No data since January.') : 'No data in this window.'}</td></tr>
+                        <tr><td colSpan={9} className={styles.empty}>{tableDim === 'month' ? (yearRows === null ? 'Loading the months...' : 'No data since January.') : tableDim === 'googleType' ? 'No Google campaigns in this window.' : 'No data in this window.'}</td></tr>
                       ) : treeItems ? treeItems.map(it => (
                         <tr key={it.key} style={it.kind === 'band' ? { fontWeight: 800, background: 'var(--navy-tint)' } : (it.kind === 'campaign' ? { color: 'var(--text2)' } : undefined)}>
                           <td
