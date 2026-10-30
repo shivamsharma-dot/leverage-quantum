@@ -5340,27 +5340,6 @@ async function handleBigQuery(req, res, me) {
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
       return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
-    if (mode === 'tmp_tm_delete_suraj') { // TEMPORARY one-off row delete in Team Mapping, removed right after use
-      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-      const tk = await sheetsWriteToken()
-      const H = { Authorization: `Bearer ${tk}`, 'Content-Type': 'application/json' }
-      const chk = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent("'Team Mapping'!A246:O246")}`, { headers: H })).json()
-      const row = (chk.values && chk.values[0]) || []
-      if (String(row[6] || '').toLowerCase().trim() !== 'suraj.kumar4@leverageedu.com') return res.status(409).json({ error: 'Row 246 is not Suraj Kumar any more', row })
-      const meta = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=sheets.properties`, { headers: H })).json()
-      const sh = (meta.sheets || []).map(x => x.properties).find(x => x.title === 'Team Mapping')
-      if (!sh) return res.status(404).json({ error: 'Team Mapping tab not found' })
-      const del = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}:batchUpdate`, { method: 'POST', headers: H, body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId: sh.sheetId, dimension: 'ROWS', startIndex: 245, endIndex: 246 } } }] }) })
-      return res.status(200).json({ status: del.status, removed: row, body: await del.json().catch(() => ({})) })
-    }
-    if (mode === 'tmp_sheet_probe') { // TEMPORARY read-only probe, removed right after use
-      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-      const tokenP = await sheetsWriteToken()
-      const rr = String((req.query && req.query.range) || '')
-      const render = (req.query && req.query.render) === 'F' ? 'FORMULA' : 'UNFORMATTED_VALUE'
-      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent(rr)}?valueRenderOption=${render}`, { headers: { Authorization: `Bearer ${tokenP}` } })
-      return res.status(200).json(await rp.json())
-    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
