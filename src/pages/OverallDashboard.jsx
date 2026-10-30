@@ -5396,7 +5396,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 </div>
               }
             >
-              {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), grpBy === 'month'
+              {sectionTitle('Funnel summary by ' + (grpBy === 'googleType' ? 'Google campaign type' : grpByLabel.toLowerCase()), grpBy === 'month'
                 ? (bqActive
                     ? 'January ' + new Date().getFullYear() + ' onward, not scoped to the date filter above'
                       + (summaryMonthBqBusy ? ' - fetching the full year, this can take a moment' : ' - search, sort, and customize the columns below')
