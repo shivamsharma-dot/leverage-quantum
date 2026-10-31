@@ -576,6 +576,9 @@ export default function LiveQLsDashboard() {
   // Per-day Queued: BigQuery for completed days, LeadSquared (live counts) for the newest day(s)
   // BigQuery has not synced yet. Starts only once the main load for THIS preset has finished.
   useEffect(() => {
+    // Drop the previous preset's Queued split the moment the preset changes, so the table
+    // shows "…" instead of 0s for days it has no figure for yet.
+    if (data && data.date !== datePreset) setDailyQueued(null)
     if (!data || loading || data.date !== datePreset) return
     let dead = false
     const cacheKey = 'live_ql_daily_v2:' + datePreset
