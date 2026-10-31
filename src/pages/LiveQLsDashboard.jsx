@@ -536,9 +536,11 @@ export default function LiveQLsDashboard() {
   // Fetched lazily, only for whichever rows are on the CURRENTLY VISIBLE page -- see the
   // effect below and the backend comment on fetchLiveQlOpportunityOwners.
   const [ownerCache, setOwnerCache] = useState({})
-  // Day-on-day Queued split (see fetchLiveQlDailyQueued in api/crm-leads.js). Loaded lazily AFTER
-  // the main KPIs so it never slows them down: { days: {'YYYY-MM-DD': {humanQueued, aiQueued,
-  // aiDnp}}, truncated } | null. dailyError is a message string when the fetch failed.
+  // Day-on-day Queued split. Completed days come from BigQuery (mode live_ql_daily_bq in
+  // api/crm-leads.js, one query, matches the cards exactly); any day newer than BigQuery's last
+  // sync (normally just today) is filled from LeadSquared's own live counts. Loaded lazily AFTER
+  // the main KPIs. dailyQueued = { days: {'YYYY-MM-DD': {humanQueued, aiQueued, aiDnp}},
+  // bqThrough, liveDays: [...] } | null; dailyError is a message string when it failed.
   const [dailyQueued, setDailyQueued] = useState(null)
   const [dailyLoading, setDailyLoading] = useState(false)
   const [dailyError, setDailyError] = useState(null)
@@ -571,17 +573,30 @@ export default function LiveQLsDashboard() {
 
   useEffect(() => { load(false) }, [datePreset]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Per-day Queued needs the queued rows themselves (the headline Queued cards are a fast
-  // count-only query), so it is fetched on its own, only once the main load for THIS preset has
-  // finished -- same sequencing reason as the owner enrichment below (LeadSquared rate limit).
+  // Per-day Queued: BigQuery for completed days, LeadSquared (live counts) for the newest day(s)
+  // BigQuery has not synced yet. Starts only once the main load for THIS preset has finished.
   useEffect(() => {
     if (!data || loading || data.date !== datePreset) return
     let dead = false
-    const cacheKey = 'live_ql_daily_queued_v1:' + datePreset
+    const cacheKey = 'live_ql_daily_v2:' + datePreset
     const cached = getSession(cacheKey)
     if (cached) { setDailyQueued(cached.data.result); setDailyError(null); setDailyLoading(false); return }
     setDailyQueued(null); setDailyError(null); setDailyLoading(true)
-    fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_daily_queued&date=${datePreset}`)
+    ;(async () => {
+      const bq = await fetchJson(`/api/crm-leads?source=bigquery&mode=live_ql_daily_bq&date=${datePreset}`)
+      const days = { ...bq.days }
+      const istToday = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10)
+      const istYesterday = new Date(Date.now() + 330 * 60000 - 86400000).toISOString().slice(0, 10)
+      const liveDays = []
+      for (const [key, day] of [['yesterday', istYesterday], ['today', istToday]]) {
+        // Only days inside this window that BigQuery has not covered yet.
+        if (day < bq.since || day > bq.until || (bq.bqThrough && day <= bq.bqThrough)) continue
+        const m = data.date === key ? data : await fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_metrics&date=${key}`)
+        days[day] = { humanQueued: m.human.queuedCount, aiQueued: m.ai.queuedCount, aiDnp: m.ai.queuedDnp }
+        liveDays.push(day)
+      }
+      return { days, bqThrough: bq.bqThrough, liveDays }
+    })()
       .then(d => { if (dead) return; setDailyQueued(d); setSession(cacheKey, { result: d, ts: new Date() }) })
       .catch(e => { if (!dead) setDailyError(e.message || 'Failed to load') })
       .finally(() => { if (!dead) setDailyLoading(false) })
@@ -600,7 +615,7 @@ export default function LiveQLsDashboard() {
 
   // One row per IST calendar day. QLs come from the rows already fetched (unfiltered, like the
   // ratio KPIs above -- a filter chip must not change what a day's conversion rate means);
-  // Queued comes from dailyQueued. Every column is the same figure a KPI card shows, just
+  // Queued comes from dailyQueued (BigQuery + live LeadSquared for the newest day). Every column is the same figure a KPI card shows, just
   // split by day, and the Total row adds up to those cards.
   const dailyTable = useMemo(() => {
     if (!data) return []
@@ -1075,17 +1090,13 @@ export default function LiveQLsDashboard() {
               <div style={{ padding: '16px 28px 0' }}>
                 <Card title="Day on day" sub={
                   `${fmtN(dailyTable.length)} day${dailyTable.length === 1 ? '' : 's'} -- every KPI above, split by IST day` +
-                  (dailyLoading ? ' -- loading Queued per day...' : '')
+                  (dailyLoading ? ' -- loading Queued per day...' : '') +
+                  (dailyQueued && dailyQueued.liveDays.length ? ` -- Queued for ${dailyQueued.liveDays.map(dayLabel).join(', ')} is live from LeadSquared, earlier days from BigQuery` : (dailyQueued ? ' -- Queued from BigQuery' : ''))
                 }
                   action={dailyTable.length > 0 ? <ExportButton data={dailyExportRows} filename={`live-qls-day-on-day-${datePreset}`} /> : null}>
                   {dailyError && (
                     <div style={{ padding: '8px 12px', marginBottom: 8, borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12, fontWeight: 600 }}>
                       Queued per day could not be loaded ({dailyError}). QL columns are complete; Queued and the rates that use it show "-" until Refresh.
-                    </div>
-                  )}
-                  {dailyQueued && dailyQueued.truncated && (
-                    <div style={{ padding: '8px 12px', marginBottom: 8, borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12, fontWeight: 600 }}>
-                      This window has more queued leads than one load can read in full, so the Queued columns here are partial and will not add up to the cards above. Pick a shorter window for exact per-day Queued.
                     </div>
                   )}
                   <div style={{ overflowX: 'auto' }}>

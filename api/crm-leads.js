@@ -853,71 +853,6 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   }
 }
 
-// Day-on-day Queued split for the Live QLs table. Queued is count-only in
-// fetchLiveQlChannel (fast, one call), but a per-day breakdown needs the rows themselves, so
-// this pulls ONLY the CreatedOn column (plus Futwork Ai Project for AI, to tell Fresh from DNP)
-// and buckets by IST calendar day. Kept as its own lazy mode, never part of live_ql_metrics, so
-// the main KPI load stays fast. CreatedOn from this endpoint is UTC (confirmed 2026-09-17), so
-// each timestamp is shifted +05:30 before taking its date. Paged in bounded concurrent batches
-// (fetchAllPagesChunked) to stay under LeadSquared's 72-calls-per-5s limit; a month is roughly
-// 60-70 pages per channel, hence the larger cap than LIVE_QL_MAX_PAGES.
-const LIVE_QL_DAILY_QUEUED_MAX_PAGES = 100
-const LIVE_QL_DAILY_QUEUED_CHUNK = 8
-// Function ceiling is 60s (maxDuration below). Past this budget pages come back empty, which
-// ends the loop and shows up as truncated (recordCount > rows pulled) rather than a timeout.
-const LIVE_QL_DAILY_QUEUED_BUDGET_MS = 50000
-function istDayOf(utcStr) {
-  const t = Date.parse(String(utcStr || '').replace(' ', 'T') + 'Z')
-  if (!Number.isFinite(t)) return null
-  return new Date(t + 330 * 60000).toISOString().slice(0, 10)
-}
-async function fetchLiveQlDailyQueued(creds, { date }) {
-  const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
-  const days = {}
-  const bump = (day, key) => {
-    if (!day) return
-    const d = days[day] || (days[day] = { humanQueued: 0, aiQueued: 0, aiDnp: 0 })
-    d[key] += 1
-  }
-  let truncated = false
-  const deadline = Date.now() + LIVE_QL_DAILY_QUEUED_BUDGET_MS
-  const pullChannel = async channelKey => {
-    const ch = LIVE_QL_CHANNELS[channelKey]
-    const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
-    const dnpField = channelKey === 'ai' ? ch.fields.futworkAiProject : null
-    const includeCsv = ['CreatedOn', dnpField].filter(Boolean).join(',')
-    let recordCount = 0
-    const fetchPage = async (pageIndex, pageSize) => {
-      if (pageIndex > 1 && Date.now() > deadline) return []
-      const data = await leadsquaredPost('/v2/ProspectActivity.svc/Activity/Retrieve/BySearchParameter', creds, {
-        ActivityEvent: ch.code,
-        AdvancedSearch: search,
-        Paging: { PageIndex: pageIndex, PageSize: pageSize },
-        Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-        Columns: { Include_CSV: includeCsv },
-      })
-      recordCount = (data && data.RecordCount) || recordCount
-      return (data && data.List) || []
-    }
-    const { rows } = await fetchAllPagesChunked(fetchPage, LIVE_QL_DAILY_QUEUED_MAX_PAGES, LIVE_QL_DAILY_QUEUED_CHUNK)
-    if (recordCount > rows.length) truncated = true
-    rows.forEach(r => {
-      const day = istDayOf(r.CreatedOn)
-      if (channelKey === 'human') bump(day, 'humanQueued')
-      else {
-        bump(day, 'aiQueued')
-        if (dnpField && /dnp/i.test(String(r[dnpField] || ''))) bump(day, 'aiDnp')
-      }
-    })
-    return rows.length
-  }
-  // Human first, then AI: running both at once roughly doubles the burst against the
-  // per-account rate limit for no real gain on the window sizes this is used for.
-  const humanRows = await pullChannel('human')
-  const aiRows = await pullChannel('ai')
-  return { date: date && LIVE_QL_DATE_KEYWORDS[date] ? date : 'today', days, truncated, humanRows, aiRows }
-}
-
 async function fetchLiveQlMetrics(creds, { date }) {
   const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
   const [human, ai] = await Promise.all([
@@ -3759,7 +3694,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
-    if (mode === 'live_ql_daily_queued') return res.status(200).json(await fetchLiveQlDailyQueued(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
     if (mode === 'attempted_not_closed_opportunities') return res.status(200).json(await fetchAttemptedNotClosedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
@@ -4734,6 +4668,7 @@ async function handleBigQuery(req, res, me) {
   const gateId = mode === 'careers_leads' ? 'leverage_careers'
     : mode === 'ql_split_totals' ? 'overall'
     : (mode === 'marketing_review_cac' || mode === 'marketing_review_tabs') ? 'marketing_review'
+    : mode === 'live_ql_daily_bq' ? 'live_qls'
     : OVERALL_BQ_READ_MODES.includes(mode) ? 'overall_bigquery'
     : 'settings'
   // The Marketing Review deck reads the same Overall BigQuery cache rows, so anyone granted that page can
@@ -5839,6 +5774,50 @@ async function handleBigQuery(req, res, me) {
         configured: true, ok: true, phase: 'done', rowCount: records.length, aggRowCount: aggRecords.length,
         syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed,
       })
+    }
+    if (mode === 'live_ql_daily_bq') {
+      // Live QLs "Day on day" table: Queued / DNP per IST day for COMPLETED days, from BigQuery
+      // (one query, no LeadSquared calls). Verified 2026-10-31 against the live cards for a whole
+      // week: every day matches exactly IF the date is taken as stored -- these two tables keep
+      // IST clock time labelled as UTC, so DATE(ts) is already the IST day; converting to IST
+      // again shifts events a further 5.5h and wrongly looks like a data gap.
+      // BigQuery lags LeadSquared (about 4h seen), so only days strictly before the day of the
+      // newest synced event are returned as `days`; the page fills anything later from LeadSquared.
+      const istNow = new Date(Date.now() + 330 * 60000)
+      const iso = d => d.toISOString().slice(0, 10)
+      const addDays = (d, n) => new Date(d.getTime() + n * 86400000)
+      const todayD = new Date(iso(istNow) + 'T00:00:00Z')
+      const dow = (todayD.getUTCDay() + 6) % 7 // Monday = 0
+      const monthStart = new Date(Date.UTC(todayD.getUTCFullYear(), todayD.getUTCMonth(), 1))
+      const preset = String((req.query && req.query.date) || 'today')
+      const win = {
+        today: [todayD, todayD], yesterday: [addDays(todayD, -1), addDays(todayD, -1)],
+        this_week: [addDays(todayD, -dow), todayD], last_week: [addDays(todayD, -dow - 7), addDays(todayD, -dow - 1)],
+        this_month: [monthStart, todayD],
+        last_month: [new Date(Date.UTC(todayD.getUTCFullYear(), todayD.getUTCMonth() - 1, 1)), addDays(monthStart, -1)],
+      }[preset] || [todayD, todayD]
+      const since = iso(win[0]); const until = iso(win[1])
+      const hq = LIVE_QL_CHANNELS.human.queuedNote.replace(/'/g, "''")
+      const aq = LIVE_QL_CHANNELS.ai.queuedNote.replace(/'/g, "''")
+      const fresh = await bq.bigQuerySelect(
+        `SELECT 'h' t, CAST(MAX(DATE(activity_creation_date)) AS STRING) mx FROM leverage_direct.lsq_activities_futwork WHERE DATE(activity_creation_date) >= DATE_SUB(DATE('${iso(todayD)}'), INTERVAL 3 DAY) ` +
+        `UNION ALL SELECT 'a', CAST(MAX(DATE(activity_creation_date)) AS STRING) FROM leverage_direct.lsq_activities_futwork_ai WHERE DATE(activity_creation_date) >= DATE_SUB(DATE('${iso(todayD)}'), INTERVAL 3 DAY)`,
+        { mode: 'live_ql_daily', dashboardId: 'live_qls', userEmail: me.email })
+      const newest = (fresh.rows || []).map(r => r.mx).filter(Boolean).sort()[0] || null // older of the two tables
+      const bqThrough = newest ? iso(addDays(new Date(newest + 'T00:00:00Z'), -1)) : null
+      const end = bqThrough && bqThrough < until ? bqThrough : until
+      let days = {}
+      if (bqThrough && since <= end) {
+        const out = await bq.bigQuerySelect(
+          `SELECT CAST(DATE(activity_creation_date) AS STRING) d, COUNTIF(note = '${hq}') hq, 0 aq, 0 dnp FROM leverage_direct.lsq_activities_futwork WHERE DATE(activity_creation_date) BETWEEN '${since}' AND '${end}' GROUP BY d ` +
+          `UNION ALL SELECT CAST(DATE(activity_creation_date) AS STRING), 0, COUNTIF(notes = '${aq}'), COUNTIF(notes = '${aq}' AND LOWER(futworkai_project) LIKE '%dnp%') FROM leverage_direct.lsq_activities_futwork_ai WHERE DATE(activity_creation_date) BETWEEN '${since}' AND '${end}' GROUP BY 1`,
+          { mode: 'live_ql_daily', dashboardId: 'live_qls', userEmail: me.email })
+        ;(out.rows || []).forEach(r => {
+          const d = days[r.d] || (days[r.d] = { humanQueued: 0, aiQueued: 0, aiDnp: 0 })
+          d.humanQueued += Number(r.hq) || 0; d.aiQueued += Number(r.aq) || 0; d.aiDnp += Number(r.dnp) || 0
+        })
+      }
+      return res.status(200).json({ date: preset, since, until, bqThrough, days })
     }
     if (mode === 'datasets') {
       const d = await bq.bigQueryDatasets()
