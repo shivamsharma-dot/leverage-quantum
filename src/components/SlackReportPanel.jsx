@@ -230,6 +230,10 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const [aiLoading, setAiLoading] = useState(false)
   useEffect(() => {
     setAiBullets(null)
+    // Reset the loading flag too: when the version changes mid-request the old request is cancelled
+    // below and its .finally never clears it, which left "Rewriting ... with AI" stuck on V9 and every
+    // other version opened after V4.
+    setAiLoading(false)
     const digest = rawMessages[0] && rawMessages[0].aiDigest
     if (!open || !Array.isArray(digest) || !digest.length) return
     let cancelled = false
