@@ -853,6 +853,71 @@ async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
   }
 }
 
+// Day-on-day Queued split for the Live QLs table. Queued is count-only in
+// fetchLiveQlChannel (fast, one call), but a per-day breakdown needs the rows themselves, so
+// this pulls ONLY the CreatedOn column (plus Futwork Ai Project for AI, to tell Fresh from DNP)
+// and buckets by IST calendar day. Kept as its own lazy mode, never part of live_ql_metrics, so
+// the main KPI load stays fast. CreatedOn from this endpoint is UTC (confirmed 2026-09-17), so
+// each timestamp is shifted +05:30 before taking its date. Paged in bounded concurrent batches
+// (fetchAllPagesChunked) to stay under LeadSquared's 72-calls-per-5s limit; a month is roughly
+// 60-70 pages per channel, hence the larger cap than LIVE_QL_MAX_PAGES.
+const LIVE_QL_DAILY_QUEUED_MAX_PAGES = 100
+const LIVE_QL_DAILY_QUEUED_CHUNK = 8
+// Function ceiling is 60s (maxDuration below). Past this budget pages come back empty, which
+// ends the loop and shows up as truncated (recordCount > rows pulled) rather than a timeout.
+const LIVE_QL_DAILY_QUEUED_BUDGET_MS = 50000
+function istDayOf(utcStr) {
+  const t = Date.parse(String(utcStr || '').replace(' ', 'T') + 'Z')
+  if (!Number.isFinite(t)) return null
+  return new Date(t + 330 * 60000).toISOString().slice(0, 10)
+}
+async function fetchLiveQlDailyQueued(creds, { date }) {
+  const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
+  const days = {}
+  const bump = (day, key) => {
+    if (!day) return
+    const d = days[day] || (days[day] = { humanQueued: 0, aiQueued: 0, aiDnp: 0 })
+    d[key] += 1
+  }
+  let truncated = false
+  const deadline = Date.now() + LIVE_QL_DAILY_QUEUED_BUDGET_MS
+  const pullChannel = async channelKey => {
+    const ch = LIVE_QL_CHANNELS[channelKey]
+    const search = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
+    const dnpField = channelKey === 'ai' ? ch.fields.futworkAiProject : null
+    const includeCsv = ['CreatedOn', dnpField].filter(Boolean).join(',')
+    let recordCount = 0
+    const fetchPage = async (pageIndex, pageSize) => {
+      if (pageIndex > 1 && Date.now() > deadline) return []
+      const data = await leadsquaredPost('/v2/ProspectActivity.svc/Activity/Retrieve/BySearchParameter', creds, {
+        ActivityEvent: ch.code,
+        AdvancedSearch: search,
+        Paging: { PageIndex: pageIndex, PageSize: pageSize },
+        Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+        Columns: { Include_CSV: includeCsv },
+      })
+      recordCount = (data && data.RecordCount) || recordCount
+      return (data && data.List) || []
+    }
+    const { rows } = await fetchAllPagesChunked(fetchPage, LIVE_QL_DAILY_QUEUED_MAX_PAGES, LIVE_QL_DAILY_QUEUED_CHUNK)
+    if (recordCount > rows.length) truncated = true
+    rows.forEach(r => {
+      const day = istDayOf(r.CreatedOn)
+      if (channelKey === 'human') bump(day, 'humanQueued')
+      else {
+        bump(day, 'aiQueued')
+        if (dnpField && /dnp/i.test(String(r[dnpField] || ''))) bump(day, 'aiDnp')
+      }
+    })
+    return rows.length
+  }
+  // Human first, then AI: running both at once roughly doubles the burst against the
+  // per-account rate limit for no real gain on the window sizes this is used for.
+  const humanRows = await pullChannel('human')
+  const aiRows = await pullChannel('ai')
+  return { date: date && LIVE_QL_DATE_KEYWORDS[date] ? date : 'today', days, truncated, humanRows, aiRows }
+}
+
 async function fetchLiveQlMetrics(creds, { date }) {
   const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
   const [human, ai] = await Promise.all([
@@ -3694,6 +3759,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
+    if (mode === 'live_ql_daily_queued') return res.status(200).json(await fetchLiveQlDailyQueued(creds, { date: req.query.date }))
     if (mode === 'live_ql_opportunity_owners') return res.status(200).json({ rows: await fetchLiveQlOpportunityOwners(creds, String(req.query.ids || '').split(',').filter(Boolean)) })
     if (mode === 'not_attempted_opportunities') return res.status(200).json(await fetchNotAttemptedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))
     if (mode === 'attempted_not_closed_opportunities') return res.status(200).json(await fetchAttemptedNotClosedOpportunities(creds, { since: req.query.since || null, until: req.query.until || null, datePreset: req.query.datePreset || null }))

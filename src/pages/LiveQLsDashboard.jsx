@@ -489,6 +489,34 @@ function PaginationControl({ page, totalPages, onPrev, onNext }) {
   )
 }
 
+// CreatedOn from LeadSquared's activity search is UTC; the page's days are IST calendar days.
+function istDayOf(utcStr) {
+  const t = Date.parse(String(utcStr || '').replace(' ', 'T') + 'Z')
+  if (!Number.isFinite(t)) return null
+  return new Date(t + 330 * 60000).toISOString().slice(0, 10)
+}
+const dayLabel = day => new Date(day + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const pctOf = (n, d) => (d > 0 ? ((n / d) * 100).toFixed(1) + '%' : '-')
+
+// Same fields as the KPI cards, one column each, in the same order. calc gets one day's row
+// (or the Total row) and returns the display string.
+const DAILY_COLUMNS = [
+  { label: 'Total Queued', calc: r => fmtN(r.humanQueued + r.aiQueued), queued: true },
+  { label: 'Human Queued', calc: r => fmtN(r.humanQueued), queued: true },
+  { label: 'AI Queued (Fresh)', calc: r => fmtN(r.aiFresh), queued: true },
+  { label: 'AI Queued (DNP)', calc: r => fmtN(r.aiDnp), queued: true },
+  { label: 'Total QLs', calc: r => fmtN(r.humanQL + r.aiQL) },
+  { label: 'Human QLs', calc: r => fmtN(r.humanQL) },
+  { label: 'AI QLs', calc: r => fmtN(r.aiQL) },
+  { label: 'QL % (DNP)', calc: r => pctOf(r.humanQL + r.aiQL, r.humanQueued + r.aiQueued), queued: true },
+  { label: 'QL % (Fresh)', calc: r => pctOf(r.humanQL + r.aiQL, r.humanQueued + r.aiFresh), queued: true },
+  { label: 'QL % (Human)', calc: r => pctOf(r.humanQL, r.humanQueued), queued: true },
+  { label: 'QL % (AI)', calc: r => pctOf(r.aiQL, r.aiQueued), queued: true },
+  { label: 'QL % (AI Fresh)', calc: r => pctOf(r.aiQL, r.aiFresh), queued: true },
+  { label: 'AI Share of QLs', calc: r => pctOf(r.aiQL, r.humanQL + r.aiQL) },
+  { label: 'DNP Share', calc: r => pctOf(r.aiDnp, r.aiQueued), queued: true },
+]
+
 const KPI_CARD_ROW = { display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: 12, padding: '0 28px', marginTop: 16 }
 
 export default function LiveQLsDashboard() {
@@ -508,6 +536,12 @@ export default function LiveQLsDashboard() {
   // Fetched lazily, only for whichever rows are on the CURRENTLY VISIBLE page -- see the
   // effect below and the backend comment on fetchLiveQlOpportunityOwners.
   const [ownerCache, setOwnerCache] = useState({})
+  // Day-on-day Queued split (see fetchLiveQlDailyQueued in api/crm-leads.js). Loaded lazily AFTER
+  // the main KPIs so it never slows them down: { days: {'YYYY-MM-DD': {humanQueued, aiQueued,
+  // aiDnp}}, truncated } | null. dailyError is a message string when the fetch failed.
+  const [dailyQueued, setDailyQueued] = useState(null)
+  const [dailyLoading, setDailyLoading] = useState(false)
+  const [dailyError, setDailyError] = useState(null)
   const PAGE_SIZE = 25
 
   // 'force' true only for an explicit Refresh click -- a plain mount (including
@@ -537,6 +571,23 @@ export default function LiveQLsDashboard() {
 
   useEffect(() => { load(false) }, [datePreset]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Per-day Queued needs the queued rows themselves (the headline Queued cards are a fast
+  // count-only query), so it is fetched on its own, only once the main load for THIS preset has
+  // finished -- same sequencing reason as the owner enrichment below (LeadSquared rate limit).
+  useEffect(() => {
+    if (!data || loading || data.date !== datePreset) return
+    let dead = false
+    const cacheKey = 'live_ql_daily_queued_v1:' + datePreset
+    const cached = getSession(cacheKey)
+    if (cached) { setDailyQueued(cached.data.result); setDailyError(null); setDailyLoading(false); return }
+    setDailyQueued(null); setDailyError(null); setDailyLoading(true)
+    fetchJson(`/api/crm-leads?source=leadsquared&mode=live_ql_daily_queued&date=${datePreset}`)
+      .then(d => { if (dead) return; setDailyQueued(d); setSession(cacheKey, { result: d, ts: new Date() }) })
+      .catch(e => { if (!dead) setDailyError(e.message || 'Failed to load') })
+      .finally(() => { if (!dead) setDailyLoading(false) })
+    return () => { dead = true }
+  }, [data, loading, datePreset]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Human + AI rows unified into one list, each tagged with its own channel -- every row
   // already carries the SAME field keys (country/intake/budget/...) regardless of channel,
   // since the backend maps each channel's own mx_Custom_N numbering onto one shared key set.
@@ -546,6 +597,34 @@ export default function LiveQLsDashboard() {
     const a = (data.ai.rows || []).map(r => ({ ...r, channel: 'ai' }))
     return [...h, ...a]
   }, [data])
+
+  // One row per IST calendar day. QLs come from the rows already fetched (unfiltered, like the
+  // ratio KPIs above -- a filter chip must not change what a day's conversion rate means);
+  // Queued comes from dailyQueued. Every column is the same figure a KPI card shows, just
+  // split by day, and the Total row adds up to those cards.
+  const dailyTable = useMemo(() => {
+    if (!data) return []
+    const byDay = {}
+    const slot = day => byDay[day] || (byDay[day] = { day, humanQL: 0, aiQL: 0 })
+    ;(data.human.rows || []).forEach(r => { const d = istDayOf(r.createdOn); if (d) slot(d).humanQL += 1 })
+    ;(data.ai.rows || []).forEach(r => { const d = istDayOf(r.createdOn); if (d) slot(d).aiQL += 1 })
+    const qd = dailyQueued && dailyQueued.days ? dailyQueued.days : {}
+    Object.keys(qd).forEach(d => slot(d))
+    return Object.values(byDay).sort((a, b) => (a.day < b.day ? 1 : -1)).map(r => {
+      const q = qd[r.day] || { humanQueued: 0, aiQueued: 0, aiDnp: 0 }
+      return { ...r, humanQueued: q.humanQueued, aiQueued: q.aiQueued, aiDnp: q.aiDnp, aiFresh: q.aiQueued - q.aiDnp }
+    })
+  }, [data, dailyQueued])
+
+  const dailyTotal = useMemo(() => dailyTable.reduce((t, r) => ({
+    humanQL: t.humanQL + r.humanQL, aiQL: t.aiQL + r.aiQL, humanQueued: t.humanQueued + r.humanQueued,
+    aiQueued: t.aiQueued + r.aiQueued, aiDnp: t.aiDnp + r.aiDnp, aiFresh: t.aiFresh + r.aiFresh,
+  }), { humanQL: 0, aiQL: 0, humanQueued: 0, aiQueued: 0, aiDnp: 0, aiFresh: 0 }), [dailyTable])
+  const dailyExportRows = useMemo(() => [...dailyTable, { ...dailyTotal, day: 'Total' }].map(r => {
+    const out = { date: r.day }
+    DAILY_COLUMNS.forEach(c => { out[c.label] = c.queued && !dailyQueued ? '' : c.calc(r) })
+    return out
+  }), [dailyTable, dailyTotal, dailyQueued])
 
   // allRows + whatever's currently resolved in ownerCache, merged so 'ownerName' /
   // 'ownerAssignedOn' / 'oppCreatedOn' behave like any other field on the row -- the
@@ -991,6 +1070,61 @@ export default function LiveQLsDashboard() {
                 <PremKPI label={periodUnit === 'hour' ? 'Avg Queued / Hour' : 'Avg Queued / Day'} value={periodAvgQueued.toFixed(1)} sub={`${fmtN(totalQueued)} queued, same window`} accent={C.green} icon={KPI_ICONS.total} />
                 <PremKPI label="AI Share of QLs" value={aiShareOfQl == null ? '-' : `${aiShareOfQl.toFixed(1)}%`} sub="AI QLs / Total QLs" accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label="DNP Share" value={dnpShareOfAiQueued == null ? '-' : `${dnpShareOfAiQueued.toFixed(1)}%`} sub="AI Queued (DNP) / AI Queued" accent={C.cyan} icon={KPI_ICONS.bot} />
+              </div>
+
+              <div style={{ padding: '16px 28px 0' }}>
+                <Card title="Day on day" sub={
+                  `${fmtN(dailyTable.length)} day${dailyTable.length === 1 ? '' : 's'} -- every KPI above, split by IST day` +
+                  (dailyLoading ? ' -- loading Queued per day...' : '')
+                }
+                  action={dailyTable.length > 0 ? <ExportButton data={dailyExportRows} filename={`live-qls-day-on-day-${datePreset}`} /> : null}>
+                  {dailyError && (
+                    <div style={{ padding: '8px 12px', marginBottom: 8, borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12, fontWeight: 600 }}>
+                      Queued per day could not be loaded ({dailyError}). QL columns are complete; Queued and the rates that use it show "-" until Refresh.
+                    </div>
+                  )}
+                  {dailyQueued && dailyQueued.truncated && (
+                    <div style={{ padding: '8px 12px', marginBottom: 8, borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12, fontWeight: 600 }}>
+                      This window has more queued leads than one load can read in full, so the Queued columns here are partial and will not add up to the cards above. Pick a shorter window for exact per-day Queued.
+                    </div>
+                  )}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'right' }}>
+                          {['Date', ...DAILY_COLUMNS.map(c => c.label)].map((h, i) => (
+                            <th key={h} style={{ padding: '8px 10px', textAlign: i === 0 ? 'left' : 'right', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dailyTable.map(r => (
+                          <tr key={r.day} style={{ borderBottom: '1px solid ' + C.border }}>
+                            <td style={{ padding: '7px 10px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{dayLabel(r.day)}</td>
+                            {DAILY_COLUMNS.map(c => (
+                              <td key={c.label} style={{ padding: '7px 10px', textAlign: 'right', color: C.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                {c.queued && !dailyQueued ? (dailyLoading ? '…' : '-') : c.calc(r)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                        {dailyTable.length > 0 && (
+                          <tr style={{ background: C.navyBg, fontWeight: 800 }}>
+                            <td style={{ padding: '8px 10px', color: C.navy }}>Total</td>
+                            {DAILY_COLUMNS.map(c => (
+                              <td key={c.label} style={{ padding: '8px 10px', textAlign: 'right', color: C.navy, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                                {c.queued && !dailyQueued ? (dailyLoading ? '…' : '-') : c.calc(dailyTotal)}
+                              </td>
+                            ))}
+                          </tr>
+                        )}
+                        {dailyTable.length === 0 && (
+                          <tr><td colSpan={DAILY_COLUMNS.length + 1} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No data for this window.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
               </div>
 
               <div style={{ padding: '16px 28px 28px' }}>
