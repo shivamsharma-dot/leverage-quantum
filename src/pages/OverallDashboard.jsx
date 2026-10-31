@@ -3847,8 +3847,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // construction, every time, rather than approximately most of the time.
       let superbotQl = 0
       // Overall Total QL / SR / AC: the QL Split sheet, used only when it covers every complete day.
-      const sheetOk = !!(qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) >= daysDone && qlSplitSheet.totalQL > 0)
+      // The sheet runs about a day behind. Any complete day it has not filled yet is taken from the
+      // BigQuery Futwork QL count (Human + AI) for that day and split at the sheet's own SR share, so the
+      // SR / AC columns never drop to dashes just because the newest day is missing.
+      const sheetOk = !!(qlSplitSheet && Number.isFinite(qlSplitSheet.totalQL) && Number(qlSplitSheet.daysCovered) > 0 && qlSplitSheet.totalQL > 0)
       const sheetSrShare = sheetOk ? qlSplitSheet.srQl / (qlSplitSheet.srQl + qlSplitSheet.acQl) : null
+      let sheetFill = { total: 0, sr: 0 }
+      if (sheetOk && Number(qlSplitSheet.daysCovered) < daysDone) {
+        const have = new Set(qlSplitSheet.days || [])
+        const miss = rows.filter(r => r.date && !have.has(dayKey(r.date)))
+        const fillTotal = miss.reduce((a, r) => a + r.humanQL + r.futworkAiQl, 0)
+        sheetFill = { total: fillTotal, sr: Math.round(fillTotal * sheetSrShare) }
+      }
       // Monthly QLs rows give a per-channel SR:AC ratio, but only if they reach the last complete day.
       const monthlyFresh = Array.isArray(qlSplitRaw) && qlSplitRaw.length > 0 && qlSplitRaw.reduce((m, r) => (r.iso && r.iso > m ? r.iso : m), '') >= until
       const qlBucket = filterFn => (monthlyFresh ? qlSplitRaw : []).filter(filterFn).reduce((a, r) => ({
@@ -3876,9 +3886,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       applyBucketSplit(organicRow, r => !isPaidSource(r.source) && r.source !== 'Referral' && !isBrandingSource(r.source))
       applyBucketSplit(referralRow, r => r.source === 'Referral')
       if (sheetOk) {
-        overallRow.totalQL = qlSplitSheet.totalQL
-        overallRow.srQl = qlSplitSheet.srQl
-        overallRow.acQl = qlSplitSheet.acQl
+        overallRow.totalQL = qlSplitSheet.totalQL + sheetFill.total
+        overallRow.srQl = qlSplitSheet.srQl + sheetFill.sr
+        overallRow.acQl = overallRow.totalQL - overallRow.srQl
       } else {
         applyBucketSplit(overallRow, () => true)
       }

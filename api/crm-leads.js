@@ -2987,11 +2987,13 @@ async function fetchQlSplitSheetTotals(since, until) {
     else if (vertical === 'AC') acQl += n
     else continue
     rowsInWindow++
-    daysSeen.add(y + '-' + m + '-' + day)
+    daysSeen.add(y + '-' + String(m).padStart(2, '0') + '-' + String(day).padStart(2, '0'))
   }
   // daysCovered lets the caller tell "the sheet is filled through the whole window" from
   // "the sheet is empty / still catching up" -- an all-zero total alone can't.
-  return { srQl, acQl, totalQL: srQl + acQl, rowsInWindow, daysCovered: daysSeen.size }
+  // `days` (YYYY-MM-DD) lets the caller see exactly WHICH days the sheet has, so a day the sheet has not
+  // filled yet (it runs about a day behind) can be covered some other way instead of dropping the split.
+  return { srQl, acQl, totalQL: srQl + acQl, rowsInWindow, daysCovered: daysSeen.size, days: [...daysSeen].sort() }
 }
 
 // Marketing Review deck, "H1 CAC" slide only (2026-10-09, direct ask: "make a slide of this
