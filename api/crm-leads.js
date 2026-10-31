@@ -647,7 +647,8 @@ const LIVE_QL_DATE_KEYWORDS = {
 }
 // "lik" is LeadSquared's own operator name for a substring/contains match (confirmed from
 // the captured payload) -- not "contains" or "like".
-const LIVE_QL_CONTAINS_WORDS = ['spoken', 'transferred', 'future', 'intent']
+// 'intent' also covers Low Intent Lead; 'ivy' and 'pathway' added 2026-10-31 (Interested in IVY / Pathways).
+const LIVE_QL_CONTAINS_WORDS = ['spoken', 'transferred', 'future', 'intent', 'ivy', 'pathway']
 
 // Field maps confirmed live via GetActivitySetting for each activity type -- custom field
 // NUMBERING is per-activity-type in LeadSquared, so Human and AI use entirely different
@@ -5295,10 +5296,10 @@ async function handleBigQuery(req, res, me) {
       ),
       ql AS (
         SELECT DISTINCT opportunity_id_futwork AS oid FROM \`leverage_direct.lsq_activities_futwork\`
-        WHERE LOWER(note) LIKE '%post%' AND disposition IN ('Interested in Call Back','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Interested in 2026 Intakes','Interested in 2027 Intakes','Low Intent Lead','Call Transferred To Counsellor')
+        WHERE LOWER(note) LIKE '%post%' AND (disposition IN ('Interested in Call Back','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Interested in 2026 Intakes','Interested in 2027 Intakes','Low Intent Lead','Call Transferred To Counsellor') OR LOWER(disposition) LIKE 'interested in ivy%' OR LOWER(disposition) LIKE 'interested in pathway%')
         UNION DISTINCT
         SELECT DISTINCT opportunity_id FROM \`leverage_direct.lsq_activities_futwork_ai\`
-        WHERE LOWER(notes) LIKE '%post%' AND disposition IN ('Interested in Callback','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Low Intent Lead','Interested in 2026 Intakes','Interested in 2027 Intakes','Call Transferred To Counsellor')
+        WHERE LOWER(notes) LIKE '%post%' AND (disposition IN ('Interested in Callback','Interested Post 2025 Intakes','Interested spoken to parents','Discover Future Intent','Low Intent Lead','Interested in 2026 Intakes','Interested in 2027 Intakes','Call Transferred To Counsellor') OR LOWER(disposition) LIKE 'interested in ivy%' OR LOWER(disposition) LIKE 'interested in pathway%')
       ),
       fwf AS (
         SELECT oid, MIN(ts) AS ts FROM (

@@ -148,7 +148,7 @@ jobs:
             FROM leverage_direct.lsq_activities_futwork f
             LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id_futwork
             WHERE LOWER(f.note) LIKE '%post%'
-              AND f.disposition IN (
+              AND (f.disposition IN (
                 'Interested in Call Back',
                 'Interested Post 2025 Intakes',
                 'Interested spoken to parents',
@@ -158,6 +158,8 @@ jobs:
                 'Low Intent Lead',
                 'Call Transferred To Counsellor'
               )
+                OR LOWER(f.disposition) LIKE 'interested in ivy%'
+                OR LOWER(f.disposition) LIKE 'interested in pathway%')
               AND DATE(f.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
             GROUP BY 1, 2
           ),
@@ -206,7 +208,7 @@ jobs:
             FROM leverage_direct.lsq_activities_futwork_ai f
             LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id
             WHERE LOWER(f.notes) LIKE '%post%'
-              AND f.disposition IN (
+              AND (f.disposition IN (
                 'Interested in Callback',
                 'Interested Post 2025 Intakes',
                 'Interested spoken to parents',
@@ -216,6 +218,8 @@ jobs:
                 'Interested in 2027 Intakes',
                 'Call Transferred To Counsellor'
               )
+                OR LOWER(f.disposition) LIKE 'interested in ivy%'
+                OR LOWER(f.disposition) LIKE 'interested in pathway%')
               AND DATE(f.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
             GROUP BY 1, 2
           ),
