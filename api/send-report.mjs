@@ -8,7 +8,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // ever be reached via a dynamic import()).
 import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
-import { readEbitdaView, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages } from '../lib/ebitdaManagerReport.mjs'
+import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages } from '../lib/ebitdaManagerReport.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -2983,8 +2983,7 @@ async function handleEbitdaManagerReport(req, res) {
     const grid = await readEbitdaView()
     const parsed = parseEbitdaView(grid)
     // IST "yesterday" and the month fraction the sheet itself uses (days elapsed / days in month).
-    const ist = new Date(Date.now() + 5.5 * 3600 * 1000)
-    const y = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() - 1))
+    const y = await ebitdaYesterday()
     const mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
     const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
@@ -3064,8 +3063,7 @@ async function handleEbitdaManagerView(req, res) {
   try {
     const grid = await readEbitdaView()
     const parsed = parseEbitdaView(grid)
-    const ist = new Date(Date.now() + 5.5 * 3600 * 1000)
-    const y = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() - 1))
+    const y = await ebitdaYesterday()
     const mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
     const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
