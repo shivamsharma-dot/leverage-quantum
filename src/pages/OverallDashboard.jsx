@@ -3737,7 +3737,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // day, but now genuinely refetches once the calendar date has actually moved on,
   // with no need to click Refresh or reload the page.
   const [mtdScorecard, setMtdScorecard] = useState(null)
-  useEffect(() => { setMtdScorecard(null) }, [bqNonce])
+  // A PAST month picked in the header (e.g. Oct'26 while it is November) makes this report cover that whole
+  // month, 1st to last day. On the current month, or any other selection, it behaves exactly as before
+  // (current month, 1st through yesterday).
+  const scorecardPastMk = useMemo(() => {
+    if (activeFilter !== 'month' || !selMonth || selMonth === 'All months') return null
+    const mk = monthKeyByLabel.get(selMonth)
+    return mk != null && mk < monthKey(new Date()) ? mk : null
+  }, [activeFilter, selMonth, monthKeyByLabel])
+  useEffect(() => { setMtdScorecard(null) }, [bqNonce, scorecardPastMk])
   // A scorecard built WITHOUT the cost-metric exclusions (their lookup failed) is not cached for
   // the day: it is retried once per panel opening. This ref stops that retry from looping.
   const degradedRetryUsed = useRef(false)
@@ -3756,8 +3764,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }
     fetchedThisOpen.current = true
     let dead = false
-    const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
-    const yesterdayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+    // Window start / last day: the picked past month in full, else the current month up to yesterday.
+    const monthStartDate = scorecardPastMk != null
+      ? new Date(Math.floor(scorecardPastMk / 12), scorecardPastMk % 12, 1)
+      : new Date(now.getFullYear(), now.getMonth(), 1)
+    const yesterdayDate = scorecardPastMk != null
+      ? new Date(Math.floor(scorecardPastMk / 12), scorecardPastMk % 12 + 1, 0)
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
     // Today being the 1st of the month means yesterday falls in the PREVIOUS month --
     // there are zero complete days to report yet. Surface that honestly rather than
     // firing a since>until query or dividing by a zero day count.
@@ -3937,7 +3950,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
       setMtdScorecard({
         ready: true,
-        monthLabel: now.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+        monthLabel: monthStartDate.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
         throughLabel: yesterdayDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
         rows: buckets,
         totalQL: overallRow.totalQL, totalApps, dailyRunRate, daysDone,
@@ -3949,7 +3962,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       })
     }).catch(e => { if (!dead) setMtdScorecard({ ready: false, error: e.message, computedForDay: todayKey }) })
     return () => { dead = true }
-  }, [slackPanelOpen, mtdScorecard])
+  }, [slackPanelOpen, mtdScorecard, scorecardPastMk])
 
   // AC Sales for the MTD Scorecard -- deliberately a SEPARATE value from Marketing
   // Review's own ac_sales_manual (explicit instruction, 2026-09-10: "keep both
@@ -3983,7 +3996,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .finally(() => setOverallAcSalesSaving(false))
   }, [overallAcSales])
 
-  const currentYm = useMemo(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') }, [])
+  // The month the scorecard covers, as YYYY-MM (the key its AC Sales figure is stored under) and as a label.
+  const currentYm = useMemo(() => {
+    if (scorecardPastMk != null) return Math.floor(scorecardPastMk / 12) + '-' + String(scorecardPastMk % 12 + 1).padStart(2, '0')
+    const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+  }, [scorecardPastMk])
+  const scorecardMonthLabel = useMemo(() => (
+    scorecardPastMk != null
+      ? new Date(Math.floor(scorecardPastMk / 12), scorecardPastMk % 12, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+      : new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+  ), [scorecardPastMk])
   // The object buildV8 actually reads -- mtdScorecard's own one-shot fetch, plus the
   // always-live AC Sales figure and everything derived from it, recomputed on every
   // edit rather than frozen at fetch time.
@@ -5495,7 +5517,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 rowCount={sortedFilteredRows.length}
                 extraHeader={
                   <AcSalesEditor
-                    monthLabel={new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                    monthLabel={scorecardMonthLabel}
                     value={overallAcSalesLoaded && overallAcSales[currentYm] != null && overallAcSales[currentYm] !== '' ? Number(overallAcSales[currentYm]) : null}
                     saving={overallAcSalesSaving}
                     loaded={overallAcSalesLoaded}
