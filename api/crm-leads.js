@@ -5352,11 +5352,30 @@ async function handleBigQuery(req, res, me) {
         const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=sheets.properties`, { headers: HP })).json()
         return res.status(200).json(mm)
       }
+      if ((req.query && req.query.meta) === 'ds') {
+        const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=dataSources,dataSourceSchedules`, { headers: HP })).json()
+        return res.status(200).json(mm)
+      }
       const rr = String((req.query && req.query.range) || '').split('|').filter(Boolean)
       const render = (req.query && req.query.render) === 'F' ? 'FORMULA' : 'UNFORMATTED_VALUE'
       const qs = rr.map(x => 'ranges=' + encodeURIComponent(x)).join('&')
       const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values:batchGet?${qs}&valueRenderOption=${render}`, { headers: HP })
       return res.status(200).json(await rp.json())
+    }
+    if (mode === 'tmp_sheet_write') { // TEMPORARY admin-only write passthrough for the October EBITDA fix, removed right after use
+      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+      const tkW = await sheetsWriteToken()
+      const HW = { Authorization: `Bearer ${tkW}`, 'Content-Type': 'application/json' }
+      const b = req.body || {}
+      if (b.kind === 'values') {
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent(b.range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', headers: HW, body: JSON.stringify({ values: b.values }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      if (b.kind === 'batch') {
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}:batchUpdate`, { method: 'POST', headers: HW, body: JSON.stringify({ requests: b.requests }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      return res.status(400).json({ error: 'kind must be values or batch' })
     }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
