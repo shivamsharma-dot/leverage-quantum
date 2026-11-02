@@ -4575,9 +4575,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const mtdCmp = useMemo(() => cmpEntries(filtered, prevFiltered), [cmpEntries, filtered, prevFiltered])
 
   const ydayCmp = useMemo(() => {
-    const last = daySeries[daySeries.length - 1] || null
+    // ?lastDay=YYYY-MM-DD pins the Last Day message to that day (used to re-issue a past day's report,
+    // e.g. 31 Oct after the month rolled over). Without it, the latest complete day, as always.
+    let pinKey = ''
+    try { pinKey = new URLSearchParams(window.location.search).get('lastDay') || '' } catch (_) { /* no window */ }
+    const pinIdx = /^\d{4}-\d{2}-\d{2}$/.test(pinKey) ? daySeries.findIndex(e => e.key === pinKey) : -1
+    const li = pinIdx >= 0 ? pinIdx : daySeries.length - 1
+    const last = daySeries[li] || null
     if (!last) return null
-    const prior = daySeries[daySeries.length - 2] || null
+    const prior = daySeries[li - 1] || null
     const b = cmpEntries(last.rows, prior ? prior.rows : [])
     const total = b.rows.length ? b.rows[0].g : null
     const y = new Date()
@@ -4586,6 +4592,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       label: dayLabelOf(last.date),
       prevLabel: prior ? dayLabelOf(prior.date) : null,
       isYesterday: last.key === dayKeyOf(y),
+      pinned: pinIdx >= 0,
       rows: b.rows,
       totalSpend: b.totalSpend,
       now: total,

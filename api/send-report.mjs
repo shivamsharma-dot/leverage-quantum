@@ -3102,6 +3102,30 @@ async function handleSlackEditBotMessage(req, res) {
   // keeping every cell's style (bold, alignment) and the header row. Used to correct figures without deleting the post.
   const setRows = Array.isArray(req.body?.setTableRows) ? req.body.setTableRows.map(r => Array.isArray(r) ? r.map(c => String(c)) : null) : null
   if (setRows && setRows.some(r => !r)) return res.status(400).json({ error: 'setTableRows must be an array of arrays of strings' })
+  // copyBlocksFrom {channel, ts}: replace the whole content of the target message with another bot message's blocks
+  // (the corrected version, posted to the sandbox first). Both must be the bot's own messages.
+  const copyFrom = req.body?.copyBlocksFrom && typeof req.body.copyBlocksFrom === 'object' ? req.body.copyBlocksFrom : null
+  if (copyFrom) {
+    if (!/^[CG][A-Z0-9]{8,}$/.test(channel) || !/^\d+\.\d+$/.test(ts) || !/^[CG][A-Z0-9]{8,}$/.test(String(copyFrom.channel || '')) || !/^\d+\.\d+$/.test(String(copyFrom.ts || ''))) return res.status(400).json({ error: 'channel, ts and copyBlocksFrom {channel, ts} are required' })
+    try {
+      const auth = await (await fetch('https://slack.com/api/auth.test', { headers: { Authorization: `Bearer ${token}` } })).json()
+      const getOne = async (ch, t) => {
+        const h = await (await fetch('https://slack.com/api/conversations.history?' + new URLSearchParams({ channel: ch, latest: t, inclusive: 'true', limit: '1' }).toString(), { headers: { Authorization: `Bearer ${token}` } })).json()
+        const m = h.ok && h.messages && h.messages[0]
+        return m && m.ts === t ? m : null
+      }
+      const [target, source] = await Promise.all([getOne(channel, ts), getOne(copyFrom.channel, copyFrom.ts)])
+      if (!target || !source) return res.status(404).json({ error: 'target or source message not found' })
+      if (target.user !== auth.user_id || source.user !== auth.user_id) return res.status(403).json({ error: 'Not a bot message' })
+      if (!Array.isArray(source.blocks) || !source.blocks.length) return res.status(400).json({ error: 'source message has no blocks' })
+      if (req.body?.dryRun === true) return res.status(200).json({ ok: true, dryRun: true, targetBlocks: (target.blocks || []).length, sourceBlocks: source.blocks.length, sourceText: String(source.text || '').slice(0, 200) })
+      await slackUpdateBlocks(token, channel, ts, source.text || 'Report', source.blocks)
+      await logReport({ report_type: 'slack edit bot message (replace content)', recipients: ['slack:' + channel], status: 'sent', triggered_by: me.email })
+      return res.status(200).json({ ok: true, replacedWith: copyFrom.ts })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
+  }
   if (!/^[CG][A-Z0-9]{8,}$/.test(channel) || !/^\d+\.\d+$/.test(ts) || (!setRows && prefix.length < 5)) return res.status(400).json({ error: 'channel, ts and removeLinesStartingWith (5+ chars) or setTableRows are required' })
   try {
     const auth = await (await fetch('https://slack.com/api/auth.test', { headers: { Authorization: `Bearer ${token}` } })).json()

@@ -352,9 +352,9 @@ function buildV2(ctx) {
   if (d && d.now) {
     const two = [
       '*:calendar: Last Day Performance*',
-      '*Yesterday \u00b7 ' + d.label + '*',
+      '*' + (d.pinned ? '' : 'Yesterday \u00b7 ') + d.label + '*',
       (d.prevLabel ? 'Against ' + d.prevLabel + ' \u00b7 ' : '') + (ctx.scopeLine || ''),
-      d.isYesterday ? null : '_' + d.label + ' is the most recent day carrying data, so it is the day reported._',
+      (d.isYesterday || d.pinned) ? null : '_' + d.label + ' is the most recent day carrying data, so it is the day reported._',
       '',
       ...v2KpiLines(ctx, d.now, d.prev, V2_DAY_KPIS),
       '',
