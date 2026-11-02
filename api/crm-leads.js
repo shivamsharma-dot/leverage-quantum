@@ -5348,18 +5348,19 @@ async function handleBigQuery(req, res, me) {
       if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
       const tokenP = await sheetsWriteToken()
       const HP = { Authorization: `Bearer ${tokenP}` }
+      const SID = /^[A-Za-z0-9_-]{20,60}$/.test(String((req.query && req.query.sid) || '')) ? String(req.query.sid) : SR_REVENUE_SHEET_ID
       if ((req.query && req.query.meta) === '1') {
-        const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=sheets.properties`, { headers: HP })).json()
+        const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}?fields=sheets.properties`, { headers: HP })).json()
         return res.status(200).json(mm)
       }
       if ((req.query && req.query.meta) === 'ds') {
-        const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}?fields=dataSources,dataSourceSchedules`, { headers: HP })).json()
+        const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}?fields=dataSources,dataSourceSchedules`, { headers: HP })).json()
         return res.status(200).json(mm)
       }
       const rr = String((req.query && req.query.range) || '').split('|').filter(Boolean)
       const render = (req.query && req.query.render) === 'F' ? 'FORMULA' : 'UNFORMATTED_VALUE'
       const qs = rr.map(x => 'ranges=' + encodeURIComponent(x)).join('&')
-      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values:batchGet?${qs}&valueRenderOption=${render}`, { headers: HP })
+      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}/values:batchGet?${qs}&valueRenderOption=${render}`, { headers: HP })
       return res.status(200).json(await rp.json())
     }
     if (mode === 'tmp_sheet_write') { // TEMPORARY admin-only write passthrough for the October EBITDA fix, removed right after use
