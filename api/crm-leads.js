@@ -5182,23 +5182,6 @@ async function handleBigQuery(req, res, me) {
     // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
     // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
     // per call keeps each run well inside Vercel's 60s limit.
-    if (mode === 'b2c_cf_sheet') {
-      // TEMPORARY READ-ONLY (2026-11-02), admin only, service account. Reads cells of the B2C workbook to check the
-      // Cash Flow opening balance. No write path. Remove right after the check.
-      if (me.role !== 'admin') return res.status(403).json({ ok: false, error: 'Admin only' })
-      const q = req.query || {}
-      const sid = await getB2CSheetId()
-      if (!sid) return res.status(400).json({ ok: false, error: 'B2C sheet is not configured' })
-      const token = await sheetsWriteToken()
-      const tab = String(q.tab || '')
-      const range = String(q.range || '')
-      const render = ['FORMULA', 'FORMATTED_VALUE', 'UNFORMATTED_VALUE'].includes(q.render) ? q.render : 'UNFORMATTED_VALUE'
-      if (!/^[A-Za-z0-9 _.\-]{1,60}$/.test(tab) || !/^[A-Z]{1,3}\d{1,4}(:[A-Z]{1,3}\d{1,4})?$/.test(range)) return res.status(400).json({ ok: false, error: 'bad tab or range' })
-      const a1 = "'" + tab + "'!" + range
-      const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent(a1) + '?valueRenderOption=' + render + '&dateTimeRenderOption=FORMATTED_STRING', { headers: { Authorization: 'Bearer ' + token } })
-      const j = await r.json().catch(() => ({}))
-      return res.status(r.ok ? 200 : 502).json({ ok: r.ok, range: a1, render, values: j.values || [], error: j.error && j.error.message })
-    }
     if (mode === 'route_funnel') {
       // Lead-route funnel analysis (2026-10-17): offline / online x Futwork-queued or not, with SR deposits and AC sales.
       // Admin only. Reads the CIB workbook (AC sales, with Prospect ID) via the service account, joins to
