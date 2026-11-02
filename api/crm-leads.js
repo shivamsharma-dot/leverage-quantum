@@ -5182,6 +5182,45 @@ async function handleBigQuery(req, res, me) {
     // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
     // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
     // per call keeps each run well inside Vercel's 60s limit.
+    if (mode === 'b2c_cf_sheet') {
+      // TEMPORARY (2026-11-02), admin only, service account only. Reads cells of the B2C workbook for the
+      // Cash Flow check, and (op=write) sets ONLY CF!R27:R28 (the "MTD from" / "MTD to" helper cells) to one of
+      // a fixed list of formulas. Remove once the October Cash Flow report has been sent and the cells restored.
+      if (me.role !== 'admin') return res.status(403).json({ ok: false, error: 'Admin only' })
+      const q = req.query || {}
+      const sid = await getB2CSheetId()
+      if (!sid) return res.status(400).json({ ok: false, error: 'B2C sheet is not configured' })
+      let token
+      try { token = await sheetsWriteToken() } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e) }) }
+      const H = { Authorization: 'Bearer ' + token }
+      const op = String(q.op || 'meta')
+      if (op === 'meta') {
+        const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '?fields=properties.title,sheets.properties.title', { headers: H })
+        const j = await r.json().catch(() => ({}))
+        return res.status(200).json({ ok: r.ok, status: r.status, title: j.properties && j.properties.title, tabs: (j.sheets || []).map(x => x.properties.title), error: j.error && j.error.message })
+      }
+      if (op === 'read') {
+        const tab = String(q.tab || '')
+        const range = String(q.range || '')
+        const render = ['FORMULA', 'FORMATTED_VALUE', 'UNFORMATTED_VALUE'].includes(q.render) ? q.render : 'FORMATTED_VALUE'
+        if (!/^[A-Za-z0-9 _.\-]{1,60}$/.test(tab) || !/^[A-Z]{1,3}\d{1,4}(:[A-Z]{1,3}\d{1,4})?$/.test(range)) return res.status(400).json({ ok: false, error: 'bad tab or range' })
+        const a1 = "'" + tab + "'!" + range
+        const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent(a1) + '?valueRenderOption=' + render + '&dateTimeRenderOption=FORMATTED_STRING', { headers: H })
+        const j = await r.json().catch(() => ({}))
+        return res.status(r.ok ? 200 : 502).json({ ok: r.ok, range: a1, render, values: j.values || [], error: j.error && j.error.message })
+      }
+      if (op === 'write') {
+        const ALLOWED = ['=DATE(2026,10,1)', '=DATE(2026,10,31)', '=DATE(YEAR(TODAY()-1),MONTH(TODAY()-1),1)', '=TODAY()-1']
+        const a = String(q.r27 || ''), b = String(q.r28 || '')
+        if (!ALLOWED.includes(a) || !ALLOWED.includes(b)) return res.status(400).json({ ok: false, error: 'values not in the allowed list' })
+        const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent("'CF'!R27:R28") + '?valueInputOption=USER_ENTERED', {
+          method: 'PUT', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [[a], [b]] }),
+        })
+        const j = await r.json().catch(() => ({}))
+        return res.status(r.ok ? 200 : 502).json({ ok: r.ok, status: r.status, updatedCells: j.updatedCells, error: j.error && j.error.message })
+      }
+      return res.status(400).json({ ok: false, error: 'unknown op' })
+    }
     if (mode === 'route_funnel') {
       // Lead-route funnel analysis (2026-10-17): offline / online x Futwork-queued or not, with SR deposits and AC sales.
       // Admin only. Reads the CIB workbook (AC sales, with Prospect ID) via the service account, joins to
