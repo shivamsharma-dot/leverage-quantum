@@ -2538,3 +2538,21 @@ New card between the KPI grid and Records: one row per IST day plus a Total row,
 
 **Queued per day comes from BigQuery for completed days** (`mode=live_ql_daily_bq` in `handleBigQuery`, gated on `live_qls`; one query over `leverage_direct.lsq_activities_futwork` and `lsq_activities_futwork_ai`, about 4s for a month, no LeadSquared calls). The first version paged LeadSquared rows and was dropped (rate limit, 60s cap). **Key finding: these two BigQuery tables store IST clock time labelled as UTC, so `DATE(activity_creation_date)` already IS the IST day. Do not convert to IST again** -- doing so shifts events 5.5h and looks like a 2.9% AI Queued gap (it was my own bug). Taken as-is, BigQuery equals the cards exactly for Last Week (Human 8,849, AI 11,568, DNP 3,248; QLs 1,242 / 979); Last Month is within 0.03% (BigQuery 9-15 higher of 52k-71k, late-arriving rows).
 BigQuery lags LeadSquared (latest event about 4h old at 12:21 IST), so the server returns `bqThrough` (day before the newest synced day) and the page fills any later day in the window, normally just today, from `live_ql_metrics` counts; the card subtitle says which days are live. Columns: human table uses `note`, AI table `notes` and `futworkai_project` (DNP = contains "dnp"). Live-checked: Today, This Month (31 days, total 96,119 vs cards 96,111).
+
+## 2026-11-02 -- B2C Cash Flow: month-end window and opening balance fixed in the sheet (no app change)
+
+**Problem.** The Cash Flow block in the B2C workbook (tab `CF`, `Q3:U25`: MTD / H2 / YTD / H1) ended at `TODAY()-1`. Finance fills the daily rows a day or two late, so on the 2nd of a month MTD covered one empty day (zeros), and the Daily Report's P&L date picker could not move it. Also the MTD opening (`R7`) was typed as `=U25` (the H1 closing), right only for October.
+
+**Fix (4 cells on `CF`, done through the service account, 2 Nov 2026).**
+- `R28` "MTD to" = the last day with any inflow or outflow, never later than yesterday: `=MIN(TODAY()-1,MAX(MAXIFS(B,I,">0"),MAXIFS(B,Q,">0")))` where B/I/Q are `'Daily Cash Flow - Final_7 Sep'!$B$3:$B$367` / `$I$3:$I$367` / `$Q$3:$Q$367` (date, total inflow, total outflow).
+- `R27` "MTD from" = `=DATE(YEAR($R$28),MONTH($R$28),1)`.
+- `R7` MTD opening = `$U$25 +` (sum of I minus sum of Q for dates from 1 Oct 2026 up to the day before `$R$27`) `/10000000`, so October opens at the H1 closing and every later month opens at the previous month's close. H2 (`S7`), YTD and H1 openings are unchanged.
+- `R5` MTD heading = `="MTD ("&TEXT($R$27,"d mmm")&" to "&TEXT($R$28,"d mmm")&")"`, so the report prints its own window ("MTD (1 Oct to 31 Oct)"). The app's column key still matches `/^MTD/`.
+
+**Checked live.** Window 1 Oct to 31 Oct (Nov 1 not yet filled), MTD opening -68.88, inflow 10.46, outflow 13.95, closing -72.37; H1 closes -68.88 = Oct opening; YTD closes -72.37 = H2. November opening will be -72.37 (H1 close + October net) once Nov 1 is filled; that part was checked by arithmetic, not live.
+
+**Rollback (values before the fix).** `R5` = `MTD`, `R7` = `=U25`, `R27` = `=DATE(YEAR(TODAY()-1),MONTH(TODAY()-1),1)`, `R28` = `=TODAY()-1`.
+
+**Still manual.** The block has the financial year typed in (2026 / 2027 dates, the 1 Apr 2026 opening in `U7`, `DATE(2026,10,1)` in `R7`): update once each April. A day with exactly zero inflow and outflow is invisible to the "last day with data" rule (only matters if it is the very last day entered). The +600000 University Collections adjustment lives only in the H1 column, not in the daily rows, which is why the opening is anchored on the block's `U25` rather than on a cumulative sum from April.
+
+The original two-column block (`G3:I25`) and its report versions were not touched. A temporary admin-only sheet tool used to make the change was added and removed the same day.

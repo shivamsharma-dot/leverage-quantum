@@ -5182,66 +5182,6 @@ async function handleBigQuery(req, res, me) {
     // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
     // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
     // per call keeps each run well inside Vercel's 60s limit.
-    if (mode === 'b2c_cf_sheet') {
-      // TEMPORARY (2026-11-02), admin only, service account only. Reads cells of the B2C workbook for the
-      // Cash Flow check, and (op=write) sets ONLY CF!R27:R28 (the "MTD from" / "MTD to" helper cells) to one of
-      // a fixed list of formulas. Remove once the October Cash Flow report has been sent and the cells restored.
-      if (me.role !== 'admin') return res.status(403).json({ ok: false, error: 'Admin only' })
-      const q = req.query || {}
-      const sid = await getB2CSheetId()
-      if (!sid) return res.status(400).json({ ok: false, error: 'B2C sheet is not configured' })
-      let token
-      try { token = await sheetsWriteToken() } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e) }) }
-      const H = { Authorization: 'Bearer ' + token }
-      const op = String(q.op || 'meta')
-      if (op === 'meta') {
-        const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '?fields=properties.title,sheets.properties.title', { headers: H })
-        const j = await r.json().catch(() => ({}))
-        return res.status(200).json({ ok: r.ok, status: r.status, title: j.properties && j.properties.title, tabs: (j.sheets || []).map(x => x.properties.title), error: j.error && j.error.message })
-      }
-      if (op === 'read') {
-        const tab = String(q.tab || '')
-        const range = String(q.range || '')
-        const render = ['FORMULA', 'FORMATTED_VALUE', 'UNFORMATTED_VALUE'].includes(q.render) ? q.render : 'FORMATTED_VALUE'
-        if (!/^[A-Za-z0-9 _.\-]{1,60}$/.test(tab) || !/^[A-Z]{1,3}\d{1,4}(:[A-Z]{1,3}\d{1,4})?$/.test(range)) return res.status(400).json({ ok: false, error: 'bad tab or range' })
-        const a1 = "'" + tab + "'!" + range
-        const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent(a1) + '?valueRenderOption=' + render + '&dateTimeRenderOption=FORMATTED_STRING', { headers: H })
-        const j = await r.json().catch(() => ({}))
-        return res.status(r.ok ? 200 : 502).json({ ok: r.ok, range: a1, render, values: j.values || [], error: j.error && j.error.message })
-      }
-      if (op === 'write') {
-        // Named presets only: the four cells the month-end fix touches (CF!R5, R7, R27, R28), nothing else.
-        const T = "'Daily Cash Flow - Final_7 Sep'!"
-        const B = T + '$B$3:$B$367', I = T + '$I$3:$I$367', Q = T + '$Q$3:$Q$367'
-        const PRESETS = {
-          // 2026-11-02: "MTD to" = the last day with any inflow or outflow, never later than yesterday; "MTD from" = the
-          // 1st of that month; MTD opening = H1 closing + every flow from 1 Oct up to the day before "MTD from";
-          // the MTD heading prints its own date range.
-          fix: {
-            R5: '="MTD ("&TEXT($R$27,"d mmm")&" to "&TEXT($R$28,"d mmm")&")"',
-            R7: '=$U$25+(SUMIFS(' + I + ',' + B + ',">="&DATE(2026,10,1),' + B + ',"<"&$R$27)-SUMIFS(' + Q + ',' + B + ',">="&DATE(2026,10,1),' + B + ',"<"&$R$27))/10000000',
-            R27: '=DATE(YEAR($R$28),MONTH($R$28),1)',
-            R28: '=MIN(TODAY()-1,MAX(MAXIFS(' + B + ',' + I + ',">0"),MAXIFS(' + B + ',' + Q + ',">0")))',
-          },
-          // The cells exactly as they were before the fix (as read on 2026-11-02).
-          rollback: {
-            R5: 'MTD',
-            R7: '=U25',
-            R27: '=DATE(YEAR(TODAY()-1),MONTH(TODAY()-1),1)',
-            R28: '=TODAY()-1',
-          },
-        }
-        const preset = PRESETS[String(q.preset || '')]
-        if (!preset) return res.status(400).json({ ok: false, error: 'unknown preset' })
-        const data = Object.keys(preset).map(cell => ({ range: "'CF'!" + cell, values: [[preset[cell]]] }))
-        const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values:batchUpdate', {
-          method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }),
-        })
-        const j = await r.json().catch(() => ({}))
-        return res.status(r.ok ? 200 : 502).json({ ok: r.ok, status: r.status, totalUpdatedCells: j.totalUpdatedCells, error: j.error && j.error.message })
-      }
-      return res.status(400).json({ ok: false, error: 'unknown op' })
-    }
     if (mode === 'route_funnel') {
       // Lead-route funnel analysis (2026-10-17): offline / online x Futwork-queued or not, with SR deposits and AC sales.
       // Admin only. Reads the CIB workbook (AC sales, with Prospect ID) via the service account, joins to
