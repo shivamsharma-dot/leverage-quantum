@@ -5344,6 +5344,21 @@ async function handleBigQuery(req, res, me) {
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
       return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
+    if (mode === 'tmp_sheet_probe') { // TEMPORARY admin-only sheet read/write via the service account, removed right after use
+      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+      const tkW = await sheetsWriteToken()
+      const HW = { Authorization: `Bearer ${tkW}`, 'Content-Type': 'application/json' }
+      const b = req.body || {}
+      if (b.kind === 'values') {
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values/${encodeURIComponent(b.range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', headers: HW, body: JSON.stringify({ values: b.values }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      const rr = String((req.query && req.query.range) || '').split('|').filter(Boolean)
+      const render = (req.query && req.query.render) === 'F' ? 'FORMULA' : 'UNFORMATTED_VALUE'
+      const qs = rr.map(x => 'ranges=' + encodeURIComponent(x)).join('&')
+      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SR_REVENUE_SHEET_ID}/values:batchGet?${qs}&valueRenderOption=${render}`, { headers: HW })
+      return res.status(200).json(await rp.json())
+    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
