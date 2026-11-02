@@ -4133,7 +4133,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const prevLabel = useMemo(() => {
     if (!prevWindow) return null
     if (prevWindow.type === 'month') return monthLabel(prevWindow.mk)
-    return dayLabel(prevWindow.from) + ' to ' + dayLabel(prevWindow.to)
+    // One-day window (e.g. 2 Nov: month to date is just 1 Nov, so the like-for-like window is just 1 Oct):
+    // "1 Oct to 1 Oct" reads like a mistake, so print the single date.
+    const a = dayLabel(prevWindow.from), b = dayLabel(prevWindow.to)
+    return a === b ? a : a + ' to ' + b
   }, [prevWindow])
 
   // --- Day-level windows for the three-message v2 report --------------------
