@@ -5344,6 +5344,23 @@ async function handleBigQuery(req, res, me) {
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
       return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
+    if (mode === 'tmp_oct_copy') { // TEMPORARY: reads/writes ONLY the October copy workbook via the service account, removed right after use
+      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+      const OCT_ID = '19jiItg-r5iveLGPjtZrZsIUI4OvQIK03A4PLNLUfZik'
+      const tkO = await sheetsWriteToken()
+      const HO = { Authorization: `Bearer ${tkO}`, 'Content-Type': 'application/json' }
+      const b = req.body || {}
+      if (b.kind === 'values' && Array.isArray(b.values)) {
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${OCT_ID}/values/${encodeURIComponent(b.range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', headers: HO, body: JSON.stringify({ values: b.values }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      if (b.kind === 'batch') {
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${OCT_ID}:batchUpdate`, { method: 'POST', headers: HO, body: JSON.stringify({ requests: b.requests }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${OCT_ID}/values/${encodeURIComponent(String(b.range || ''))}?valueRenderOption=${b.formula ? 'FORMULA' : 'UNFORMATTED_VALUE'}`, { headers: HO })
+      return res.status(200).json(await rp.json())
+    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
