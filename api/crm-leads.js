@@ -5344,6 +5344,24 @@ async function handleBigQuery(req, res, me) {
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
       return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
+    if (mode === 'tmp_cib_nov') { // TEMPORARY: creates ONLY the tab 'Nov Live 2026' in Finance's CIB workbook and sets its A1 import; reads that tab; removed right after use
+      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+      const CIB_ID = '1MIbHGyTHLo_WnthZxAX_ZRFokPo83JBIWs1n4_QYzFs'
+      const tkC = await sheetsWriteToken()
+      const HC = { Authorization: `Bearer ${tkC}`, 'Content-Type': 'application/json' }
+      const b = req.body || {}
+      if (b.kind === 'create') {
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_ID}:batchUpdate`, { method: 'POST', headers: HC, body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Nov Live 2026', index: 3 } } }] }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      if (b.kind === 'formula') {
+        const f = '=IMPORTRANGE("https://docs.google.com/spreadsheets/d/14iVlcLelKiwZ9I-s8YCzyDymNmaupkXtHFIulQlNxNw/edit?pli=1&gid=653753152#gid=653753152","' + String(b.tab || 'november').replace(/[^A-Za-z0-9 _\-]/g, '') + '!a:w")'
+        const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_ID}/values/${encodeURIComponent("'Nov Live 2026'!A1")}?valueInputOption=USER_ENTERED`, { method: 'PUT', headers: HC, body: JSON.stringify({ values: [[f]] }) })
+        return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
+      }
+      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_ID}/values:batchGet?ranges=${encodeURIComponent(String(b.range || "'Nov Live 2026'!A1:C3"))}&valueRenderOption=${b.formula ? 'FORMULA' : 'FORMATTED_VALUE'}`, { headers: HC })
+      return res.status(200).json(await rp.json())
+    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
