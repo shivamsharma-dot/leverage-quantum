@@ -36,6 +36,28 @@ const{tab='campaigns',dateRange='LAST_30_DAYS',from,to}=req.query
 const dc=from&&to?`segments.date BETWEEN '${from}' AND '${to}'`:`segments.date DURING ${dateRange}`
 try{
 const token=await getAccessToken()
+if(tab==='kwplan'){
+if(me.role!=='admin')return res.status(403).json({error:'Admin only'})
+const kws=String(req.query.kw||'').split('|').map(x=>x.trim()).filter(Boolean).slice(0,200)
+const r=await fetch(`${ADS_BASE}/customers/${cid}:generateKeywordHistoricalMetrics`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'developer-token':process.env.GOOGLE_ADS_DEVELOPER_TOKEN,'Content-Type':'application/json','login-customer-id':process.env.GOOGLE_ADS_MANAGER_ID||cid},body:JSON.stringify({keywords:kws,geoTargetConstants:['geoTargetConstants/'+(req.query.geo||'2356')],language:'languageConstants/1000',keywordPlanNetwork:'GOOGLE_SEARCH'})})
+const t=await r.text()
+return res.status(r.status).setHeader('Content-Type','application/json').send(t)
+}
+if(tab==='sheettmp'){
+if(me.role!=='admin')return res.status(403).json({error:'Admin only'})
+const{JWT}=await import('google-auth-library')
+const au=new JWT({email:process.env.GOOGLE_SHEETS_CLIENT_EMAIL,key:(process.env.GOOGLE_SHEETS_PRIVATE_KEY||'').replace(/\\n/g,'\n'),scopes:['https://www.googleapis.com/auth/spreadsheets']})
+const{access_token}=await au.authorize()
+const sid=String(req.query.id||''),rg=encodeURIComponent(String(req.query.range||''))
+if(req.method==='POST'){
+const u=`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${rg}?valueInputOption=USER_ENTERED`
+const w=await fetch(u,{method:'PUT',headers:{Authorization:`Bearer ${access_token}`,'Content-Type':'application/json'},body:JSON.stringify({values:req.body.values})})
+return res.status(w.status).json(await w.json())
+}
+const u=req.query.meta?`https://sheets.googleapis.com/v4/spreadsheets/${sid}?fields=sheets.properties`:`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${rg}?valueRenderOption=${req.query.fmt||'FORMULA'}`
+const g=await fetch(u,{headers:{Authorization:`Bearer ${access_token}`}})
+return res.status(g.status).json(await g.json())
+}
 if(tab==='campaigns'){
 const rows=await gaql(token,cid,`SELECT campaign.id,campaign.name,campaign.status,campaign.advertising_channel_type,campaign.bidding_strategy_type,campaign.target_cpa.target_cpa_micros,campaign.target_roas.target_roas,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.conversions_value,metrics.cost_per_conversion,metrics.search_impression_share FROM campaign WHERE ${dc} AND campaign.status!='REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 100`)
 const campaigns=rows.map(r=>{
