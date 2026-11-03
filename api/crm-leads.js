@@ -5344,22 +5344,6 @@ async function handleBigQuery(req, res, me) {
       const [leads, sales, diag] = await Promise.all([bq.bigQuerySelect(leadsSql, opts), bq.bigQuerySelect(salesSql, opts), bq.bigQuerySelect(diagSql, opts)])
       return res.status(200).json({ ok: true, since, until, tabInfo, acRowsTotal: acRows.length, acRecon, acResolution: diag.rows && diag.rows[0], leads: leads.rows, sales: sales.rows })
     }
-    if (mode === 'tmp_sheet_probe') { // TEMPORARY read-only sheet probe (service account), removed right after use
-      if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
-      const tokenP = await sheetsWriteToken()
-      const HP = { Authorization: `Bearer ${tokenP}` }
-      const OK_IDS = [SR_REVENUE_SHEET_ID, '19jiItg-r5iveLGPjtZrZsIUI4OvQIK03A4PLNLUfZik']
-      const SID = OK_IDS.includes(String((req.query && req.query.sid) || '')) ? String(req.query.sid) : SR_REVENUE_SHEET_ID
-      if ((req.query && req.query.meta) === '1') {
-        const mm = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}?fields=properties.title,sheets.properties,dataSources`, { headers: HP })).json()
-        return res.status(200).json(mm)
-      }
-      const rr = String((req.query && req.query.range) || '').split('|').filter(Boolean)
-      const render = (req.query && req.query.render) === 'F' ? 'FORMULA' : 'UNFORMATTED_VALUE'
-      const qs = rr.map(x => 'ranges=' + encodeURIComponent(x)).join('&')
-      const rp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}/values:batchGet?${qs}&valueRenderOption=${render}`, { headers: HP })
-      return res.status(200).json(await rp.json())
-    }
     if (mode === 'sr_revenue_fill') {
       // Month = the current IST month unless ?month=YYYY-MM is given; ?dryRun=1 reads and computes but never writes.
       const q = req.query || {}
