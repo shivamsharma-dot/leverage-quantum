@@ -5357,7 +5357,7 @@ async function handleBigQuery(req, res, me) {
         return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
       }
       if (b.kind === 'values' && Array.isArray(b.values)) {
-        const ok = b.range === `'${newTitle}'!A1` || (!b.copy && /^'How It Works'!/.test(b.range))
+        const ok = b.range === `'${newTitle}'!A1` || (!b.copy && (/^'How It Works'!/.test(b.range) || b.range === "'EBITDA - October'!A1"))
         if (!ok) return res.status(403).json({ error: 'Range not allowed' })
         const w = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${encodeURIComponent(b.range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', headers: HW, body: JSON.stringify({ values: b.values }) })
         return res.status(200).json({ status: w.status, body: await w.json().catch(() => ({})) })
