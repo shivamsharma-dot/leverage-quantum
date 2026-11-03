@@ -62,7 +62,7 @@ export const EBITDA_MANAGER_VERSIONS = [{
   code: 'EB1',
   msgKeys: ['summary', 'team_1', 'team_2', 'team_3', 'team_4'],
   name: 'Manager EBITDA',
-  tagline: 'Header plus one table per team (AC, SR, VAS, Offline), straight from the EBITDA View tab.',
+  tagline: 'Header plus one table per team (AC, SR, VAS, Offline). Sends the view picked on the page: Combined, October or November.',
   what: [
     'Message 1: revenue, cost, EBITDA and managers in profit, for the four teams together',
     'Messages 2 to 5: one native table per team, managers sorted by EBITDA with a green or red arrow',

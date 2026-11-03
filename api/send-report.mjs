@@ -8,7 +8,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // ever be reached via a dynamic import()).
 import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
-import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages } from '../lib/ebitdaManagerReport.mjs'
+import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages, EBITDA_MONTHS, combineParsed, combineSections, ebitdaMonthStart } from '../lib/ebitdaManagerReport.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -3061,21 +3061,51 @@ async function handleEbitdaManagerView(req, res) {
   if (!me) return res.status(401).json({ error: 'Not signed in' })
   if (!canAccessDashboard(me.role, 'ceo_b2c_manager_ebitda')) return res.status(403).json({ error: 'Forbidden' })
   try {
-    const grid = await readEbitdaView()
-    const parsed = parseEbitdaView(grid)
-    const y = await ebitdaYesterday()
+    // month: 'combined' (default, every month in EBITDA_MONTHS added together) or one month's key ('oct', 'nov').
+    const want = String((req.body && req.body.month) || (req.query && req.query.month) || 'combined')
+    const picked = want === 'combined' ? EBITDA_MONTHS : EBITDA_MONTHS.filter(m => m.key === want)
+    if (!picked.length) return res.status(400).json({ error: 'Unknown month ' + want })
     const mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
+    if (picked.length > 1) {
+      const starts = await Promise.all(picked.map(m => ebitdaMonthStart(m.sheetId)))
+      for (let i = 1; i < starts.length; i++) {
+        if (starts[i] != null && starts[i - 1] != null && starts[i] <= starts[i - 1]) {
+          return res.status(409).json({ error: 'The ' + picked[i].label + ' sheet is still set to the same month as ' + picked[i - 1].label + ', so the combined view would count that month twice. Switch the live sheet to the new month first (clear EBITDA View S1).' })
+        }
+      }
+    }
+    const loaded = await Promise.all(picked.map(async m => {
+      const grid = await readEbitdaView(m.sheetId)
+      const y = await ebitdaYesterday(m.sheetId)
+      return { label: m.label, grid, parsed: parseEbitdaView(grid), sections: extractEbitdaViewSections(grid), y }
+    }))
+    const last = loaded[loaded.length - 1]
+    const y = last.y
     const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
+    const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
     const proRata = y.getUTCDate() + '/' + daysInMonth
-    const report = buildEbitdaReport(parsed, { dateLabel, proRata })
+    let report, sheetOut
+    if (loaded.length === 1) {
+      report = buildEbitdaReport(last.parsed, { dateLabel, proRata })
+      sheetOut = last.sections
+    } else {
+      const names = loaded.map(l => l.label.slice(0, 3)).join(' + ')
+      report = buildEbitdaReport(combineParsed(loaded), {
+        dateLabel, proRata,
+        headerTitle: 'Overall EBITDA, ' + names + ' (as on ' + dateLabel + ')',
+        noteText: 'AC, SR, VAS and Offline only. ' + loaded.map(l => l.label).join(' plus ') + ' added together; the latest month is month to date, as on ' + dateLabel + '. Team shows the latest month, with earlier months in brackets. Sorted by EBITDA, highest first. A picture of each table is in its thread.',
+      })
+      sheetOut = combineSections(loaded)
+    }
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({
       ok: true,
       readAt: new Date().toISOString(),
+      month: want,
+      months: [{ key: 'combined', label: 'Combined' }].concat(EBITDA_MONTHS.map(m => ({ key: m.key, label: m.label }))),
       dateLabel, proRata,
       totals: report.totals,
-      sheet: extractEbitdaViewSections(grid),
+      sheet: sheetOut,
       messages: materialiseMessages(report.messages),
     })
   } catch (e) {

@@ -13,10 +13,12 @@ import { getSession, setSession } from '../lib/sessionLoad'
 // the Slack report come from the same read, so they can never disagree. The sheet is the single
 // source: this page keeps no copy, and re-reads only on a fresh page load and when Refresh is clicked.
 
-const CACHE_KEY = 'lq_manager_ebitda_v1'
+const CACHE_KEY = 'lq_manager_ebitda_v2'
+const cacheKey = month => CACHE_KEY + '_' + month
+const DEFAULT_MONTHS = [{ key: 'combined', label: 'Combined' }, { key: 'oct', label: 'October' }, { key: 'nov', label: 'November' }]
 
-async function fetchView() {
-  const r = await fetch('/api/send-report?type=ebitda_manager_view', { method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+async function fetchView(month) {
+  const r = await fetch('/api/send-report?type=ebitda_manager_view', { method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month }) })
   const d = await r.json().catch(() => ({}))
   if (!r.ok || !d.ok) throw new Error(d.error || 'Failed to read the EBITDA View sheet')
   return d
@@ -72,7 +74,8 @@ function SheetTable({ header, rows, boldLast, ebitdaCol }) {
 }
 
 export default function ManagerEbitdaDashboard() {
-  const cached = getSession(CACHE_KEY)
+  const [month, setMonth] = useState('combined')
+  const cached = getSession(cacheKey(month))
   const [data, setData] = useState(cached ? cached.data : null)
   const [loading, setLoading] = useState(!cached)
   const [refreshing, setRefreshing] = useState(false)
@@ -85,8 +88,8 @@ export default function ManagerEbitdaDashboard() {
     busy.current = true
     if (quiet) setRefreshing(true)
     try {
-      const d = await fetchView()
-      setData(d); setError(null); setSession(CACHE_KEY, d)
+      const d = await fetchView(month)
+      setData(d); setError(null); setSession(cacheKey(month), d)
       return d
     } catch (e) {
       setError(e.message || String(e))
@@ -95,13 +98,27 @@ export default function ManagerEbitdaDashboard() {
       busy.current = false
       setLoading(false); setRefreshing(false)
     }
-  }, [])
+  }, [month])
 
+  // Switching the view shows its last read straight away (or the skeleton the first time), then re-reads the sheets.
   useEffect(() => {
-    load(!!cached)
+    const c = getSession(cacheKey(month))
+    setData(c ? c.data : null); setLoading(!c); setError(null)
+    load(!!c)
   }, [load]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openSlack = () => setSlackOpen(true)
+
+  const monthPicker = (
+    <div style={{ display: 'inline-flex', border: '0.5px solid ' + C.border, borderRadius: 8, overflow: 'hidden' }}>
+      {((data && data.months) || DEFAULT_MONTHS).map(m => (
+        <button key={m.key} onClick={() => setMonth(m.key)} disabled={refreshing && m.key !== month}
+          style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT, background: month === m.key ? '#1F3C84' : 'var(--card)', color: month === m.key ? '#fff' : C.muted }}>
+          {m.label}
+        </button>
+      ))}
+    </div>
+  )
 
   const buildContext = useCallback(() => ({ messages: (data && data.messages) || [] }), [data])
   const captureFiles = useCallback(async () => ({ pngBase64: null, pixelRatio: null, csv: null }), [])
@@ -121,7 +138,7 @@ export default function ManagerEbitdaDashboard() {
         <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5, maxWidth: 560 }}>
           {"Couldn't load Manager EBITDA: " + error}
         </div>
-        <div style={{ marginTop: 12 }}><Button size="sm" onClick={() => load(false)}>Try again</Button></div>
+        <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center' }}>{monthPicker}<Button size="sm" onClick={() => load(false)}>Try again</Button></div>
       </div>
     )
   }
@@ -140,6 +157,7 @@ export default function ManagerEbitdaDashboard() {
         </div>
         <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {readAt && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Read from sheet {readAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}{refreshing ? '…' : ''}</span>}
+          {monthPicker}
           <Button onClick={() => load(true)} disabled={refreshing} size="sm">{refreshing ? 'Refreshing' : 'Refresh'}</Button>
           <Button size="sm" variant="secondary" onClick={openSlack} icon={<SlackIcon size={13} />}>Send to Slack</Button>
         </div>
