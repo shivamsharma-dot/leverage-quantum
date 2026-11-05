@@ -1827,7 +1827,10 @@ export default function MetaAdsDashboard() {
       setError('No Facebook window opened? Your browser probably blocked the popup. Allow popups for this site (icon at the right of the address bar) and click again, or use "Paste access token manually".')
       setLoading(false)
     }, 12000)
-    window.FB.login(async r => {
+    // Facebook's SDK now throws "Expression is of type asyncfunction, not function"
+    // if the callback is an async function, which made this button do nothing.
+    // Pass a plain function and run the async work inside it.
+    const onLogin = async r => {
       clearTimeout(blockedHint)
       if (r.authResponse?.accessToken) {
         const t = r.authResponse.accessToken
@@ -1837,7 +1840,8 @@ export default function MetaAdsDashboard() {
         fetchAdAccounts(t)
         notifyTokenStored(result)
       } else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
-    }, { scope: 'ads_read,ads_management,business_management' })
+    }
+    window.FB.login(r => { onLogin(r) }, { scope: 'ads_read,ads_management,business_management' })
   }
 
   const handlePaste = async (t) => {

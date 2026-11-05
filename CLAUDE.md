@@ -2560,3 +2560,7 @@ The original two-column block (`G3:I25`) and its report versions were not touche
 ## 2026-11-05 -- Meta token no longer expires silently (auto-renew + daily check)
 
 Meta Ads showed "Connect Meta Ads": the shared 60-day token (meta_tokens) expired on 26 Oct 2026 and nothing renewed it. `api/meta-token.mjs` now (1) renews on use: a GET when the stored token is 30+ days old exchanges it for a fresh 60-day one (Meta allows this while the token is still valid); (2) `GET ?action=check` (Bearer CRON_SECRET) does the same daily and emails shivam.sharma@ via Resend if the token is dead or renewal fails; (3) new `.github/workflows/meta-token-check.yml`, 9:00 AM IST daily. Banner hint text updated. An already-expired token cannot be renewed: someone must click "Continue with Meta" once (do this to recover now). Not yet verified past a real day-30 renewal.
+
+## 2026-11-05 (later) -- Meta Ads "Continue with Meta" did nothing: Facebook SDK rejects async callbacks
+
+`FB.login(async r => ...)` now throws "Expression is of type asyncfunction, not function", so the button never opened the login window. `handleConnect` in `MetaAdsDashboard.jsx` now passes a plain function that calls an async helper. Also added a 12s "popup blocked?" hint. Diagnosed live by hooking window error events and clicking the real button; a direct FB.login call with a plain callback opened the login tab.
