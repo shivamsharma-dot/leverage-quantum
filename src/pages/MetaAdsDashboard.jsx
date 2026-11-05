@@ -1663,7 +1663,7 @@ function TokenExpiryBanner({ createdAt }) {
   return (
     <div style={{ margin:'8px 28px 0',padding:'9px 14px',background:bg,border:'0.5px solid '+border,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12 }}>
       <span style={{ fontSize:12,color:color,fontWeight:600 }}>{'\u26a0\ufe0f ' + msg}</span>
-      <span style={{ fontSize:11,color:'#6B7280',whiteSpace:'nowrap' }}>developers.facebook.com/tools/explorer - Generate - Paste here</span>
+      <span style={{ fontSize:11,color:'#6B7280',whiteSpace:'nowrap' }}>Click Continue with Meta to renew</span>
     </div>
   )
 }

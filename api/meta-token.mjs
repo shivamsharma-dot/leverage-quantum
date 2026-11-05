@@ -43,7 +43,90 @@ async function exchangeForLongLivedToken(shortLivedToken) {
   }
 }
 
+
+const ALERT_TO = 'shivam.sharma@leverageedu.com'
+const RENEW_AFTER_DAYS = 30   // renew once the stored token is this old (it lives ~60 days)
+
+function tokenAgeDays(createdAt) {
+  return (Date.now() - new Date(createdAt).getTime()) / 86400000
+}
+
+// Meta lets a still-valid long-lived user token be exchanged again for a fresh
+// 60-day one. This is what keeps the shared token alive without anyone
+// clicking "Continue with Meta" every two months. It only works while the
+// token is still valid, so it must run well before day 60 -- which is why
+// both the daily check below and any page load past day 30 call it.
+async function renewStoredToken(row) {
+  const ex = await exchangeForLongLivedToken(row.token)
+  if (!ex.exchanged) return { renewed: false, reason: ex.reason }
+  const ins = await supabaseAdmin('meta_tokens', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ token: ex.token, email: 'auto-renew' }),
+  })
+  if (!ins.ok) return { renewed: false, reason: 'Could not store the renewed token' }
+  return { renewed: true, token: ex.token, createdAt: new Date().toISOString(), expiresIn: ex.expiresIn || null }
+}
+
+async function tokenIsValid(token) {
+  try {
+    const r = await fetch('https://graph.facebook.com/v19.0/me?' + new URLSearchParams({ access_token: token }))
+    const d = await r.json()
+    return !(d && d.error)
+  } catch { return true } // network blip: do not raise a false alarm
+}
+
+async function sendAlertEmail(subject, text) {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return false
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({
+        from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>',
+        to: [ALERT_TO],
+        subject,
+        text,
+      }),
+    })
+    return r.ok
+  } catch { return false }
+}
+
+// Daily check, called by .github/workflows/meta-token-check.yml with the
+// CRON_SECRET. Renews at day 30+, and emails if the token is already dead or
+// the renewal failed -- so an expiry can never again go unnoticed.
+async function dailyCheck(res) {
+  const r = await supabaseAdmin('meta_tokens?select=token,created_at&order=created_at.desc&limit=1')
+  const row = r.ok ? (await r.json())?.[0] : null
+  if (!row) {
+    await sendAlertEmail('Quantum: no Meta token is stored', 'There is no Meta access token saved. Open Meta Ads in Quantum and click "Continue with Meta".')
+    return res.status(200).json({ ok: false, status: 'no_token' })
+  }
+  const age = tokenAgeDays(row.created_at)
+  const valid = await tokenIsValid(row.token)
+  if (!valid) {
+    await sendAlertEmail('Quantum: Meta token has expired - reconnect needed',
+      'The shared Meta access token is no longer valid, so Meta Ads, Ask AI (Meta) and the Meta parts of the reports are failing.\n\nFix (1 minute): open https://quantum.leverageedu.com/dashboard/meta-ads and click "Continue with Meta".')
+    return res.status(200).json({ ok: false, status: 'expired', ageDays: Math.floor(age) })
+  }
+  if (age >= RENEW_AFTER_DAYS) {
+    const out = await renewStoredToken(row)
+    if (out.renewed) return res.status(200).json({ ok: true, status: 'renewed', expiresIn: out.expiresIn })
+    await sendAlertEmail('Quantum: Meta token could not be renewed automatically',
+      'The Meta token is ' + Math.floor(age) + ' days old and the automatic renewal failed (' + out.reason + ').\nIt expires around day 60. Please open https://quantum.leverageedu.com/dashboard/meta-ads and click "Continue with Meta" before then.')
+    return res.status(200).json({ ok: false, status: 'renew_failed', reason: out.reason, ageDays: Math.floor(age) })
+  }
+  return res.status(200).json({ ok: true, status: 'fresh', ageDays: Math.floor(age) })
+}
+
 export default async function handler(req, res) {
+  if (req.method === 'GET' && req.query?.action === 'check') {
+    const bearer = req.headers.authorization || ''
+    if (!process.env.CRON_SECRET || bearer !== 'Bearer ' + process.env.CRON_SECRET) return res.status(403).json({ error: 'Forbidden' })
+    try { return await dailyCheck(res) } catch (e) { return res.status(500).json({ error: e.message }) }
+  }
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
 
@@ -54,7 +137,12 @@ export default async function handler(req, res) {
       const r = await supabaseAdmin('meta_tokens?select=token,created_at&order=created_at.desc&limit=1')
       if (!r.ok) return res.status(500).json({ error: 'Failed to read token' })
       const data = await r.json()
-      const row = data?.[0]
+      let row = data?.[0]
+      // Renew on use: a page load past day 30 swaps in a fresh 60-day token.
+      if (row && tokenAgeDays(row.created_at) >= RENEW_AFTER_DAYS) {
+        const out = await renewStoredToken(row).catch(() => ({ renewed: false }))
+        if (out.renewed) row = { token: out.token, created_at: out.createdAt }
+      }
       return res.status(200).json(row ? { token: row.token, createdAt: row.created_at } : {})
     } catch (e) {
       return res.status(500).json({ error: e.message })

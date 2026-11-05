@@ -1,0 +1,22 @@
+name: Meta Token Check
+
+# Daily: renews the shared Meta access token once it is 30+ days old (Meta lets a
+# valid long-lived token be exchanged for a fresh 60-day one) and emails
+# shivam.sharma@ if the token is dead or renewal fails. Without this the token
+# silently expired after 60 days (it did on 26 Oct 2026).
+on:
+  schedule:
+    - cron: '30 3 * * *'   # 9:00 AM IST
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check and renew Meta token
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          out=$(curl -sS --max-time 60 -H "Authorization: Bearer $CRON_SECRET" "https://quantum.leverageedu.com/api/meta-token?action=check")
+          echo "$out"
+          echo "$out" | grep -q '"ok":true' || { echo "::warning::Meta token needs attention (an email was sent)"; }

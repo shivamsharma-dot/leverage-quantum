@@ -2556,3 +2556,7 @@ BigQuery lags LeadSquared (latest event about 4h old at 12:21 IST), so the serve
 **Still manual.** The block has the financial year typed in (2026 / 2027 dates, the 1 Apr 2026 opening in `U7`, `DATE(2026,10,1)` in `R7`): update once each April. A day with exactly zero inflow and outflow is invisible to the "last day with data" rule (only matters if it is the very last day entered). The +600000 University Collections adjustment lives only in the H1 column, not in the daily rows, which is why the opening is anchored on the block's `U25` rather than on a cumulative sum from April.
 
 The original two-column block (`G3:I25`) and its report versions were not touched. A temporary admin-only sheet tool used to make the change was added and removed the same day.
+
+## 2026-11-05 -- Meta token no longer expires silently (auto-renew + daily check)
+
+Meta Ads showed "Connect Meta Ads": the shared 60-day token (meta_tokens) expired on 26 Oct 2026 and nothing renewed it. `api/meta-token.mjs` now (1) renews on use: a GET when the stored token is 30+ days old exchanges it for a fresh 60-day one (Meta allows this while the token is still valid); (2) `GET ?action=check` (Bearer CRON_SECRET) does the same daily and emails shivam.sharma@ via Resend if the token is dead or renewal fails; (3) new `.github/workflows/meta-token-check.yml`, 9:00 AM IST daily. Banner hint text updated. An already-expired token cannot be renewed: someone must click "Continue with Meta" once (do this to recover now). Not yet verified past a real day-30 renewal.
