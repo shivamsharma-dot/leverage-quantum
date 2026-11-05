@@ -59,6 +59,8 @@ function tokenAgeDays(createdAt) {
 async function renewStoredToken(row) {
   const ex = await exchangeForLongLivedToken(row.token)
   if (!ex.exchanged) return { renewed: false, reason: ex.reason }
+  // Only count it as renewed if Meta really handed back a long life (~60 days).
+  if (ex.expiresIn && ex.expiresIn < 50 * 86400) return { renewed: false, reason: 'Meta returned a token that expires in only ' + Math.round(ex.expiresIn / 86400) + ' days' }
   const ins = await supabaseAdmin('meta_tokens', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -74,6 +76,23 @@ async function tokenIsValid(token) {
     const d = await r.json()
     return !(d && d.error)
   } catch { return true } // network blip: do not raise a false alarm
+}
+
+// Meta's own record of when this token dies (needs the app secret). Returns
+// days left, or null if it cannot be read. This, not our own created_at clock,
+// is what the daily check trusts.
+async function metaDaysLeft(token) {
+  const secret = process.env.META_APP_SECRET
+  if (!secret) return null
+  try {
+    const qs = new URLSearchParams({ input_token: token, access_token: META_APP_ID + '|' + secret })
+    const r = await fetch('https://graph.facebook.com/v19.0/debug_token?' + qs)
+    const x = (await r.json())?.data
+    if (!x) return null
+    if (x.is_valid === false) return -1
+    if (x.expires_at === 0) return 9999
+    return x.expires_at ? Math.round((x.expires_at - Date.now() / 1000) / 86400) : null
+  } catch { return null }
 }
 
 async function sendAlertEmail(subject, text) {
@@ -111,14 +130,23 @@ async function dailyCheck(res) {
       'The shared Meta access token is no longer valid, so Meta Ads, Ask AI (Meta) and the Meta parts of the reports are failing.\n\nFix (1 minute): open https://quantum.leverageedu.com/dashboard/meta-ads and click "Continue with Meta".')
     return res.status(200).json({ ok: false, status: 'expired', ageDays: Math.floor(age) })
   }
-  if (age >= RENEW_AFTER_DAYS) {
+  // Renew when Meta says it has under 40 days left (or our clock says 30+ days
+  // and Meta's date cannot be read).
+  let daysLeft = await metaDaysLeft(row.token)
+  if (daysLeft === null ? age >= RENEW_AFTER_DAYS : daysLeft < 40) {
     const out = await renewStoredToken(row)
-    if (out.renewed) return res.status(200).json({ ok: true, status: 'renewed', expiresIn: out.expiresIn })
-    await sendAlertEmail('Quantum: Meta token could not be renewed automatically',
-      'The Meta token is ' + Math.floor(age) + ' days old and the automatic renewal failed (' + out.reason + ').\nIt expires around day 60. Please open https://quantum.leverageedu.com/dashboard/meta-ads and click "Continue with Meta" before then.')
-    return res.status(200).json({ ok: false, status: 'renew_failed', reason: out.reason, ageDays: Math.floor(age) })
+    if (out.renewed) {
+      const after = await metaDaysLeft(out.token)
+      if (after === null || after >= 40) return res.status(200).json({ ok: true, status: 'renewed', daysLeft: after })
+      daysLeft = after
+    }
+    if (daysLeft === null || daysLeft < 20) {
+      await sendAlertEmail('Quantum: Meta token could not be renewed automatically',
+        'The Meta token has about ' + (daysLeft === null ? '?' : daysLeft) + ' days left and automatic renewal failed (' + (out.reason || 'no extension from Meta') + ').\nPlease open https://quantum.leverageedu.com/dashboard/meta-ads and click "Continue with Meta" before it expires.')
+      return res.status(200).json({ ok: false, status: 'renew_failed', reason: out.reason, daysLeft })
+    }
   }
-  return res.status(200).json({ ok: true, status: 'fresh', ageDays: Math.floor(age) })
+  return res.status(200).json({ ok: true, status: 'fresh', ageDays: Math.floor(age), daysLeft })
 }
 
 export default async function handler(req, res) {

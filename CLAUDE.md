@@ -2564,3 +2564,7 @@ Meta Ads showed "Connect Meta Ads": the shared 60-day token (meta_tokens) expire
 ## 2026-11-05 (later) -- Meta Ads "Continue with Meta" did nothing: Facebook SDK rejects async callbacks
 
 `FB.login(async r => ...)` now throws "Expression is of type asyncfunction, not function", so the button never opened the login window. `handleConnect` in `MetaAdsDashboard.jsx` now passes a plain function that calls an async helper. Also added a 12s "popup blocked?" hint. Diagnosed live by hooking window error events and clicking the real button; a direct FB.login call with a plain callback opened the login tab.
+
+## 2026-11-05 (later still) -- Meta token: verified 60-day token, daily check now trusts Meta's real expiry
+
+After reconnecting, Facebook's debug_token confirmed: valid, USER token, 60 days to expiry, 90 days data access. `api/meta-token.mjs` daily check (`?action=check`) now reads Meta's own expires_at via debug_token (app_id|secret), renews when under 40 days left, treats a "renewal" that returns under 50 days as failed, and emails shivam.sharma@ if still under 20 days afterwards. A user token can never be truly permanent; the only never-expiring option is a Business Manager System User token (pasted once). Not yet proven: a real renewal at day 20 (due about 25 Nov 2026).
