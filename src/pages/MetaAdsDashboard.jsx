@@ -1821,7 +1821,14 @@ export default function MetaAdsDashboard() {
   const handleConnect = () => {
     if (!window.FB) { setError('Facebook SDK loading, please wait…'); return }
     setLoading(true); setError('')
+    // If the browser blocks the Facebook popup the SDK never calls back, so the
+    // button used to sit on "Connecting..." forever. Say what to do instead.
+    const blockedHint = setTimeout(() => {
+      setError('No Facebook window opened? Your browser probably blocked the popup. Allow popups for this site (icon at the right of the address bar) and click again, or use "Paste access token manually".')
+      setLoading(false)
+    }, 12000)
     window.FB.login(async r => {
+      clearTimeout(blockedHint)
       if (r.authResponse?.accessToken) {
         const t = r.authResponse.accessToken
         const result = await storeTokenInSupabase(t)
