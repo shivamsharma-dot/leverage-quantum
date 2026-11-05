@@ -3084,16 +3084,28 @@ async function handleEbitdaManagerView(req, res) {
     const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
     const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
     const proRata = y.getUTCDate() + '/' + daysInMonth
+    // "How to read this" note for the Slack report (owner, 5 Nov 2026): defines EBITDA so readers do not rebuild it by hand.
+    const liveKey = EBITDA_MONTHS[EBITDA_MONTHS.length - 1].key
+    const monthLines = picked.map(m => m.key === liveKey
+      ? '• *' + m.label + '* = month to date, as on ' + dateLabel + '. Costs are counted only for the days passed.'
+      : '• *' + m.label + '* = full month, as reported. Costs may update once that month\'s actual costs are final.')
+    const howTo = ['*How to read this*',
+      '• *EBITDA* = revenue minus all costs put against the team.',
+      '• *Revenue* = SR deposits (₹2.62 L each) + AC sales (90% of cash-in) + VAS sales (95% of cash-in), from Finance\'s CIB.',
+      '• *Costs* = product cost + team salary + share of company salary, office and rent + marketing + offline centre + partner payout.']
+      .concat(monthLines)
+      .concat(loaded.length > 1 ? ['• *Combined* = ' + loaded.map(l => l.label).join(' + ') + ' added together. Team size shows the latest month.'] : [])
+      .concat(['• Person-by-person breakdown: EBITDA sheet, Team Finder and Explain - Person tabs.']).join('\n')
     let report, sheetOut
     if (loaded.length === 1) {
-      report = buildEbitdaReport(last.parsed, { dateLabel, proRata })
+      report = buildEbitdaReport(last.parsed, { dateLabel, proRata, howTo })
       sheetOut = last.sections
     } else {
       const names = loaded.map(l => l.label.slice(0, 3)).join(' + ')
       report = buildEbitdaReport(combineParsed(loaded), {
-        dateLabel, proRata,
+        dateLabel, proRata, howTo,
         headerTitle: 'Overall EBITDA, ' + names + ' (as on ' + dateLabel + ')',
-        noteText: 'AC, SR, VAS and Offline only. ' + loaded.map(l => l.label).join(' plus ') + ' added together; the latest month is month to date, as on ' + dateLabel + '. Team shows the latest month, with earlier months in brackets. Sorted by EBITDA, highest first. A picture of each table is in its thread.',
+        noteText: 'AC, SR, VAS and Offline only. ' + loaded.map(l => l.label).join(' plus ') + ' added together; the latest month is month to date, as on ' + dateLabel + '. Team shows the latest month headcount. Sorted by EBITDA, highest first. A picture of each table is in its thread.',
       })
       sheetOut = combineSections(loaded)
     }
