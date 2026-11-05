@@ -20,6 +20,38 @@ export async function fetchCareersMetaAds(force) {
   }
 }
 
+
+// Careers names and Meta names for the SAME ad often differ in small ways: an
+// apostrophe in one is an underscore in the other (04Nov'26 vs 04Nov_26), case,
+// or the ad was later renamed with a date added on the end. Match in this order:
+// exact, then normalised (case + punctuation ignored), then a Careers name that is
+// the start of exactly ONE Meta name. Never guesses between several candidates.
+const normName = n => String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+export function makeAdResolver(adsMap) {
+  const exact = adsMap || {}
+  const norm = new Map()
+  const dupNorm = new Set()
+  Object.keys(exact).forEach(k => { const n = normName(k); if (norm.has(n)) dupNorm.add(n); else norm.set(n, k) })
+  const keys = [...norm.keys()]
+  const memo = new Map()
+  return function resolve(name) {
+    if (!name) return null
+    if (memo.has(name)) return memo.get(name)
+    let hit = null
+    if (exact[name]) hit = exact[name]
+    else {
+      const n = normName(name)
+      if (norm.has(n) && !dupNorm.has(n)) hit = exact[norm.get(n)]
+      else if (n.length >= 20) {
+        const cands = keys.filter(k => k.startsWith(n + '_') || k === n)
+        if (cands.length === 1) hit = exact[norm.get(cands[0])]
+      }
+    }
+    memo.set(name, hit)
+    return hit
+  }
+}
+
 export const imgProxy = url => (url ? '/api/img-proxy?url=' + encodeURIComponent(url) : null)
 
 // Fetch a Meta picture and shrink it to a small JPEG data URI, so the report file
@@ -57,10 +89,10 @@ export function buildCareersCreativeReportHtml({ ads, totals, windowLabel, filte
     const play = m.video
       ? '<div class="playicon"><svg width="30" height="30" viewBox="0 0 24 24" fill="rgba(255,255,255,0.92)"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.28)"/><path d="M10 8l6 4-6 4V8z"/></svg></div>'
       : ''
-    return '<div class="card">' +
-      '<div class="thumb">' + thumb + (st ? '<span class="badge ' + (m.status === 'ACTIVE' ? 'live' : 'off') + '">' + st + '</span>' : '') + play + '</div>' +
+    return '<a class="card" href="' + esc(m.link || '#') + '" target="_blank" rel="noreferrer" title="Open this ad on Meta: ' + esc(a.name) + '">' +
+      '<div class="thumb">' + thumb + (st ? '<span class="badge ' + (m.status === 'ACTIVE' ? 'live' : 'off') + '">' + st + '</span>' : '') + play + '<span class="open">Open ad &#8599;</span></div>' +
       '<div class="card-body">' +
-      '<a class="card-link" href="' + esc(m.link || '#') + '" target="_blank" rel="noreferrer" title="' + esc(a.name) + '">' + esc(a.name) + '</a>' +
+      '<div class="card-name">' + esc(a.name) + '</div>' +
       (a.program ? '<div class="prog">' + esc(a.program) + '</div>' : '') +
       '<div class="stats">' +
       '<div><div class="sl">Spend</div><div class="sv">' + inr(a.spend) + '</div></div>' +
@@ -69,8 +101,9 @@ export function buildCareersCreativeReportHtml({ ads, totals, windowLabel, filte
       '<div><div class="sl">CPL</div><div class="sv acc">' + inr(a.cpl) + '</div></div>' +
       '<div><div class="sl">CPI</div><div class="sv acc">' + inr(a.cpi) + '</div></div>' +
       '<div><div class="sl">CPS</div><div class="sv acc">' + inr(a.cps) + '</div></div>' +
-      '<div><div class="sl">Won</div><div class="sv">' + num(a.won) + '</div></div>' +
-      '</div></div></div>'
+      '<div><div class="sl">Won (Funnel)</div><div class="sv">' + num(a.won) + '</div></div>' +
+      '<div><div class="sl">Won (Snapshot)</div><div class="sv">' + num(a.wonSnapshot) + '</div></div>' +
+      '</div></div></a>'
   }).join('')
   const chips = (filterChips || []).map(c => '<span class="chip">' + esc(c) + '</span>').join('')
   const omit = omitted > 0
@@ -95,16 +128,23 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 .tv { font-size:16px; font-weight:800; color:#0F172A; }
 .note { font-size:11.5px; color:#64748B; background:#F8FAFC; border-radius:8px; padding:8px 12px; margin-bottom:16px; }
 .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
-.card { border:0.5px solid #EEF1F6; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,0.05); }
+.card { display:block; color:inherit; text-decoration:none; cursor:pointer; position:relative; border:0.5px solid #EEF1F6; border-radius:12px; overflow:hidden; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.05); transition:transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease, border-color .22s ease; }
+.card:hover, .card:focus-visible { transform:translateY(-8px) scale(1.035); z-index:5; border-color:#1C9FD4; box-shadow:0 18px 40px rgba(31,60,132,0.22), 0 4px 10px rgba(15,23,42,0.08); outline:none; }
+.card:active { transform:translateY(-4px) scale(1.01); }
+.thumb img { transition:transform .45s ease; }
+.card:hover .thumb img, .card:focus-visible .thumb img { transform:scale(1.07); }
+.open { position:absolute; right:8px; bottom:8px; font-size:10.5px; font-weight:800; color:#fff; background:#1F3C84; padding:5px 10px; border-radius:999px; opacity:0; transform:translateY(6px); transition:opacity .2s ease, transform .2s ease; }
+.card:hover .open, .card:focus-visible .open { opacity:1; transform:translateY(0); }
+.card:hover .card-name, .card:focus-visible .card-name { text-decoration:underline; }
 .thumb { position:relative; width:100%; aspect-ratio:1/1; overflow:hidden; background:#F1F5F9; }
 .thumb img, .thumb .ph { width:100%; height:100%; object-fit:cover; display:block; }
+@media (prefers-reduced-motion: reduce){ .card, .thumb img, .open { transition:none; } .card:hover { transform:none; } }
 .thumb .ph { background:linear-gradient(135deg,#1F3C84,#1C9FD4); }
 .badge { position:absolute; top:8px; left:8px; font-size:9px; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; padding:3px 8px; border-radius:6px; color:#fff; }
 .badge.live { background:#4CAE6F; } .badge.off { background:#64748B; }
 .playicon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
 .card-body { padding:12px 13px 14px; }
-.card-link { font-size:12px; font-weight:700; color:#1F3C84; text-decoration:none; display:block; margin-bottom:4px; line-height:1.4; word-break:break-word; }
-.card-link:hover { text-decoration:underline; }
+.card-name { font-size:12px; font-weight:700; color:#1F3C84; text-decoration:none; display:block; margin-bottom:4px; line-height:1.4; word-break:break-word; }
 .prog { font-size:10px; font-weight:700; color:#1C9FD4; margin-bottom:9px; }
 .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:7px 8px; }
 .sl { font-size:8.5px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px; }
@@ -119,11 +159,12 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 <div class="tile"><div class="tl">Leads</div><div class="tv">` + num(totals.leads) + `</div></div>
 <div class="tile"><div class="tl">Interested</div><div class="tv">` + num(totals.interested) + `</div></div>
 <div class="tile"><div class="tl">Won (Funnel)</div><div class="tv">` + num(totals.won) + `</div></div>
+<div class="tile"><div class="tl">Won (Snapshot)</div><div class="tv">` + num(totals.wonSnapshot) + `</div></div>
 <div class="tile"><div class="tl">CPL</div><div class="tv">` + inr(totals.cpl) + `</div></div>
 <div class="tile"><div class="tl">CPI</div><div class="tv">` + inr(totals.cpi) + `</div></div>
 <div class="tile"><div class="tl">CPS</div><div class="tv">` + inr(totals.cps) + `</div></div>
 <div class="tile"><div class="tl">Ads shown</div><div class="tv">` + ads.length + `</div></div>
 </div>` + omit + '<div class="grid">' + cards + `</div>
-<div class="foot">Exported from <b style="color:#1F3C84;">Leverage Quantum</b> &middot; Ad names open the live ad on Meta &middot; All figures from the Careers data, Meta supplies only the picture and link</div>
+<div class="foot">Exported from <b style="color:#1F3C84;">Leverage Quantum</b> &middot; Hover a card to lift it, click anywhere on it to open the live ad on Meta &middot; All figures from the Careers data, Meta supplies only the picture and link</div>
 </div></body></html>`
 }

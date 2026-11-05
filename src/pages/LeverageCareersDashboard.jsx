@@ -21,7 +21,7 @@ import { DEFAULT_PROGRAMS, classifyProgram, normalizePrograms } from '../lib/car
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { getSession, setSession } from '../lib/sessionLoad'
-import { fetchCareersMetaAds, fetchImageDataUri, imgProxy, buildCareersCreativeReportHtml } from '../lib/careersMetaAds'
+import { fetchCareersMetaAds, makeAdResolver, fetchImageDataUri, imgProxy, buildCareersCreativeReportHtml } from '../lib/careersMetaAds'
 import styles from './LeverageCareersDashboard.module.css'
 
 // ---- Pure calendar-date arithmetic on 'YYYY-MM-DD' strings (Date.UTC keeps
@@ -619,6 +619,7 @@ export default function LeverageCareersDashboard() {
     fetchCareersMetaAds().then(r => { if (dead) return; setMetaAds((r && r.ads) || {}); setMetaAdsNote(r && !r.ok ? (r.error || 'Meta ads could not be loaded') : '') })
     return () => { dead = true }
   }, [])
+  const resolveAd = useMemo(() => makeAdResolver(metaAds), [metaAds])
   const [creativeBusy, setCreativeBusy] = useState('')
   const searchQ = useDebouncedValue(searchText, 250)
   const filters = useMemo(
@@ -755,14 +756,14 @@ export default function LeverageCareersDashboard() {
   const CREATIVE_REPORT_MAX = 100
   const downloadCreativeReport = useCallback(async () => {
     if (creativeBusy) return
-    const matched = campaignRows.filter(c => metaAds[c.label])
+    const matched = campaignRows.filter(c => resolveAd(c.label))
     if (!matched.length) { toast(metaAdsNote || 'None of the ads in this view matched a Meta ad.', { type: 'muted' }); return }
     const picked = matched.slice(0, CREATIVE_REPORT_MAX)
     const progOf = new Map()
     rows.forEach(r => { if (!progOf.has(r.name)) progOf.set(r.name, r.program) })
     setCreativeBusy('0 / ' + picked.length)
     try {
-      const out = picked.map(c => ({ ...c, name: c.label, program: progOf.get(c.label) || '', meta: metaAds[c.label], _img: null }))
+      const out = picked.map(c => ({ ...c, name: c.label, program: progOf.get(c.label) || '', meta: resolveAd(c.label), _img: null }))
       let done = 0
       const queue = out.slice()
       await Promise.all(Array.from({ length: 6 }, async () => {
@@ -788,7 +789,7 @@ export default function LeverageCareersDashboard() {
     } catch (e) {
       toast('Could not build the report: ' + (e.message || e), { type: 'muted' })
     } finally { setCreativeBusy('') }
-  }, [creativeBusy, campaignRows, metaAds, metaAdsNote, rows, FILTER_FIELDS, activeFilters, searchText, windowLabel])
+  }, [creativeBusy, campaignRows, resolveAd, metaAdsNote, rows, FILTER_FIELDS, activeFilters, searchText, windowLabel])
 
   const exportRows = useMemo(() => tableRows.map(r => ({
     [EXPORT_KEY[tableDim]]: labelForDim(tableDim, r.label),
@@ -1155,7 +1156,7 @@ export default function LeverageCareersDashboard() {
                           >
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                               {it.toggle ? <TreeChevron open={it.open} /> : null}
-                              {it.kind === 'campaign' ? <AdLabel name={it.label} meta={metaAds[it.label]} /> : it.label}
+                              {it.kind === 'campaign' ? <AdLabel name={it.label} meta={resolveAd(it.label)} /> : it.label}
                             </span>
                           </td>
                           <td>{fmtINR(it.spend)}</td><td>{fmtN(it.leads)}</td><td>{fmtN(it.interested)}</td><td>{fmtN(it.won)}</td><td>{fmtN(it.wonSnapshot)}</td>
@@ -1163,7 +1164,7 @@ export default function LeverageCareersDashboard() {
                         </tr>
                       )) : tableRows.map(r => (
                         <tr key={r.key}>
-                          <td style={tableDim === 'campaign' ? undefined : { whiteSpace: 'nowrap', maxWidth: 'none' }}>{tableDim === 'campaign' ? <AdLabel name={r.label} meta={metaAds[r.label]} /> : labelForDim(tableDim, r.label)}</td>
+                          <td style={tableDim === 'campaign' ? undefined : { whiteSpace: 'nowrap', maxWidth: 'none' }}>{tableDim === 'campaign' ? <AdLabel name={r.label} meta={resolveAd(r.label)} /> : labelForDim(tableDim, r.label)}</td>
                           <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td><td>{fmtN(r.wonSnapshot)}</td>
                           <td>{fmtINR(r.cpl)}</td><td>{fmtINR(r.cpi)}</td><td>{fmtINR(r.cps)}</td>
                         </tr>
