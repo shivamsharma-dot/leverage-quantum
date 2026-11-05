@@ -6568,6 +6568,74 @@ async function handleSuperTracker(req, res, me) {
   }
 }
 
+// ---- Leverage Careers: Meta ad lookup (name -> link + picture) ----
+// The Careers data tracks at AD level (the "campaign" name in the Careerv2 query
+// is the Meta ad name), so a Careers row can be matched to its Meta ad by exact
+// name. This returns ONLY what is needed to open and show the ad: a link, a
+// picture URL, status. No spend or any other Meta number is read or returned.
+// Cached in memory for an hour so page loads do not each hit Meta.
+let _careersMetaAdsCache = null
+async function handleCareersMetaAds(req, res, me) {
+  const { canAccessDashboard, supabaseAdmin } = await import('../lib/auth.mjs')
+  if (!canAccessDashboard(me.role, 'leverage_careers')) return res.status(403).json({ error: 'Forbidden' })
+  try {
+    const force = req.query && req.query.refresh === '1'
+    if (!force && _careersMetaAdsCache && Date.now() - _careersMetaAdsCache.at < 60 * 60 * 1000) {
+      return res.status(200).json(_careersMetaAdsCache.body)
+    }
+    const tr = await supabaseAdmin('meta_tokens?select=token&order=created_at.desc&limit=1')
+    const trows = tr.ok ? await tr.json() : []
+    const token = trows && trows[0] && trows[0].token
+    if (!token) return res.status(200).json({ ok: false, error: 'No Meta token is connected. Connect Meta Ads first.', ads: {} })
+    const G = 'https://graph.facebook.com/v19.0/'
+    const j = async url => { const r = await fetch(url); return r.json() }
+    // The Careers ad accounts are found by name, so a new Careers account is picked up by itself.
+    const accs = await j(G + 'me/adaccounts?fields=name,account_id&limit=100&access_token=' + encodeURIComponent(token))
+    if (accs.error) return res.status(200).json({ ok: false, error: 'Meta: ' + String(accs.error.message || '').slice(0, 160), ads: {} })
+    const careers = (accs.data || []).filter(a => /^leverage careers/i.test(a.name || ''))
+    const fields = 'name,effective_status,created_time,creative{instagram_permalink_url,effective_object_story_id,object_story_id,thumbnail_url,image_url,object_type,object_story_spec{video_data{image_url},link_data{picture}}}'
+    const archived = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ARCHIVED'] }]))
+    const all = []
+    for (const acc of careers) {
+      for (const extra of ['', '&filtering=' + archived]) {
+        let url = G + 'act_' + acc.account_id + '/ads?fields=' + encodeURIComponent(fields) + '&limit=200' + extra + '&access_token=' + encodeURIComponent(token)
+        for (let page = 0; url && page < 40; page++) {
+          const d = await j(url)
+          if (d.error) break
+          for (const a of (d.data || [])) all.push(a)
+          url = d.paging && d.paging.next
+        }
+      }
+    }
+    // Same name on several Meta ads (an ad reused in other ad sets): prefer an ACTIVE one, then the newest.
+    const rank = a => (a.effective_status === 'ACTIVE' ? 2 : 0) * 1e15 + (Date.parse(a.created_time) || 0)
+    const byName = new Map()
+    for (const a of all) { const cur = byName.get(a.name); if (!cur || rank(a) > rank(cur)) byName.set(a.name, a) }
+    const ads = {}
+    for (const [name, a] of byName) {
+      const c = a.creative || {}
+      const story = c.effective_object_story_id || c.object_story_id || null
+      const parts = story ? String(story).split('_') : []
+      const fb = parts.length === 2 ? 'https://www.facebook.com/' + parts[0] + '/posts/' + parts[1] : null
+      const ig = c.instagram_permalink_url || null
+      const spec = c.object_story_spec || {}
+      ads[name] = {
+        id: a.id,
+        status: a.effective_status,
+        link: ig || fb || 'https://www.facebook.com/ads/library/?id=' + a.id,
+        platform: ig ? 'instagram' : fb ? 'facebook' : 'library',
+        image: (spec.video_data && spec.video_data.image_url) || c.image_url || (spec.link_data && spec.link_data.picture) || c.thumbnail_url || null,
+        video: c.object_type === 'VIDEO',
+      }
+    }
+    const body = { ok: true, ads, accounts: careers.map(a => a.name), fetchedAt: Date.now() }
+    _careersMetaAdsCache = { at: Date.now(), body }
+    return res.status(200).json(body)
+  } catch (e) {
+    return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 160), ads: {} })
+  }
+}
+
 export default async function handler(req, res) {
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
@@ -6699,6 +6767,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'ga4') return handleGA4(req, res, me)
   if ((req.query && req.query.source) === 'super_tracker') return handleSuperTracker(req, res, me)
   if ((req.query && req.query.source) === 'coach_nps') return handleCoachNps(req, res, me)
+  if ((req.query && req.query.source) === 'careers_meta_ads') return handleCareersMetaAds(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })

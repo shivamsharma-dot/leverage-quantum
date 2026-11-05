@@ -21,6 +21,7 @@ import { DEFAULT_PROGRAMS, classifyProgram, normalizePrograms } from '../lib/car
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { getSession, setSession } from '../lib/sessionLoad'
+import { fetchCareersMetaAds, fetchImageDataUri, imgProxy, buildCareersCreativeReportHtml } from '../lib/careersMetaAds'
 import styles from './LeverageCareersDashboard.module.css'
 
 // ---- Pure calendar-date arithmetic on 'YYYY-MM-DD' strings (Date.UTC keeps
@@ -354,6 +355,33 @@ function sortRowsBy(arr, sort) {
 
 // Expand/collapse caret for the Source view's tree rows -- same glyph and rotation
 // as Overall's TreeChevron.
+// An ad name that opens the real Meta ad (instagram post, facebook post or the
+// Ads Library page) in a new tab, with a small picture on hover so a person can
+// see what the ad is about before clicking. Plain text when Meta has no match.
+function AdLabel({ name, meta }) {
+  const [pos, setPos] = useState(null)
+  if (!meta) return name
+  const statusText = { ACTIVE: 'Live', PAUSED: 'Paused', ADSET_PAUSED: 'Paused', CAMPAIGN_PAUSED: 'Paused', ARCHIVED: 'Archived' }[meta.status] || ''
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}>
+      <a
+        href={meta.link} target="_blank" rel="noreferrer"
+        onClick={e => e.stopPropagation()}
+        onMouseEnter={e => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: r.left, y: r.bottom }) }}
+        onMouseLeave={() => setPos(null)}
+        style={{ color: C.navy, textDecoration: 'none', borderBottom: '1px dashed ' + C.blue, fontWeight: 600 }}
+        title={'Open this ad on Meta' + (statusText ? ' (' + statusText + ')' : '')}
+      >{name}<span style={{ marginLeft: 5, fontSize: 11, color: C.blue }}>{'\u2197'}</span></a>
+      {pos && meta.image && (
+        <span style={{ position: 'fixed', left: Math.min(pos.x, window.innerWidth - 250), top: Math.min(pos.y + 8, window.innerHeight - 270), zIndex: 70, width: 232, background: '#fff', border: '0.5px solid #E2E8F0', borderRadius: 12, boxShadow: '0 8px 28px rgba(15,23,42,0.18)', padding: 8, pointerEvents: 'none' }}>
+          <img src={imgProxy(meta.image)} alt="" style={{ width: '100%', height: 216, objectFit: 'cover', borderRadius: 8, display: 'block', background: '#F1F5F9' }} />
+          {statusText ? <span style={{ display: 'block', marginTop: 6, fontSize: 10.5, fontWeight: 700, color: meta.status === 'ACTIVE' ? '#4CAE6F' : '#64748B' }}>{statusText}</span> : null}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function TreeChevron({ open }) {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
@@ -582,6 +610,16 @@ export default function LeverageCareersDashboard() {
 
   // ---- main-page aggregates ----
   const [searchText, setSearchText] = useState('') // campaign-name search, applies to the whole page
+  // Meta ad lookup (name -> link + picture). Loaded once; if Meta is not connected the
+  // page simply shows plain ad names, nothing else changes.
+  const [metaAds, setMetaAds] = useState({})
+  const [metaAdsNote, setMetaAdsNote] = useState('')
+  useEffect(() => {
+    let dead = false
+    fetchCareersMetaAds().then(r => { if (dead) return; setMetaAds((r && r.ads) || {}); setMetaAdsNote(r && !r.ok ? (r.error || 'Meta ads could not be loaded') : '') })
+    return () => { dead = true }
+  }, [])
+  const [creativeBusy, setCreativeBusy] = useState('')
   const searchQ = useDebouncedValue(searchText, 250)
   const filters = useMemo(
     () => {
@@ -709,6 +747,48 @@ export default function LeverageCareersDashboard() {
   const treeItems = tableDim === 'source' ? sourceTreeItems : (tableDim === 'program' ? programTreeItems : null)
   const tableTotals = useMemo(() => sumTotals(tableRows), [tableRows])
   const toggleSort = key => setTableSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
+
+  // "Creative report": a self-contained HTML file, one card per ad with its picture
+  // (embedded, so it still opens after Meta's links expire), a link to the live ad,
+  // and the Careers numbers. Uses the ads currently on screen (page filters apply),
+  // most spend first. Only ads that Meta matched by exact name are included.
+  const CREATIVE_REPORT_MAX = 100
+  const downloadCreativeReport = useCallback(async () => {
+    if (creativeBusy) return
+    const matched = campaignRows.filter(c => metaAds[c.label])
+    if (!matched.length) { toast(metaAdsNote || 'None of the ads in this view matched a Meta ad.', { type: 'muted' }); return }
+    const picked = matched.slice(0, CREATIVE_REPORT_MAX)
+    const progOf = new Map()
+    rows.forEach(r => { if (!progOf.has(r.name)) progOf.set(r.name, r.program) })
+    setCreativeBusy('0 / ' + picked.length)
+    try {
+      const out = picked.map(c => ({ ...c, name: c.label, program: progOf.get(c.label) || '', meta: metaAds[c.label], _img: null }))
+      let done = 0
+      const queue = out.slice()
+      await Promise.all(Array.from({ length: 6 }, async () => {
+        while (queue.length) {
+          const a = queue.shift()
+          a._img = await fetchImageDataUri(a.meta.image)
+          done += 1; setCreativeBusy(done + ' / ' + out.length)
+        }
+      }))
+      const chips = FILTER_FIELDS.map(f => (activeFilters[f.key] || []).length ? f.label + ': ' + (activeFilters[f.key] || []).join(', ') : null).filter(Boolean)
+      if (searchText.trim()) chips.push('Search: ' + searchText.trim())
+      const html = buildCareersCreativeReportHtml({
+        ads: out, totals: sumTotals(out), windowLabel, filterChips: chips,
+        omitted: campaignRows.length - out.length,
+      })
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'leverage_careers_creative_report_' + new Date().toISOString().slice(0, 10) + '.html'
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+      toast('Creative report downloaded (' + out.length + ' ads)', { type: 'success' })
+    } catch (e) {
+      toast('Could not build the report: ' + (e.message || e), { type: 'muted' })
+    } finally { setCreativeBusy('') }
+  }, [creativeBusy, campaignRows, metaAds, metaAdsNote, rows, FILTER_FIELDS, activeFilters, searchText, windowLabel])
 
   const exportRows = useMemo(() => tableRows.map(r => ({
     [EXPORT_KEY[tableDim]]: labelForDim(tableDim, r.label),
@@ -1037,6 +1117,10 @@ export default function LeverageCareersDashboard() {
                       size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
                       icon={<SlackIcon size={13} />}
                     >Send to Slack</Button>
+                    <Button
+                      size="sm" variant="secondary" onClick={downloadCreativeReport} disabled={!!creativeBusy}
+                      title="Download an HTML report with each Meta ad's picture, a link to the live ad and its numbers"
+                    >{creativeBusy ? 'Building ' + creativeBusy : 'Creative report'}</Button>
                     <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack />
                   </div>
                 </div>
@@ -1071,7 +1155,7 @@ export default function LeverageCareersDashboard() {
                           >
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                               {it.toggle ? <TreeChevron open={it.open} /> : null}
-                              {it.label}
+                              {it.kind === 'campaign' ? <AdLabel name={it.label} meta={metaAds[it.label]} /> : it.label}
                             </span>
                           </td>
                           <td>{fmtINR(it.spend)}</td><td>{fmtN(it.leads)}</td><td>{fmtN(it.interested)}</td><td>{fmtN(it.won)}</td><td>{fmtN(it.wonSnapshot)}</td>
@@ -1079,7 +1163,7 @@ export default function LeverageCareersDashboard() {
                         </tr>
                       )) : tableRows.map(r => (
                         <tr key={r.key}>
-                          <td style={tableDim === 'campaign' ? undefined : { whiteSpace: 'nowrap', maxWidth: 'none' }}>{labelForDim(tableDim, r.label)}</td>
+                          <td style={tableDim === 'campaign' ? undefined : { whiteSpace: 'nowrap', maxWidth: 'none' }}>{tableDim === 'campaign' ? <AdLabel name={r.label} meta={metaAds[r.label]} /> : labelForDim(tableDim, r.label)}</td>
                           <td>{fmtINR(r.spend)}</td><td>{fmtN(r.leads)}</td><td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td><td>{fmtN(r.wonSnapshot)}</td>
                           <td>{fmtINR(r.cpl)}</td><td>{fmtINR(r.cpi)}</td><td>{fmtINR(r.cps)}</td>
                         </tr>
