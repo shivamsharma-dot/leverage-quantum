@@ -4070,7 +4070,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (!r.ok) { toast(r.error || 'Meta ads could not be loaded', { type: 'muted' }); return }
       const ratio = (n, d) => (n > 0 && d > 0 ? n / d : null)
       const picked = pool.filter(c => r.ads[c.campaign]).slice(0, 100).map(c => ({
-        name: c.campaign, program: c.subSource && c.subSource !== 'Unknown' ? c.subSource : '',
+        name: c.campaign, program: c.subSource && c.subSource !== 'Unknown' && c.subSource !== c.source ? c.subSource : '',
         spend: c.spend, leads: c.leads, totalQL: c.totalQL, apps: c.apps, deposits: c.deposits,
         cpl: ratio(c.cplCostSpend, c.leads), cpql: ratio(c.costSpend, c.totalQL), cpa: ratio(c.cpaCostSpend, c.apps),
         _cpl: c.cplCostSpend, _cpql: c.costSpend, _cpa: c.cpaCostSpend,
