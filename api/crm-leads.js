@@ -6650,34 +6650,47 @@ const _metaCreativeCache = new Map() // id -> { at, meta }
 const META_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'DISAPPROVED', 'WITH_ISSUES', 'IN_PROCESS', 'PENDING_REVIEW', 'PREAPPROVED', 'PENDING_BILLING_INFO']
 async function buildMetaNameIndex(token) {
   const G = 'https://graph.facebook.com/v19.0/'
-  const j = async url => { const r = await fetch(url); return r.json() }
-  const accs = await j(G + 'me/adaccounts?fields=name,account_id&limit=100&access_token=' + encodeURIComponent(token))
-  if (accs.error) throw new Error('Meta: ' + String(accs.error.message || '').slice(0, 160))
-  const chains = []
-  for (const acc of (accs.data || [])) {
-    for (const st of META_STATUSES) {
-      chains.push((async () => {
-        const out = []
-        const filt = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: [st] }]))
-        let url = G + 'act_' + acc.account_id + '/ads?fields=name,effective_status,created_time&limit=500&filtering=' + filt + '&access_token=' + encodeURIComponent(token)
-        for (let page = 0; url && page < 80; page++) {
-          const d = await j(url)
-          if (d.error) break
-          for (const a of (d.data || [])) out.push(a)
-          url = d.paging && d.paging.next
-        }
-        return out
-      })())
+  const sleep = ms => new Promise(r => setTimeout(r, ms))
+  // One Graph call, retried on an error (Meta rate-limits a burst of calls on one
+  // ad account); returns null when it still fails, so the caller can count it.
+  const j = async url => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const d = await (await fetch(url)).json()
+        if (!d.error) return d
+      } catch {}
+      await sleep(800 * (attempt + 1))
     }
+    return null
   }
-  const all = (await Promise.all(chains)).flat()
+  const accs = await j(G + 'me/adaccounts?fields=name,account_id&limit=100&access_token=' + encodeURIComponent(token))
+  if (!accs) throw new Error('Meta: could not list the ad accounts')
+  const jobs = []
+  for (const acc of (accs.data || [])) for (const st of META_STATUSES) jobs.push({ acc, st })
+  const all = []
+  let failed = 0
+  // At most 6 chains at once: a 110-way burst got throttled and returned a third of the ads.
+  const queue = jobs.slice()
+  await Promise.all(Array.from({ length: 6 }, async () => {
+    while (queue.length) {
+      const { acc, st } = queue.shift()
+      const filt = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: [st] }]))
+      let url = G + 'act_' + acc.account_id + '/ads?fields=name,effective_status,created_time&limit=500&filtering=' + filt + '&access_token=' + encodeURIComponent(token)
+      for (let page = 0; url && page < 80; page++) {
+        const d = await j(url)
+        if (!d) { failed += 1; break }
+        for (const a of (d.data || [])) all.push(a)
+        url = d.paging && d.paging.next
+      }
+    }
+  }))
   // Same name on several ads (an ad reused in other ad sets): prefer ACTIVE, then the newest.
   const rank = a => (a.effective_status === 'ACTIVE' ? 2 : 0) * 1e15 + (Date.parse(a.created_time) || 0)
   const best = new Map()
   for (const a of all) { const cur = best.get(a.name); if (!cur || rank(a) > rank(cur)) best.set(a.name, a) }
   const byName = {}
   for (const [name, a] of best) byName[name] = { id: a.id, status: a.effective_status }
-  return { at: Date.now(), byName, adCount: all.length, accounts: (accs.data || []).length }
+  return { at: Date.now(), byName, adCount: all.length, failed, accounts: (accs.data || []).length }
 }
 async function handleMetaAdCreatives(req, res, me) {
   const { canAccessDashboard, supabaseAdmin } = await import('../lib/auth.mjs')
@@ -6693,7 +6706,10 @@ async function handleMetaAdCreatives(req, res, me) {
     const token = trows && trows[0] && trows[0].token
     if (!token) return res.status(200).json({ ok: false, error: 'No Meta token is connected. Connect Meta Ads first.', ads: {} })
     const force = req.query && req.query.refresh === '1'
-    if (force || !_metaNameIndex || Date.now() - _metaNameIndex.at > 60 * 60 * 1000) _metaNameIndex = await buildMetaNameIndex(token)
+    // A complete index is kept for an hour; one where some Meta calls failed only for
+    // two minutes, so a throttled build is retried soon instead of hiding ads for an hour.
+    const ttl = _metaNameIndex && _metaNameIndex.failed ? 2 * 60 * 1000 : 60 * 60 * 1000
+    if (force || !_metaNameIndex || Date.now() - _metaNameIndex.at > ttl) _metaNameIndex = await buildMetaNameIndex(token)
     const { makeAdResolver } = await import('../shared/metaAdMatch.mjs')
     const resolve = makeAdResolver(_metaNameIndex.byName)
     const hits = {}
@@ -6735,7 +6751,7 @@ async function handleMetaAdCreatives(req, res, me) {
       // Picture lookup failed: still return a working link to the ad in the Ads Library.
       ads[n] = c ? c.meta : { id: h.id, status: h.status, link: 'https://www.facebook.com/ads/library/?id=' + h.id, platform: 'library', image: null, video: false }
     }
-    return res.status(200).json({ ok: true, ads, indexedAds: _metaNameIndex.adCount, indexedAt: _metaNameIndex.at })
+    return res.status(200).json({ ok: true, ads, indexedAds: _metaNameIndex.adCount, failedCalls: _metaNameIndex.failed, indexedAt: _metaNameIndex.at })
   } catch (e) {
     return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 160), ads: {} })
   }
