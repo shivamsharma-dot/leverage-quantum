@@ -7,6 +7,9 @@ import {
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
+import MetaAdLabel from '../components/MetaAdLabel'
+import { toast } from '../components/ToastHost'
+import { fetchMetaAdsForNames, fetchImageDataUri, buildCreativeReportHtml, fmtInrHtml, fmtNumHtml } from '../lib/careersMetaAds'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { SlackIcon } from '../components/icons/BrandIcons'
 import { CORRIDOR_MIN_QL } from '../lib/pmReport'
@@ -3662,6 +3665,30 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return out
   }, [grpBy, tableRows, sortedFilteredRows, aggregateRows, expandedSources, expandedSubSources, sourceSubBreakdown])
 
+  // Meta ads: a Facebook campaign_name is the Meta ad name, so the names on screen are
+  // matched to the real ad (link + hover picture). Asked for only for the rows actually
+  // shown, and remembered per name for the session. No Meta number is ever shown.
+  const [metaByName, setMetaByName] = useState({})
+  const [metaLookupNote, setMetaLookupNote] = useState('')
+  const visibleCampaignNames = useMemo(() => {
+    const out = []
+    tableBodyRows.forEach(it => {
+      if (it.kind === 'campaign' || (it.kind === 'row' && grpBy === 'campaign')) out.push(it.row.label)
+    })
+    return out
+  }, [tableBodyRows, grpBy])
+  useEffect(() => {
+    if (!visibleCampaignNames.length) return
+    let dead = false
+    fetchMetaAdsForNames(visibleCampaignNames).then(r => {
+      if (dead) return
+      setMetaByName(r.ads || {})
+      setMetaLookupNote(r.ok ? '' : (r.error || 'Meta ads could not be loaded'))
+    })
+    return () => { dead = true }
+  }, [visibleCampaignNames])
+
+
   // Exports the FULL search-filtered/sorted set, not just the on-screen "Show N" slice --
   // the row-limit control is a display density preference, not a data cap. Deliberately the
   // top-level rows only (not expanded Sub Source/Campaign detail) -- same scope the table's
@@ -4027,6 +4054,70 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       : activeFilter === 'preset' && dateWindow ? dateWindow.label
         : (selMonth || 'All time')
   ), [activeFilter, customFrom, customTo, dateWindow, selMonth])
+
+  // Creative report: the Facebook ads in the current filters, most spend first (top 100
+  // that Meta matched), each with its picture embedded so the file still works after
+  // Meta's picture links expire. Figures follow the page's own rules (cost-metric
+  // exclusions included), Meta supplies only the picture and the link.
+  const [creativeBusy, setCreativeBusy] = useState('')
+  const downloadCreativeReport = useCallback(async () => {
+    if (creativeBusy) return
+    const pool = byCampaign.filter(c => c.source === 'Facebook' && c.spend > 0).sort((a, b) => b.spend - a.spend).slice(0, 150)
+    if (!pool.length) { toast('No Facebook ads with spend in this view.', { type: 'muted' }); return }
+    setCreativeBusy('Matching ads')
+    try {
+      const r = await fetchMetaAdsForNames(pool.map(c => c.campaign))
+      if (!r.ok) { toast(r.error || 'Meta ads could not be loaded', { type: 'muted' }); return }
+      const ratio = (n, d) => (n > 0 && d > 0 ? n / d : null)
+      const picked = pool.filter(c => r.ads[c.campaign]).slice(0, 100).map(c => ({
+        name: c.campaign, program: c.subSource && c.subSource !== 'Unknown' ? c.subSource : '',
+        spend: c.spend, leads: c.leads, totalQL: c.totalQL, apps: c.apps, deposits: c.deposits,
+        cpl: ratio(c.cplCostSpend, c.leads), cpql: ratio(c.costSpend, c.totalQL), cpa: ratio(c.cpaCostSpend, c.apps),
+        _cpl: c.cplCostSpend, _cpql: c.costSpend, _cpa: c.cpaCostSpend,
+        meta: r.ads[c.campaign], _img: null,
+      }))
+      if (!picked.length) { toast('None of the Facebook ads in this view matched a Meta ad.', { type: 'muted' }); return }
+      let done = 0
+      const queue = picked.slice()
+      setCreativeBusy('0 / ' + picked.length)
+      await Promise.all(Array.from({ length: 6 }, async () => {
+        while (queue.length) {
+          const a = queue.shift()
+          a._img = await fetchImageDataUri(a.meta.image)
+          done += 1; setCreativeBusy(done + ' / ' + picked.length)
+        }
+      }))
+      const sum = k => picked.reduce((t, a) => t + (a[k] || 0), 0)
+      const tot = { spend: sum('spend'), leads: sum('leads'), totalQL: sum('totalQL'), apps: sum('apps'), deposits: sum('deposits') }
+      const chips = ['Source: Facebook']
+      if (corridorFilter && corridorFilter !== 'All') chips.push('Corridor: ' + corridorFilter)
+      if (advActiveConditions.length) chips.push(advActiveConditions.length + ' advanced filter' + (advActiveConditions.length === 1 ? '' : 's'))
+      const html = buildCreativeReportHtml({
+        title: 'Overall - Meta ad creative report', ads: picked, windowLabel: periodLabel, filterChips: chips,
+        omitted: byCampaign.filter(c => c.source === 'Facebook' && c.spend > 0).length - picked.length,
+        footNote: 'All figures from Overall (' + (dataSource === 'bigquery' ? 'BigQuery' : 'Sheet') + '), CPL / CPQL / CPA follow the Settings cost-metric exclusions. Meta supplies only the picture and link',
+        stats: [
+          { label: 'Spend', key: 'spend', fmt: 'inr' }, { label: 'Leads', key: 'leads' }, { label: 'Total QLs', key: 'totalQL' },
+          { label: 'CPL', key: 'cpl', fmt: 'inr', acc: true }, { label: 'CPQL', key: 'cpql', fmt: 'inr', acc: true }, { label: 'CPA', key: 'cpa', fmt: 'inr', acc: true },
+          { label: 'Applications', key: 'apps' }, { label: 'Deposits', key: 'deposits' },
+        ],
+        tiles: [
+          { label: 'Spend', value: fmtInrHtml(tot.spend) }, { label: 'Leads', value: fmtNumHtml(tot.leads) }, { label: 'Total QLs', value: fmtNumHtml(tot.totalQL) },
+          { label: 'Applications', value: fmtNumHtml(tot.apps) }, { label: 'Deposits', value: fmtNumHtml(tot.deposits) },
+          { label: 'CPL', value: fmtInrHtml(ratio(sum('_cpl'), tot.leads)) }, { label: 'CPQL', value: fmtInrHtml(ratio(sum('_cpql'), tot.totalQL)) }, { label: 'CPA', value: fmtInrHtml(ratio(sum('_cpa'), tot.apps)) },
+        ],
+      })
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'overall_meta_creative_report_' + new Date().toISOString().slice(0, 10) + '.html'
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+      toast('Creative report downloaded (' + picked.length + ' ads)', { type: 'success' })
+    } catch (e) {
+      toast('Could not build the report: ' + (e.message || e), { type: 'muted' })
+    } finally { setCreativeBusy('') }
+  }, [creativeBusy, byCampaign, corridorFilter, advActiveConditions, periodLabel, dataSource])
 
   const filterLine = useMemo(() => (
     'Filtered by -> ' + [periodLabel, 'Source: ' + sourceLabel, 'Corridor: ' + corridorFilter].join('  \u00b7  ')
@@ -5504,6 +5595,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 icon={<SlackIcon size={13} />}>
                 Send to Slack
               </Button>
+              <Button size="sm" variant="secondary" onClick={downloadCreativeReport} disabled={!!creativeBusy}
+                title={metaLookupNote || 'Download the Facebook ads in this view as an HTML report with each ad picture'}>
+                {creativeBusy ? 'Building ' + creativeBusy : 'Creative report'}
+              </Button>
               <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
                 rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
                 filename={'overall-' + grpBy} dashboardId="overall" hideSlack />
@@ -5690,13 +5785,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       ) }
                       if (item.kind === 'campaign') { const bg = 'var(--card)'; return (
                         <tr key={'camp-' + item.parentKey + '-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'var(--text2)', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
+                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'var(--text2)', ...stickyLabelStyle(pinCols, bg) }}><MetaAdLabel name={item.row.label} meta={metaByName[item.row.label]} /></td>
                           {renderSummaryValueCells(item.row, { fontSize:13.5, rowBg:bg })}
                         </tr>
                       ) }
                       { const bg = item.i % 2 === 0 ? 'var(--card)' : 'var(--bg3)'; return (
                         <tr key={item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'var(--text)', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'var(--text)', ...stickyLabelStyle(pinCols, bg) }}>{grpBy === 'campaign' ? <MetaAdLabel name={item.row.label} meta={metaByName[item.row.label]} /> : item.row.label}</td>
                           {renderSummaryValueCells(item.row, { rowBg:bg })}
                         </tr>
                       ) }

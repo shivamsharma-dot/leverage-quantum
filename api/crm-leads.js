@@ -6636,6 +6636,111 @@ async function handleCareersMetaAds(req, res, me) {
   }
 }
 
+// Overall (Sheet + BigQuery pages): look up the real Meta ad for a list of our
+// campaign names (on Facebook rows the campaign_name IS the Meta ad name). Two steps,
+// because the Client ad account alone holds ~18,000 ads:
+//   1. a name -> ad id index across every ad account on the shared token, names only,
+//      one paged chain per effective_status run in parallel (~9s), cached for an hour;
+//   2. creative details (link + picture) only for the ids that were asked for, 50 per
+//      call, cached per id for an hour.
+// Names are matched with shared/metaAdMatch.mjs (exact, normalised, unique prefix).
+// Only a link, a picture and a status come back; every number stays our own data.
+let _metaNameIndex = null // { at, byName: { name: { id, status, created } } }
+const _metaCreativeCache = new Map() // id -> { at, meta }
+const META_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'DISAPPROVED', 'WITH_ISSUES', 'IN_PROCESS', 'PENDING_REVIEW', 'PREAPPROVED', 'PENDING_BILLING_INFO']
+async function buildMetaNameIndex(token) {
+  const G = 'https://graph.facebook.com/v19.0/'
+  const j = async url => { const r = await fetch(url); return r.json() }
+  const accs = await j(G + 'me/adaccounts?fields=name,account_id&limit=100&access_token=' + encodeURIComponent(token))
+  if (accs.error) throw new Error('Meta: ' + String(accs.error.message || '').slice(0, 160))
+  const chains = []
+  for (const acc of (accs.data || [])) {
+    for (const st of META_STATUSES) {
+      chains.push((async () => {
+        const out = []
+        const filt = encodeURIComponent(JSON.stringify([{ field: 'effective_status', operator: 'IN', value: [st] }]))
+        let url = G + 'act_' + acc.account_id + '/ads?fields=name,effective_status,created_time&limit=500&filtering=' + filt + '&access_token=' + encodeURIComponent(token)
+        for (let page = 0; url && page < 80; page++) {
+          const d = await j(url)
+          if (d.error) break
+          for (const a of (d.data || [])) out.push(a)
+          url = d.paging && d.paging.next
+        }
+        return out
+      })())
+    }
+  }
+  const all = (await Promise.all(chains)).flat()
+  // Same name on several ads (an ad reused in other ad sets): prefer ACTIVE, then the newest.
+  const rank = a => (a.effective_status === 'ACTIVE' ? 2 : 0) * 1e15 + (Date.parse(a.created_time) || 0)
+  const best = new Map()
+  for (const a of all) { const cur = best.get(a.name); if (!cur || rank(a) > rank(cur)) best.set(a.name, a) }
+  const byName = {}
+  for (const [name, a] of best) byName[name] = { id: a.id, status: a.effective_status }
+  return { at: Date.now(), byName, adCount: all.length, accounts: (accs.data || []).length }
+}
+async function handleMetaAdCreatives(req, res, me) {
+  const { canAccessDashboard, supabaseAdmin } = await import('../lib/auth.mjs')
+  const allowed = ['overall', 'overall_bigquery', 'leverage_careers'].some(id => canAccessDashboard(me.role, id, me.email))
+  if (!allowed) return res.status(403).json({ error: 'Forbidden' })
+  try {
+    let body = req.body
+    if (typeof body === 'string') { try { body = JSON.parse(body) } catch { body = {} } }
+    const names = [...new Set(((body && body.names) || []).filter(n => typeof n === 'string' && n.trim()))].slice(0, 400)
+    if (!names.length) return res.status(200).json({ ok: true, ads: {} })
+    const tr = await supabaseAdmin('meta_tokens?select=token&order=created_at.desc&limit=1')
+    const trows = tr.ok ? await tr.json() : []
+    const token = trows && trows[0] && trows[0].token
+    if (!token) return res.status(200).json({ ok: false, error: 'No Meta token is connected. Connect Meta Ads first.', ads: {} })
+    const force = req.query && req.query.refresh === '1'
+    if (force || !_metaNameIndex || Date.now() - _metaNameIndex.at > 60 * 60 * 1000) _metaNameIndex = await buildMetaNameIndex(token)
+    const { makeAdResolver } = await import('../shared/metaAdMatch.mjs')
+    const resolve = makeAdResolver(_metaNameIndex.byName)
+    const hits = {}
+    names.forEach(n => { const h = resolve(n); if (h) hits[n] = h })
+    const now = Date.now()
+    const need = [...new Set(Object.values(hits).map(h => h.id))].filter(id => { const c = _metaCreativeCache.get(id); return !c || now - c.at > 60 * 60 * 1000 })
+    const fields = 'effective_status,creative{instagram_permalink_url,effective_object_story_id,object_story_id,thumbnail_url,image_url,object_type,object_story_spec{video_data{image_url},link_data{picture}}}'
+    const chunks = []
+    for (let i = 0; i < need.length; i += 50) chunks.push(need.slice(i, i + 50))
+    const queue = chunks.slice()
+    await Promise.all(Array.from({ length: 4 }, async () => {
+      while (queue.length) {
+        const ids = queue.shift()
+        const r = await fetch('https://graph.facebook.com/v19.0/?ids=' + ids.join(',') + '&fields=' + encodeURIComponent(fields) + '&access_token=' + encodeURIComponent(token))
+        const d = await r.json()
+        if (d && d.error) continue
+        for (const id of ids) {
+          const a = d && d[id]
+          if (!a) continue
+          const c = a.creative || {}
+          const story = c.effective_object_story_id || c.object_story_id || null
+          const parts = story ? String(story).split('_') : []
+          const fb = parts.length === 2 ? 'https://www.facebook.com/' + parts[0] + '/posts/' + parts[1] : null
+          const ig = c.instagram_permalink_url || null
+          const spec = c.object_story_spec || {}
+          _metaCreativeCache.set(id, { at: Date.now(), meta: {
+            id, status: a.effective_status,
+            link: ig || fb || 'https://www.facebook.com/ads/library/?id=' + id,
+            platform: ig ? 'instagram' : fb ? 'facebook' : 'library',
+            image: (spec.video_data && spec.video_data.image_url) || c.image_url || (spec.link_data && spec.link_data.picture) || c.thumbnail_url || null,
+            video: c.object_type === 'VIDEO',
+          } })
+        }
+      }
+    }))
+    const ads = {}
+    for (const [n, h] of Object.entries(hits)) {
+      const c = _metaCreativeCache.get(h.id)
+      // Picture lookup failed: still return a working link to the ad in the Ads Library.
+      ads[n] = c ? c.meta : { id: h.id, status: h.status, link: 'https://www.facebook.com/ads/library/?id=' + h.id, platform: 'library', image: null, video: false }
+    }
+    return res.status(200).json({ ok: true, ads, indexedAds: _metaNameIndex.adCount, indexedAt: _metaNameIndex.at })
+  } catch (e) {
+    return res.status(200).json({ ok: false, error: String(e && e.message || e).slice(0, 160), ads: {} })
+  }
+}
+
 export default async function handler(req, res) {
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
@@ -6768,6 +6873,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'super_tracker') return handleSuperTracker(req, res, me)
   if ((req.query && req.query.source) === 'coach_nps') return handleCoachNps(req, res, me)
   if ((req.query && req.query.source) === 'careers_meta_ads') return handleCareersMetaAds(req, res, me)
+  if ((req.query && req.query.source) === 'meta_ad_creatives') return handleMetaAdCreatives(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })

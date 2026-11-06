@@ -1,3 +1,4 @@
+// Meta ad creatives for Leverage Careers and Overall.
 // Leverage Careers: match each ad (the Careers "campaign" name IS the Meta ad name)
 // to its Meta ad, so a row can open the real ad and a downloadable report can show
 // the creative. Only a link and a picture come from Meta; every number on the page
@@ -21,36 +22,8 @@ export async function fetchCareersMetaAds(force) {
 }
 
 
-// Careers names and Meta names for the SAME ad often differ in small ways: an
-// apostrophe in one is an underscore in the other (04Nov'26 vs 04Nov_26), case,
-// or the ad was later renamed with a date added on the end. Match in this order:
-// exact, then normalised (case + punctuation ignored), then a Careers name that is
-// the start of exactly ONE Meta name. Never guesses between several candidates.
-const normName = n => String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-export function makeAdResolver(adsMap) {
-  const exact = adsMap || {}
-  const norm = new Map()
-  const dupNorm = new Set()
-  Object.keys(exact).forEach(k => { const n = normName(k); if (norm.has(n)) dupNorm.add(n); else norm.set(n, k) })
-  const keys = [...norm.keys()]
-  const memo = new Map()
-  return function resolve(name) {
-    if (!name) return null
-    if (memo.has(name)) return memo.get(name)
-    let hit = null
-    if (exact[name]) hit = exact[name]
-    else {
-      const n = normName(name)
-      if (norm.has(n) && !dupNorm.has(n)) hit = exact[norm.get(n)]
-      else if (n.length >= 20) {
-        const cands = keys.filter(k => k.startsWith(n + '_') || k === n)
-        if (cands.length === 1) hit = exact[norm.get(cands[0])]
-      }
-    }
-    memo.set(name, hit)
-    return hit
-  }
-}
+// Name matching lives in shared/metaAdMatch.mjs (the server uses it too).
+export { makeAdResolver } from '../../shared/metaAdMatch.mjs'
 
 export const imgProxy = url => (url ? '/api/img-proxy?url=' + encodeURIComponent(url) : null)
 
@@ -78,8 +51,12 @@ const inr = n => (n == null ? '-' : '&#8377;' + Math.round(n).toLocaleString('en
 const num = n => Math.round(n || 0).toLocaleString('en-IN')
 const STATUS_LABEL = { ACTIVE: 'Live', PAUSED: 'Paused', ADSET_PAUSED: 'Paused', CAMPAIGN_PAUSED: 'Paused', ARCHIVED: 'Archived' }
 
-// ads: [{ name, program, spend, leads, interested, won, cpl, cpi, cps, meta: {link,status,video}, _img }]
-export function buildCareersCreativeReportHtml({ ads, totals, windowLabel, filterChips, omitted }) {
+const fmtVal = (fmt, v) => (fmt === 'inr' ? inr(v) : num(v))
+
+// Generic creative report. stats = the figures on each card [{ label, key, fmt: 'inr'|'num', acc }];
+// tiles = the summary row [{ label, value }] with value already formatted.
+// ads: [{ name, program?, ...figures, meta: {link,status,video}, _img }]
+export function buildCreativeReportHtml({ title, ads, stats, tiles, windowLabel, filterChips, omitted, footNote }) {
   const cards = ads.map(a => {
     const m = a.meta || {}
     const st = STATUS_LABEL[m.status] || ''
@@ -95,14 +72,7 @@ export function buildCareersCreativeReportHtml({ ads, totals, windowLabel, filte
       '<div class="card-name">' + esc(a.name) + '</div>' +
       (a.program ? '<div class="prog">' + esc(a.program) + '</div>' : '') +
       '<div class="stats">' +
-      '<div><div class="sl">Spend</div><div class="sv">' + inr(a.spend) + '</div></div>' +
-      '<div><div class="sl">Leads</div><div class="sv">' + num(a.leads) + '</div></div>' +
-      '<div><div class="sl">Interested</div><div class="sv">' + num(a.interested) + '</div></div>' +
-      '<div><div class="sl">CPL</div><div class="sv acc">' + inr(a.cpl) + '</div></div>' +
-      '<div><div class="sl">CPI</div><div class="sv acc">' + inr(a.cpi) + '</div></div>' +
-      '<div><div class="sl">CPS</div><div class="sv acc">' + inr(a.cps) + '</div></div>' +
-      '<div><div class="sl">Won (Funnel)</div><div class="sv">' + num(a.won) + '</div></div>' +
-      '<div><div class="sl">Won (Snapshot)</div><div class="sv">' + num(a.wonSnapshot) + '</div></div>' +
+      stats.map(st => '<div><div class="sl">' + esc(st.label) + '</div><div class="sv' + (st.acc ? ' acc' : '') + '">' + fmtVal(st.fmt, a[st.key]) + '</div></div>').join('') +
       '</div></div></a>'
   }).join('')
   const chips = (filterChips || []).map(c => '<span class="chip">' + esc(c) + '</span>').join('')
@@ -110,7 +80,7 @@ export function buildCareersCreativeReportHtml({ ads, totals, windowLabel, filte
     ? '<div class="note">The totals above cover the ' + ads.length + ' ads shown. ' + omitted + ' more ad' + (omitted === 1 ? '' : 's') + ' in this window are left out (no matching Meta ad, or beyond the ' + ads.length + ' ad cap).</div>'
     : ''
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Leverage Careers - Meta ad creative report</title><style>' +
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(title) + '</title><style>' +
 `* { box-sizing:border-box; }
 body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif; background:#F4F6F9; color:#0F172A; padding:28px 32px 36px; }
 .report { max-width:1180px; margin:0 auto; background:#fff; border-radius:16px; border:0.5px solid #E2E8F0; padding:28px 32px 36px; box-shadow:0 1px 3px rgba(15,23,42,0.06); }
@@ -153,18 +123,52 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 .foot { margin-top:26px; padding-top:16px; border-top:0.5px solid #F1F5F9; text-align:center; font-size:10.5px; color:#94A3B8; }
 @media (max-width:640px){ body{padding:12px;} .report{padding:18px 14px 24px;} }
 </style></head><body><div class="report">
-<div class="head"><div class="brand"><div class="logo">` + brandLogoSvgMarkup(24) + `</div><div><p class="wm">QUANTUM</p><p class="ttl">Leverage Careers - Meta ad creative report</p><p class="sub">` + esc(windowLabel || '') + ' &middot; Generated ' + today + `</p></div></div><div class="chips">` + chips + `</div></div>
-<div class="summary">
-<div class="tile"><div class="tl">Spend</div><div class="tv">` + inr(totals.spend) + `</div></div>
-<div class="tile"><div class="tl">Leads</div><div class="tv">` + num(totals.leads) + `</div></div>
-<div class="tile"><div class="tl">Interested</div><div class="tv">` + num(totals.interested) + `</div></div>
-<div class="tile"><div class="tl">Won (Funnel)</div><div class="tv">` + num(totals.won) + `</div></div>
-<div class="tile"><div class="tl">Won (Snapshot)</div><div class="tv">` + num(totals.wonSnapshot) + `</div></div>
-<div class="tile"><div class="tl">CPL</div><div class="tv">` + inr(totals.cpl) + `</div></div>
-<div class="tile"><div class="tl">CPI</div><div class="tv">` + inr(totals.cpi) + `</div></div>
-<div class="tile"><div class="tl">CPS</div><div class="tv">` + inr(totals.cps) + `</div></div>
-<div class="tile"><div class="tl">Ads shown</div><div class="tv">` + ads.length + `</div></div>
-</div>` + omit + '<div class="grid">' + cards + `</div>
-<div class="foot">Exported from <b style="color:#1F3C84;">Leverage Quantum</b> &middot; Hover a card to lift it, click anywhere on it to open the live ad on Meta &middot; All figures from the Careers data, Meta supplies only the picture and link</div>
+<div class="head"><div class="brand"><div class="logo">` + brandLogoSvgMarkup(24) + `</div><div><p class="wm">QUANTUM</p><p class="ttl">` + esc(title) + `</p><p class="sub">` + esc(windowLabel || '') + ' &middot; Generated ' + today + `</p></div></div><div class="chips">` + chips + `</div></div>
+<div class="summary">` +
+tiles.concat([{ label: 'Ads shown', value: String(ads.length) }]).map(t => '<div class="tile"><div class="tl">' + esc(t.label) + '</div><div class="tv">' + t.value + '</div></div>').join('') +
+`</div>` + omit + '<div class="grid">' + cards + `</div>
+<div class="foot">Exported from <b style="color:#1F3C84;">Leverage Quantum</b> &middot; Hover a card to lift it, click anywhere on it to open the live ad on Meta &middot; ` + esc(footNote || '') + `</div>
 </div></body></html>`
 }
+
+// Leverage Careers wrapper (figures are the Careerv2 BigQuery data).
+export function buildCareersCreativeReportHtml({ ads, totals, windowLabel, filterChips, omitted }) {
+  return buildCreativeReportHtml({
+    title: 'Leverage Careers - Meta ad creative report', ads, windowLabel, filterChips, omitted,
+    footNote: 'All figures from the Careers data, Meta supplies only the picture and link',
+    stats: [
+      { label: 'Spend', key: 'spend', fmt: 'inr' }, { label: 'Leads', key: 'leads' }, { label: 'Interested', key: 'interested' },
+      { label: 'CPL', key: 'cpl', fmt: 'inr', acc: true }, { label: 'CPI', key: 'cpi', fmt: 'inr', acc: true }, { label: 'CPS', key: 'cps', fmt: 'inr', acc: true },
+      { label: 'Won (Funnel)', key: 'won' }, { label: 'Won (Snapshot)', key: 'wonSnapshot' },
+    ],
+    tiles: [
+      { label: 'Spend', value: inr(totals.spend) }, { label: 'Leads', value: num(totals.leads) }, { label: 'Interested', value: num(totals.interested) },
+      { label: 'Won (Funnel)', value: num(totals.won) }, { label: 'Won (Snapshot)', value: num(totals.wonSnapshot) },
+      { label: 'CPL', value: inr(totals.cpl) }, { label: 'CPI', value: inr(totals.cpi) }, { label: 'CPS', value: inr(totals.cps) },
+    ],
+  })
+}
+
+// Overall: look up Meta ads for a list of our campaign names. The server matches each
+// name to a real Meta ad (shared/metaAdMatch.mjs) and returns link + picture only.
+// Results are kept per name for the session, so paging the table does not re-ask.
+const _overallCache = new Map() // name -> meta | null
+export async function fetchMetaAdsForNames(names) {
+  const want = [...new Set((names || []).filter(n => n && !_overallCache.has(n)))]
+  for (let i = 0; i < want.length; i += 300) {
+    const chunk = want.slice(i, i + 300)
+    try {
+      const r = await fetch('/api/crm-leads?source=meta_ad_creatives', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names: chunk }),
+      })
+      const j = r.ok ? await r.json() : null
+      if (!j || !j.ok) return { ok: false, error: (j && j.error) || ('Meta lookup failed (' + r.status + ')'), ads: Object.fromEntries(_overallCache) }
+      chunk.forEach(n => _overallCache.set(n, (j.ads && j.ads[n]) || null))
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e), ads: Object.fromEntries(_overallCache) }
+    }
+  }
+  return { ok: true, ads: Object.fromEntries(_overallCache) }
+}
+export { inr as fmtInrHtml, num as fmtNumHtml }
