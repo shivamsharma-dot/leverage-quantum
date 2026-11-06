@@ -2578,3 +2578,5 @@ On Overall (Sheet and BigQuery) a Facebook `campaign_name` is the Meta AD name, 
 
 
 **Follow-up, same day (`113bc3e`):** `MetaAdLabel` no longer uses a dashed underline or a trailing arrow. The name stays plain text with a small grey platform icon (Instagram / Facebook / Ads Library) in front; hovering the row turns the name navy and fades in an "Open ad" pill at the right end of the cell (CSS injected once, `tr:hover`; always visible on touch screens). Hover picture unchanged. Also moved the Creative report into the Export menu (`extraOption`) and hid Export as JSON / Google Sheets on Overall only (other pages still pending). Live-checked on Overall (BigQuery) Campaign tab.
+
+**Follow-up, same day (`c59b7fe`):** the platform icon and the "Open ad" pill were dropped (owner did not like them). The ad name is plain text; hovering the name itself turns it navy with a normal underline and a small arrow, and shows the picture card. Live-checked.
