@@ -324,7 +324,7 @@ export default function SuperTrackerDashboard() {
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}{refreshing ? '…' : ''}</span>}
             <Button onClick={refresh} disabled={refreshing} size="sm">{refreshing ? 'Refreshing' : 'Refresh'}</Button>
             <Button size="sm" variant="secondary" onClick={() => setSlackOpen(true)} icon={<SlackIcon size={13} />}>Send to Slack</Button>
-            <ExportButton data={exportRows} filename="super_tracker" dashboardId="super_tracker" hideSlack />
+            <ExportButton data={exportRows} filename="super_tracker" dashboardId="super_tracker" />
           </div>
         </div>
         <SlackReportPanel

@@ -2421,7 +2421,6 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
         {isAdmin && <Button size="sm" onClick={onOpenAddUser}>+ Add User</Button>}
         <ExportButton
-          hideSlack
           filename="team-mapping-roster"
           onExported={({ rows: n }) => logExportActivity('Roster CSV', n)}
           data={filtered.map(r => {
@@ -2779,7 +2778,6 @@ function GroupsTab({ isAdmin, registerRefresh }) {
         <div style={{ flex: 1 }} />
         {isAdmin && <Button variant="ghost" size="sm" onClick={() => setShowCountryLists(true)}>Edit country lists</Button>}
         <ExportButton
-          hideSlack
           filename="team-mapping-groups"
           onExported={({ rows: n }) => logExportActivity('Groups CSV', n)}
           data={filtered.map(g => ({ Group: g.name, Members: g.memberCount }))}

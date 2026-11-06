@@ -5598,7 +5598,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
                 extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }}
                 rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
-                filename={'overall-' + grpBy} dashboardId="overall" hideSlack />
+                filename={'overall-' + grpBy} dashboardId="overall" />
               <SlackReportPanel
                 open={slackPanelOpen}
                 onClose={() => setSlackPanelOpen(false)}
@@ -6262,7 +6262,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             rawData={compareExportRows}
                             filename={'overall-compare-' + compareTableDim}
                             dashboardId="overall"
-                            hideSlack
                           />
                         </div>
                       </div>
@@ -6441,7 +6440,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           rawData={trendResult.exportRows}
                           filename={'overall-trend-' + trendDim + '-' + trendEffectiveGranularity}
                           dashboardId="overall"
-                          hideSlack
                         />
                       </div>
                     </>

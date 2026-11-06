@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react'
-import { toast } from './ToastHost'
 import Button from './Button'
-import { ExcelIcon, SlackIcon } from './icons/BrandIcons'
+import { ExcelIcon } from './icons/BrandIcons'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack, onExported }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, onExported }) {
   const [open, setOpen] = useState(false)
   // When this button sits near the bottom of a scrollable modal (Compare/Trend
   // Analysis, for instance), a menu that always drops DOWN renders past the
@@ -21,74 +20,16 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
     }
     setOpen(o => !o)
   }
-  const [slackBusy, setSlackBusy] = useState(false)
 
   // A totals row, when the caller has one, leads the export -- mirroring where it sits on
   // screen (directly under the header) rather than being buried at the bottom of the file.
-  // Shared by every export path so CSV and Slack can't disagree.
+  // Shared by every export path so the CSV files can't disagree.
   const allRows = totalRow ? [totalRow, ...(data || [])] : (data || [])
   const colsOf = () => columns || (allRows[0] ? Object.keys(allRows[0]) : [])
   // Optional unformatted twin of the same rows. Display values like "₹2,15,05,881" are
   // text to a spreadsheet -- they can't be summed or sorted numerically -- so callers can
   // supply the underlying numbers alongside them.
   const rawAllRows = rawData ? (rawTotalRow ? [rawTotalRow, ...rawData] : rawData) : null
-
-  // target is explicit rather than a single "send to Slack": an Incoming Webhook is bound to
-  // one channel, so the only safe way to test is a separate test webhook, and the confirm
-  // names the destination so the team channel is never hit by accident.
-  const exportSlack = async (target) => {
-    if (!allRows.length) return
-    const where = target === 'test' ? 'the TEST Slack channel' : 'the MAIN team Slack channel'
-    if (!window.confirm(`Post "${filename || 'this export'}" (${allRows.length} row${allRows.length === 1 ? '' : 's'}) to ${where}?`)) return
-    setSlackBusy(true)
-    try {
-      const cols = colsOf()
-      const rows = allRows.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
-      const r = await fetch('/api/send-report', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_export', title: filename, columns: cols, rows, sourcePage: filename, dashboardId, slackTarget: target }),
-      })
-      const resData = await r.json()
-      if (!r.ok) throw new Error(resData.error || 'Failed to post to Slack')
-      toast('Posted to Slack ' + (resData.channel || ''), { type: 'success' })
-      setOpen(false)
-    } catch (e) {
-      toast(e.message || 'Could not post to Slack', { type: 'muted' })
-    } finally {
-      setSlackBusy(false)
-    }
-  }
-
-  // When the page supplies slackRich, "Send to Slack" posts the table as a real image of
-  // the on-screen table plus the complete CSV, instead of a monospace code block that
-  // Slack truncates on wide tables. See handleSlackExportImage in api/send-report.js.
-  const exportSlackRich = async (target) => {
-    const where = target === 'test' ? 'the TEST Slack channel' : 'the MAIN team Slack channel'
-    if (!window.confirm(`Post "${filename || 'this export'}" as a table image + CSV (${allRows.length} row${allRows.length === 1 ? '' : 's'}) to ${where}?`)) return
-    setSlackBusy(true)
-    try {
-      const payload = await slackRich()
-      if (!payload || !payload.pngBase64) throw new Error('Could not render the table image - narrow the filter or use Export \u2192 CSV')
-      const r = await fetch('/api/send-report', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_export_image', dashboardId, slackTarget: target, filename, rowCount: allRows.length, ...payload }),
-      })
-      const resData = await r.json()
-      if (!r.ok) throw new Error(resData.error || 'Failed to post to Slack')
-      toast('Posted to Slack ' + (resData.channel || ''), { type: 'success' })
-      setOpen(false)
-    } catch (e) {
-      toast(e.message || 'Could not post to Slack', { type: 'muted' })
-    } finally {
-      setSlackBusy(false)
-    }
-  }
-
-  const sendSlack = target => (slackRich ? exportSlackRich(target) : exportSlack(target))
 
   const exportCSV = () => {
     if (!allRows.length) return
@@ -177,33 +118,6 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
                 Export as CSV (raw numbers)
               </button>
             )}
-        {!hideSlack && (<>
-            <button onClick={() => sendSlack('test')} disabled={slackBusy} style={{
-              display:'flex', alignItems:'center', gap:9, width:'100%',
-              padding:'9px 14px', border:'none', background:'none',
-              cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
-              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
-              transition:'background .1s', opacity: slackBusy ? 0.6 : 1
-            }}
-            title="Posts to the test channel -- safe for checking formatting"
-            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
-            onMouseOut={e=>e.currentTarget.style.background='none'}>
-              <SlackIcon size={13} />
-              {slackBusy ? 'Posting…' : 'Send to Slack - test channel'}
-            </button>
-            <button onClick={() => sendSlack('prod')} disabled={slackBusy} style={{
-              display:'flex', alignItems:'center', gap:9, width:'100%',
-              padding:'9px 14px', border:'none', background:'none',
-              cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
-              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
-              transition:'background .1s', opacity: slackBusy ? 0.6 : 1
-            }}
-            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
-            onMouseOut={e=>e.currentTarget.style.background='none'}>
-              <SlackIcon size={13} />
-              {slackBusy ? 'Posting…' : 'Send to Slack - main channel'}
-            </button>
-        </>)}
             {extraOption && (
               <button onClick={extraOption.onClick} disabled={extraOption.busy} style={{
                 display:'flex', alignItems:'center', gap:9, width:'100%',
