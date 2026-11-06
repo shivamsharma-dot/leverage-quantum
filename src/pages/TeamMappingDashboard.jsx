@@ -2421,7 +2421,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
         {isAdmin && <Button size="sm" onClick={onOpenAddUser}>+ Add User</Button>}
         <ExportButton
-          hideSlack hideJson hideSheets
+          hideSlack
           filename="team-mapping-roster"
           onExported={({ rows: n }) => logExportActivity('Roster CSV', n)}
           data={filtered.map(r => {
@@ -2779,7 +2779,7 @@ function GroupsTab({ isAdmin, registerRefresh }) {
         <div style={{ flex: 1 }} />
         {isAdmin && <Button variant="ghost" size="sm" onClick={() => setShowCountryLists(true)}>Edit country lists</Button>}
         <ExportButton
-          hideSlack hideJson hideSheets
+          hideSlack
           filename="team-mapping-groups"
           onExported={({ rows: n }) => logExportActivity('Groups CSV', n)}
           data={filtered.map(g => ({ Group: g.name, Members: g.memberCount }))}
@@ -2930,7 +2930,7 @@ function ConnectorsTab() {
             <input type="checkbox" checked={!!form.sheet_enabled} onChange={e => setForm(p => ({ ...p, sheet_enabled: e.target.checked }))} style={{ width: 15, height: 15 }} />
             Enabled
           </label>
-          <ConnectorField label="Sheet ID" hint="The id from the sheet's own URL (the part between /d/ and /edit) -- share the sheet as an Editor with the same Google service account this app already uses for 'Export to Google Sheets' elsewhere.">
+          <ConnectorField label="Sheet ID" hint="The id from the sheet's own URL (the part between /d/ and /edit) -- share the sheet as an Editor with the same Google service account this app already uses for its other Google Sheets connections.">
             <input style={inputStyle} value={form.sheet_id || ''} onChange={e => setForm(p => ({ ...p, sheet_id: e.target.value }))} placeholder="1AbCdefGhIJKlmnOPQrstuVWXyz…" />
           </ConnectorField>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>

@@ -1092,7 +1092,7 @@ export default function LeverageCareersDashboard() {
                       size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
                       icon={<SlackIcon size={13} />}
                     >Send to Slack</Button>
-                    <ExportButton hideJson hideSheets data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack
+                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack
                       extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }} />
                   </div>
                 </div>
@@ -1382,7 +1382,7 @@ export default function LeverageCareersDashboard() {
                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>Showing top 30 of {compareResult.rows.length} campaigns by |Δ Won| - every one is in the export below.</div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <ExportButton hideJson hideSheets data={compareExportRows} filename="leverage_careers_compare" dashboardId="leverage_careers" />
+                  <ExportButton data={compareExportRows} filename="leverage_careers_compare" dashboardId="leverage_careers" />
                 </div>
               </>
             )}

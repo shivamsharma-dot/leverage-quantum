@@ -3,7 +3,7 @@ import { toast } from './ToastHost'
 import Button from './Button'
 import { ExcelIcon, SlackIcon } from './icons/BrandIcons'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack, hideJson, hideSheets, onExported }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack, onExported }) {
   const [open, setOpen] = useState(false)
   // When this button sits near the bottom of a scrollable modal (Compare/Trend
   // Analysis, for instance), a menu that always drops DOWN renders past the
@@ -21,12 +21,11 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
     }
     setOpen(o => !o)
   }
-  const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
 
   // A totals row, when the caller has one, leads the export -- mirroring where it sits on
   // screen (directly under the header) rather than being buried at the bottom of the file.
-  // Shared by all four export paths so CSV / JSON / Sheets / Slack can't disagree.
+  // Shared by every export path so CSV and Slack can't disagree.
   const allRows = totalRow ? [totalRow, ...(data || [])] : (data || [])
   const colsOf = () => columns || (allRows[0] ? Object.keys(allRows[0]) : [])
   // Optional unformatted twin of the same rows. Display values like "₹2,15,05,881" are
@@ -91,30 +90,6 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
 
   const sendSlack = target => (slackRich ? exportSlackRich(target) : exportSlack(target))
 
-  const exportSheets = async () => {
-    if (!allRows.length) return
-    setSheetsBusy(true)
-    try {
-      const cols = colsOf()
-      const rows = allRows.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
-      const r = await fetch('/api/export-to-sheets', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, rawRows: rawAllRows || undefined, filename, dashboardId }),
-      })
-      const resData = await r.json()
-      if (!r.ok) throw new Error(resData.error || 'Failed to export to Google Sheets')
-      window.open(resData.url, '_blank')
-      toast('Google Sheet created', { type: 'success' })
-      setOpen(false)
-    } catch (e) {
-      toast(e.message || 'Could not export to Google Sheets', { type: 'muted' })
-    } finally {
-      setSheetsBusy(false)
-    }
-  }
-
   const exportCSV = () => {
     if (!allRows.length) return
     writeCsv(colsOf(), allRows, filename)
@@ -142,18 +117,6 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
     const a = document.createElement('a')
     a.href = url
     a.download = `${name || 'export'}_${new Date().toISOString().slice(0,10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    setOpen(false)
-  }
-
-  const exportJSON = () => {
-    if (!allRows.length) return
-    const blob = new Blob([JSON.stringify(allRows, null, 2)], { type: 'application/json;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${filename || 'export'}_${new Date().toISOString().slice(0,10)}.json`
     a.click()
     URL.revokeObjectURL(url)
     setOpen(false)
@@ -213,45 +176,6 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
                 <ExcelIcon size={13} />
                 Export as CSV (raw numbers)
               </button>
-            )}
-            {!hideJson && (
-            <button onClick={exportJSON} style={{
-              display:'flex', alignItems:'center', gap:9, width:'100%',
-              padding:'9px 14px', border:'none', background:'none',
-              cursor:'pointer', fontSize:13, fontWeight:500, color:'#111827',
-              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
-              transition:'background .1s'
-            }}
-            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
-            onMouseOut={e=>e.currentTarget.style.background='none'}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
-                <polyline points="10 9 9 9 8 9"/>
-              </svg>
-              Export as JSON
-            </button>
-            )}
-            {!hideSheets && (
-            <button onClick={exportSheets} disabled={sheetsBusy} style={{
-              display:'flex', alignItems:'center', gap:9, width:'100%',
-              padding:'9px 14px', border:'none', background:'none',
-              cursor: sheetsBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
-              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
-              transition:'background .1s', opacity: sheetsBusy ? 0.6 : 1
-            }}
-            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
-            onMouseOut={e=>e.currentTarget.style.background='none'}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="9" y1="13" x2="15" y2="13"/>
-                <line x1="9" y1="17" x2="13" y2="17"/>
-              </svg>
-              {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
-            </button>
             )}
         {!hideSlack && (<>
             <button onClick={() => sendSlack('test')} disabled={slackBusy} style={{
