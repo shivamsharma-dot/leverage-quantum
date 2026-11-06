@@ -2584,3 +2584,5 @@ On Overall (Sheet and BigQuery) a Facebook `campaign_name` is the Meta AD name, 
 ## 2026-11-06 (later) -- Export as JSON and Export to Google Sheets removed from every page (commit `158181c`)
 
 Removed from the shared `src/components/ExportButton.jsx` (menu items, `exportJSON`, `exportSheets`, `sheetsBusy`, and the `hideJson`/`hideSheets` props), so every page changed at once; dead `hideJson hideSheets` props removed from Overall, Leverage Careers and Team Mapping. Export menu now: CSV, CSV (raw numbers) where offered, Slack test/main where not hidden, plus any page extra (e.g. Creative report). Live-checked on Apps. `api/export-to-sheets.mjs` is now unused by the app (left in place; deleting it would free one Vercel function slot).
+
+**Follow-up, same day (`e46574b`):** "Send to Slack - test channel" / "main channel" also removed from the shared Export menu on every page (`exportSlack`, `exportSlackRich`, `slackRich`/`hideSlack` props gone). Each page's own "Send to Slack" button / panel is separate and untouched. Live-checked on Apps: the menu is just Export as CSV.
