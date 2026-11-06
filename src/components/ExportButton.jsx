@@ -89,7 +89,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
             position:'absolute', right:0, zIndex:100,
             ...(openUp ? { bottom:'calc(100% + 6px)' } : { top:'calc(100% + 6px)' }),
             background:'#fff', border:'1px solid #E5E7EB', borderRadius:10,
-            boxShadow:'0 8px 24px rgba(0,0,0,0.12)', padding:6, minWidth:150
+            boxShadow:'0 8px 24px rgba(0,0,0,0.12)', padding:6, minWidth:150, width:'max-content', maxWidth:'calc(100vw - 32px)', whiteSpace:'nowrap'
           }}>
             <button onClick={exportCSV} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
