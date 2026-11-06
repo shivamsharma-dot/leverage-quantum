@@ -11,7 +11,7 @@ import MetaAdLabel from '../components/MetaAdLabel'
 import { toast } from '../components/ToastHost'
 import { fetchMetaAdsForNames, fetchImageDataUri, buildCreativeReportHtml, fmtInrHtml, fmtNumHtml } from '../lib/careersMetaAds'
 import SlackReportPanel from '../components/SlackReportPanel'
-import { SlackIcon } from '../components/icons/BrandIcons'
+import { SlackIcon, FacebookIcon } from '../components/icons/BrandIcons'
 import { CORRIDOR_MIN_QL } from '../lib/pmReport'
 import {
   CpqlBySource, CostTrendMonth, CostTrendDay,
@@ -5596,7 +5596,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 Send to Slack
               </Button>
               <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
-                extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }}
+                extraOption={{ label: 'Creative report (Meta ads)', icon: <FacebookIcon size={13} />, onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }}
                 rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
                 filename={'overall-' + grpBy} dashboardId="overall" />
               <SlackReportPanel

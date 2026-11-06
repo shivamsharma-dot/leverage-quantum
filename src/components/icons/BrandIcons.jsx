@@ -83,3 +83,15 @@ export function SlackIcon({ size = 14 }) {
     </svg>
   )
 }
+
+// Facebook / Meta brand mark (white "f" on the Facebook-blue circle). Used for
+// Meta-specific actions such as the Creative report in the Export menu. Same
+// "f" path and #1877F2 blue as the Connect Meta screen on Meta Ads.
+export function FacebookIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#1877F2"/>
+      <path d="M15.6 7.6h-1.7c-.6 0-.9.3-.9.9v1.6h2.5l-.4 2.6H13v6.2h-2.7v-6.2H8.4v-2.6h1.9V8.3c0-2 1.2-3.2 3.1-3.2.9 0 1.7.1 2.2.1v2.4z" fill="#fff"/>
+    </svg>
+  )
+}

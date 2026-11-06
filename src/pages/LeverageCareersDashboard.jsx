@@ -9,7 +9,7 @@ import ExportButton from '../components/ExportButton'
 import DateRangePicker from '../components/DateRangePicker'
 import Dropdown from '../components/Dropdown'
 import SlackReportPanel from '../components/SlackReportPanel'
-import { SlackIcon } from '../components/icons/BrandIcons'
+import { SlackIcon, FacebookIcon } from '../components/icons/BrandIcons'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, RankedBars, sourceColor, NEUTRAL_TRACK } from '../ui/dashboardKit'
@@ -1093,7 +1093,7 @@ export default function LeverageCareersDashboard() {
                       icon={<SlackIcon size={13} />}
                     >Send to Slack</Button>
                     <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers"
-                      extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }} />
+                      extraOption={{ label: 'Creative report (Meta ads)', icon: <FacebookIcon size={13} />, onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }} />
                   </div>
                 </div>
                 <div ref={tableRef} style={{ overflowX: 'auto' }}>
