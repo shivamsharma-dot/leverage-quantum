@@ -5595,7 +5595,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 icon={<SlackIcon size={13} />}>
                 Send to Slack
               </Button>
-              <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
+              <ExportButton hideJson hideSheets data={tableExportRows} totalRow={tableTotalExportRow}
                 extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }}
                 rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
                 filename={'overall-' + grpBy} dashboardId="overall" hideSlack />
@@ -6257,7 +6257,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                         )}
 
                         <div style={{ marginTop:10, display:'flex', justifyContent:'flex-end' }}>
-                          <ExportButton
+                          <ExportButton hideJson hideSheets
                             data={compareExportRowsFmt}
                             rawData={compareExportRows}
                             filename={'overall-compare-' + compareTableDim}
@@ -6436,7 +6436,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       </div>
 
                       <div style={{ display:'flex', justifyContent:'flex-end' }}>
-                        <ExportButton
+                        <ExportButton hideJson hideSheets
                           data={trendExportRowsFmt}
                           rawData={trendResult.exportRows}
                           filename={'overall-trend-' + trendDim + '-' + trendEffectiveGranularity}
