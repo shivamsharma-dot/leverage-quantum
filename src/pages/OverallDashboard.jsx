@@ -5595,11 +5595,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 icon={<SlackIcon size={13} />}>
                 Send to Slack
               </Button>
-              <Button size="sm" variant="secondary" onClick={downloadCreativeReport} disabled={!!creativeBusy}
-                title={metaLookupNote || 'Download the Facebook ads in this view as an HTML report with each ad picture'}>
-                {creativeBusy ? 'Building ' + creativeBusy : 'Creative report'}
-              </Button>
               <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
+                extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }}
                 rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
                 filename={'overall-' + grpBy} dashboardId="overall" hideSlack />
               <SlackReportPanel

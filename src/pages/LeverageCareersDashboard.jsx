@@ -1092,11 +1092,8 @@ export default function LeverageCareersDashboard() {
                       size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
                       icon={<SlackIcon size={13} />}
                     >Send to Slack</Button>
-                    <Button
-                      size="sm" variant="secondary" onClick={downloadCreativeReport} disabled={!!creativeBusy}
-                      title="Download an HTML report with each Meta ad's picture, a link to the live ad and its numbers"
-                    >{creativeBusy ? 'Building ' + creativeBusy : 'Creative report'}</Button>
-                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack />
+                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack
+                      extraOption={{ label: 'Creative report (Meta ads)', onClick: downloadCreativeReport, busy: !!creativeBusy, busyLabel: 'Building ' + creativeBusy }} />
                   </div>
                 </div>
                 <div ref={tableRef} style={{ overflowX: 'auto' }}>
