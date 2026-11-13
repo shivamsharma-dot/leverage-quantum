@@ -8,7 +8,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // ever be reached via a dynamic import()).
 import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
-import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages, EBITDA_MONTHS, combineParsed, combineSections, ebitdaMonthStart } from '../lib/ebitdaManagerReport.mjs'
+import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages, EBITDA_MONTHS, combineParsed, combineSections, ebitdaMonthStart, readEbitdaTab, extractSeniorManagers, EBITDA_COMBINED_TAB, EBITDA_SHEET_ID } from '../lib/ebitdaManagerReport.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -3084,19 +3084,26 @@ async function handleEbitdaManagerView(req, res) {
     const dateLabel = y.getUTCDate() + ' ' + mons[y.getUTCMonth()]
     const daysInMonth = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth() + 1, 0)).getUTCDate()
     const proRata = y.getUTCDate() + '/' + daysInMonth
+    // The Combined tab (live workbook) carries the combined team tables (with the October moves: managers who left are
+    // counted under the manager their people went to) and one senior manager table per view. Read it once.
+    const combinedGrid = await readEbitdaTab(EBITDA_SHEET_ID, EBITDA_COMBINED_TAB, 'A1:O260')
+    const sm = extractSeniorManagers(combinedGrid, want === 'combined' ? 'Combined' : picked[0].label)
     let report, sheetOut
     if (loaded.length === 1) {
-      report = buildEbitdaReport(last.parsed, { dateLabel, proRata })
+      report = buildEbitdaReport(last.parsed, { dateLabel, proRata, seniorManagers: sm && sm.parsed })
       sheetOut = last.sections
     } else {
       const names = loaded.map(l => l.label.slice(0, 3)).join(' + ')
-      report = buildEbitdaReport(combineParsed(loaded), {
-        dateLabel, proRata,
+      // Combined = the Combined tab as it is (October + November, with the October moves), not a sum done here.
+      const combinedParsed = parseEbitdaView(combinedGrid)
+      report = buildEbitdaReport(combinedParsed, {
+        dateLabel, proRata, seniorManagers: sm && sm.parsed,
         headerTitle: 'Overall EBITDA, ' + names + ' (as on ' + dateLabel + ')',
-        noteText: 'AC, SR, VAS and Offline only. ' + loaded.map(l => l.label).join(' plus ') + ' added together; the latest month is month to date, as on ' + dateLabel + '. Team shows the latest month headcount. Sorted by EBITDA, highest first. A picture of each table is in its thread.',
+        noteText: 'AC, SR, VAS and Offline only. ' + loaded.map(l => l.label).join(' plus ') + ' added together; the latest month is month to date, as on ' + dateLabel + '. Managers who have left are shown under the manager their people went to. Team shows the latest month headcount. Sorted by EBITDA, highest first. A picture of each table is in its thread.',
       })
-      sheetOut = combineSections(loaded)
+      sheetOut = extractEbitdaViewSections(combinedGrid)
     }
+    if (sm) sheetOut = { ...sheetOut, seniorManagers: sm.section }
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({
       ok: true,

@@ -13,7 +13,7 @@ import { getSession, setSession } from '../lib/sessionLoad'
 // the Slack report come from the same read, so they can never disagree. The sheet is the single
 // source: this page keeps no copy, and re-reads only on a fresh page load and when Refresh is clicked.
 
-const CACHE_KEY = 'lq_manager_ebitda_v2'
+const CACHE_KEY = 'lq_manager_ebitda_v3'
 const cacheKey = month => CACHE_KEY + '_' + month
 const DEFAULT_MONTHS = [{ key: 'combined', label: 'Combined' }, { key: 'oct', label: 'October' }, { key: 'nov', label: 'November' }]
 
@@ -190,6 +190,12 @@ export default function ManagerEbitdaDashboard() {
         {sheet.consolidated && (
           <Card title="Team-wise view">
             <SheetTable header={sheet.consolidated.header} rows={sheet.consolidated.rows} boldLast ebitdaCol={sheet.consolidated.header.length - 1} />
+          </Card>
+        )}
+
+        {sheet.seniorManagers && sheet.seniorManagers.rows.length > 0 && (
+          <Card title={sheet.seniorManagers.title}>
+            <SheetTable header={sheet.seniorManagers.header} rows={sheet.seniorManagers.rows.concat([sheet.seniorManagers.titleRow.map((v, i) => (i === 0 ? 'Total' : i === 14 ? '' : v))])} boldLast ebitdaCol={13} />
           </Card>
         )}
 
