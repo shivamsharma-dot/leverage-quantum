@@ -1099,3 +1099,15 @@ Owner's choice: option B (follow each person). October itself (October workbook,
 - `api/send-report.mjs` `handleEbitdaManagerView`: always reads `'EBITDA - Combined'!A1:O260` once. Combined view now = that tab as it is (`parseEbitdaView` / `extractEbitdaViewSections` on it), no longer a sum done in code (`combineParsed` / `combineSections` kept but unused), so page = sheet = Slack by construction. Every view gets the matching senior manager table. Combined note text says leavers are shown under the manager their people went to.
 - `src/pages/ManagerEbitdaDashboard.jsx`: "Senior managers: ..." card after the team-wise view, with a Total row. Session cache key v2 -> v3.
 - Verified live (13 Nov): Combined SM table 12 senior managers, totals 263 (252) / revenue 11,96,67,556 / EBITDA -6,10,13,902, same as sheet; November 263 / 1,31,67,313 / -2,79,42,867; October 252 / 10,65,00,243 / -3,30,71,035. Slack Combined has 6 messages (header, 4 teams, senior managers with picture). No Vishal / Tushita / Prashanth rows in Combined tables. Nothing posted to Slack.
+
+## 43. 13 Nov 2026: Combined team size shows the current (November) size only, no brackets
+
+Owner's rule (repeated): headcount is never added or bracketed across months; only the current team size is shown. The Combined tab had "5 (7)" style sizes (November, October in brackets), and the Quantum page showed them because it reads that tab. Slack already showed the current size only.
+
+Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
+- B8 `=ARRAYFORMULA('EBITDA - November'!B8:B13)` (was November & " (" & October & ")").
+- B16, B49, B72, B85, B108 = the November title-row size (`='EBITDA - November'!B16` etc.).
+- Manager tables A18 / A51 / A74 / A87 and Difference A110: size = the manager's November size, "-" if not in November (the bracket part and the "October size + people moved" part removed).
+- Senior manager Combined table A180: size = sum of the managers' current sizes (`f(2)`); title B178 `=SUM(B180:B201)`.
+- A2 note: "Team size is the current (November) team size only; headcount is never added across months."
+- Checked live: Combined page, team tables, senior manager table and Slack all show current sizes only (AC 129, SR 60, VAS 14, Offline 60, total 263; no "N (M)" anywhere in the API response).
