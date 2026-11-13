@@ -1111,3 +1111,18 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - Senior manager Combined table A180: size = sum of the managers' current sizes (`f(2)`); title B178 `=SUM(B180:B201)`.
 - A2 note: "Team size is the current (November) team size only; headcount is never added across months."
 - Checked live: Combined page, team tables, senior manager table and Slack all show current sizes only (AC 129, SR 60, VAS 14, Offline 60, total 263; no "N (M)" anywhere in the API response).
+
+## 44. 13 Nov 2026: Team Mapping S (Total revenue) and T (Product cost) now cover every row
+
+- Found after posting the Combined report to #dashboard-testing (13:29 IST): Joydeep Mohanty's row showed AC ₹1,80,296 but Total revenue 0. Cause: Team Mapping S and T were row-by-row formulas (`=SUM(Pn:Rn)`, `=(Qn*0.2+Rn*0.9)`) filled only to row 394 plus row 441; rows 395-440 and 442-443 had none. The only sale in those rows: Suraj Kumar (row 399, Joydeep's team, active), AC ₹1,80,296. The reconciliation stayed 0 because both sides read column S.
+- Fix: S4:T800 cleared; S3 = `MAP($G3:$G800,$P3:$P800,$Q3:$Q800,$R3:$R800,LAMBDA(g,p,q,r,IF(g="","",SUM(p,q,r))))`, T3 = `MAP($G3:$G800,$Q3:$Q800,$R3:$R800,LAMBDA(g,q,r,IF(g="","",N(q)*0.2+N(r)*0.9)))`. Any row added later is covered.
+- Effect (1-12 Nov): revenue 1,57,16,360 -> 1,58,96,656 (+1,80,296), cost 4,31,64,843 -> 4,32,00,902 (+36,059). Reconciliation 0. The report posted at 13:29 is from before this fix.
+- Rollback: per-row formulas `=SUM(Pn:Rn)` and `=(Qn*0.2+Rn*0.9)` in rows 3-394 and 441.
+
+## 45. 13 Nov 2026: Soumitra Chaturvedi and Varsha Baliyan are their own senior managers
+
+- Owner: Manish Kumar Singh is CBO, not a senior manager. Both managers' own Team Mapping column K says Manish Kumar Singh, so they were grouped under him.
+- `EBITDA - Combined`!A254:A256: new list "Not a senior manager (above SM level)", A256 = Manish Kumar Singh (room to A260). A manager whose column K names someone in that list stands as their own senior manager.
+- A180 / A205 / A230 senior manager formulas: `IF(ISNUMBER(MATCH(k,$A$256:$A$260,0)),x,k)`.
+- Now 13 senior managers: Shafein Tauheid, Varsha Baliyan, Kunal Ramani, Shubham Sharma, Rishabh Mahajan, Priyansh Singh Solanki, Rahul Agarwal, Soumitra Chaturvedi, Shubham Sachdeva, Gautam Makhija, Himanshu Gupta, Deepak Panwar, Mohd Saud Khan. Totals unchanged. Page and Slack checked live (13 rows).
+- No change in Team Mapping.
