@@ -1209,3 +1209,10 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 
 - `ae76325`: EBITDA Nov cells use the same red / green arrow cell as EBITDA Combined in the native tables; the line above each table and the picture subtitle show the arrow; in the thread pictures the Nov column has the red / green fill and arrow too. "-" (no November row) stays plain.
 - Re-posted to #dashboard-testing at 18:28 IST (6 messages). A post at 18:27 went out without the Nov arrows because the page had loaded the report before the deploy finished; lesson: after a deploy, reload the page before sending from it.
+
+## 54. 14 Nov 2026: Rahul Agarwal is not a senior manager
+
+- Owner: Lakshay Gupta and Ummi Adibah Binti Robai report to Rahul Agarwal, but neither Rahul nor Manish is a senior manager (same as Soumitra / Varsha under Manish).
+- `EBITDA - Combined`!A261 = "Rahul Agarwal" (list A260:A264, A260 = Manish Kumar Singh). Note A258 corrected to "A260:A264" (it still said A256:A260 after the 4-row insert).
+- Result: Combined and November show Lakshay Gupta and Ummi Adibah Binti Robai as their own senior managers instead of Rahul (14 rows, totals unchanged: Combined 263 / -6,32,48,696, November -2,72,58,689). October also: Lakshay, Ummi, and Vishal Jain (left in October; his own column K is Rahul Agarwal) as his own row.
+- The month-tab views (`EBITDA - November`!X16, October workbook `EBITDA - October`!X16) follow automatically. How It Works row 150.
