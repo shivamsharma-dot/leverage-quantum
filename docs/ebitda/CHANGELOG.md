@@ -1182,3 +1182,20 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - October: people cost 2,74,87,636 -> 2,77,14,632; total cost 14,25,53,968 -> 14,27,80,964; EBITDA -3,57,63,011 -> -3,59,90,007.
 - Combined: cost 19,04,84,775, EBITDA -6,32,48,696. Reconciliation 0 on October and Combined (sheet and Quantum).
 - Live sheet `U3` (November actual 2,68,43,439) unchanged. How It Works (live) row 148 logged.
+
+## 51. 14 Nov 2026: Combined gets EBITDA November + EBITDA Combined; senior manager views on the month tabs
+
+- **Combined tab (`EBITDA - Combined`):**
+  - Block formulas `A18`, `A51`, `A74`, `A87` add `ne,MAP(u,LAMBDA(x,IFERROR(INDEX(INDEX(n,,14),MATCH(x,nn,0)),"-")))` and return `...,f(13),ne,f(14)` sorted by column 15 (EBITDA Combined). `A110` (Difference) the same.
+  - Column N = EBITDA November (the manager's own row on `EBITDA - November`), column O = EBITDA Combined.
+  - Heading rows `A7`, `A17`, `A50`, `A73`, `A86`, `A109` = `HSTACK('EBITDA - November'!A?:M?,"EBITDA November","EBITDA Combined")` (they used to copy November's A:N; typing headings into N/O blocked the copy and showed #REF!, so they were moved into the formula).
+  - Title rows `C16`, `C49`, `C72`, `C85`, `C108` and the summary `C8` now sum through column O. N7:O205 formatting copied from column N.
+  - `A184` (Senior managers: Combined): reads the blocks through column O, returns `f(14)` (Nov) and `f(15)` (Combined), sorted by 15; Managers moved to column P; headings `N183:P183`; title `C182` sums C:O.
+  - Checked: November EBITDA total -2,72,58,689 (= November tab), Combined -6,32,48,696, reconciliation 0.
+- **Senior manager views on the month tabs (no rows inserted, placed at column X next to the team tables):**
+  - `EBITDA - November`!X14 note, X16 `=ARRAYFORMULA(IF('EBITDA - Combined'!A207:O231="","",'EBITDA - Combined'!A207:O231))`.
+  - October workbook `EBITDA - October`!X14 note, X16 `=IMPORTRANGE(<live sheet>,"'EBITDA - Combined'!A232:O256")` (access allowed once from Chrome). Same numbers as Quantum's October view.
+  - Formatting copied from A16:N31, column X widened.
+- **Code (`94706bb`):** `lib/ebitdaManagerReport.mjs` reads column positions from each table's header (`colsOf`: Total cost, EBITDA / EBITDA Combined, EBITDA November, Managers) instead of fixed 12/13/14; rows carry `ebitdaNov` on Combined. Slack Combined tables and thread pictures get "EBITDA Nov" before "EBITDA Combined"; context lines and the headline say EBITDA Combined. Page senior manager card finds the EBITDA and Managers columns from the header; cache key `lq_manager_ebitda_v4`. November and October views unchanged.
+- **Checked live:** Combined page tables end "Total cost | EBITDA November | EBITDA Combined"; Slack preview tables have 9 columns; senior manager picture rendered (Shafein Nov -8.3 L, Combined -8.3 L ... Mohd Saud Khan -38.2 L / -1.02 Cr). Nothing sent to Slack.
+- How It Works (live) row 149.
