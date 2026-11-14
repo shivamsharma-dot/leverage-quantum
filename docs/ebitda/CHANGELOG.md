@@ -1216,3 +1216,22 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - `EBITDA - Combined`!A261 = "Rahul Agarwal" (list A260:A264, A260 = Manish Kumar Singh). Note A258 corrected to "A260:A264" (it still said A256:A260 after the 4-row insert).
 - Result: Combined and November show Lakshay Gupta and Ummi Adibah Binti Robai as their own senior managers instead of Rahul (14 rows, totals unchanged: Combined 263 / -6,32,48,696, November -2,72,58,689). October also: Lakshay, Ummi, and Vishal Jain (left in October; his own column K is Rahul Agarwal) as his own row.
 - The month-tab views (`EBITDA - November`!X16, October workbook `EBITDA - October`!X16) follow automatically. How It Works row 150.
+
+## 55. 14 Nov 2026: day summary, test posts, open points
+
+- **Daily check (14 Nov, no change):** November through 13 Nov. Revenue 2,04,45,122, cost 4,65,60,476, EBITDA -2,61,15,354 before today's cost changes (`'EBITDA - November'!F13/M13/N13`), reconciliation 0. Day on day: AC +15.3 L (9 AC sales on 13 Nov; Mayur Bajaj's 4.5 L "Sunny" IVY sale reclassified VAS -> AC by Finance), SR +15.75 L (6 new deposits), VAS +13.2 L, Offline +1.17 L. P&L 13 Nov row was still blank (`'PnL Import'!B228`), so marketing was one day short. harsh.p01 (Gautam's offline coach, not in Team Mapping) has a new SR deposit of 2,62,500 that is NOT counted: Revenue Adjustments has no SR column. Not fixed.
+- **Final figures after today's changes (sheet = Quantum = Slack):** Combined revenue 12,72,36,079, cost 19,04,84,775, EBITDA -6,32,48,696; November EBITDA -2,72,58,689; October EBITDA -3,59,90,007. Reconciliation 0 on all three.
+- **Combined test posts to #dashboard-testing (C0BM9M6MTNZ), all 6 messages each:**
+  - 18:12 IST: before Nov columns (old layout).
+  - 18:23 IST: EBITDA Nov before EBITDA Combined (order later changed).
+  - 18:27 IST: Nov last but without Nov arrows (page had loaded the report before the deploy finished).
+  - 18:28 IST: Nov last with arrows, Rahul Agarwal still a senior manager.
+  - 18:39 IST: current. 14 senior managers incl. Ummi Adibah Binti Robai and Lakshay Gupta; no Rahul Agarwal, no Vishal Jain. Checked by reading the channel.
+- **Near miss on the 18:39 send:** the Send to Slack panel's layout shifted and a click selected #team-performance-marketing (a real channel) for a moment; the send went to #dashboard-testing (checked in Slack). Lesson: re-check the selected channel in a fresh screenshot right before pressing Send.
+- **Quantum login:** the browser session expired once (`/api/send-report` returned "Not signed in"); signed back in with "Continue as Shivam" (existing Google account, no password).
+- **How It Works (live):** rows 144-150 logged today (row 143 was the last on 13 Nov). Note: an earlier attempt typed the log into `PnL Import`!A144:B145 by mistake (section 47); cleared within minutes.
+- **Open points (not changed, waiting for the owner):**
+  - Vishal Jain shows as his own row in the **October** senior manager view only (sheet `'EBITDA - Combined'` "Senior managers: October" from A232, the October workbook's `EBITDA - October`!X16, Quantum/Slack October view), because his column K says Rahul Agarwal. Not in Combined or November. Owner to decide: keep, or show under Shubham Sachdeva.
+  - harsh.p01's SR deposit (above).
+  - Combined Slack footnote still says "Sorted by EBITDA" (means EBITDA Combined).
+  - Earlier: Akshay Chaturvedi is Rahul Agarwal's own column K; Saksham Tyagi (left) still has K = Manish; self-SMs Shubham Sachdeva / Rishabh / Gautam / Kunal; Mandeep Sharma in K on Kunal's team; one-off K values Sahil Goyal, Kartik Goel.
