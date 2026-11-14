@@ -13,7 +13,7 @@ import { getSession, setSession } from '../lib/sessionLoad'
 // the Slack report come from the same read, so they can never disagree. The sheet is the single
 // source: this page keeps no copy, and re-reads only on a fresh page load and when Refresh is clicked.
 
-const CACHE_KEY = 'lq_manager_ebitda_v3'
+const CACHE_KEY = 'lq_manager_ebitda_v4'
 const cacheKey = month => CACHE_KEY + '_' + month
 const DEFAULT_MONTHS = [{ key: 'combined', label: 'Combined' }, { key: 'oct', label: 'October' }, { key: 'nov', label: 'November' }]
 
@@ -195,7 +195,13 @@ export default function ManagerEbitdaDashboard() {
 
         {sheet.seniorManagers && sheet.seniorManagers.rows.length > 0 && (
           <Card title={sheet.seniorManagers.title}>
-            <SheetTable header={sheet.seniorManagers.header} rows={sheet.seniorManagers.rows.concat([sheet.seniorManagers.titleRow.map((v, i) => (i === 0 ? 'Total' : i === 14 ? '' : v))])} boldLast ebitdaCol={13} />
+            {(() => {
+              // Columns follow the sheet header: Combined adds "EBITDA November" before "EBITDA Combined".
+              const h = sheet.seniorManagers.header.map(x => String(x || '').replace(/\s+/g, ' ').trim().toLowerCase())
+              const mi = h.indexOf('managers')
+              const ei = h.indexOf('ebitda combined') >= 0 ? h.indexOf('ebitda combined') : (h.indexOf('ebitda') >= 0 ? h.indexOf('ebitda') : 13)
+              return <SheetTable header={sheet.seniorManagers.header} rows={sheet.seniorManagers.rows.concat([sheet.seniorManagers.titleRow.map((v, i) => (i === 0 ? 'Total' : i === mi ? '' : v))])} boldLast ebitdaCol={ei} />
+            })()}
           </Card>
         )}
 
