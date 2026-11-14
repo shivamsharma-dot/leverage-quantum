@@ -3086,7 +3086,7 @@ async function handleEbitdaManagerView(req, res) {
     const proRata = y.getUTCDate() + '/' + daysInMonth
     // The Combined tab (live workbook) carries the combined team tables (with the October moves: managers who left are
     // counted under the manager their people went to) and one senior manager table per view. Read it once.
-    const combinedGrid = await readEbitdaTab(EBITDA_SHEET_ID, EBITDA_COMBINED_TAB, 'A1:O260')
+    const combinedGrid = await readEbitdaTab(EBITDA_SHEET_ID, EBITDA_COMBINED_TAB, 'A1:O320')
     const sm = extractSeniorManagers(combinedGrid, want === 'combined' ? 'Combined' : picked[0].label)
     let report, sheetOut
     if (loaded.length === 1) {
