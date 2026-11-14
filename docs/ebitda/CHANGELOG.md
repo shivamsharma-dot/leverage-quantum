@@ -1199,3 +1199,8 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Code (`94706bb`):** `lib/ebitdaManagerReport.mjs` reads column positions from each table's header (`colsOf`: Total cost, EBITDA / EBITDA Combined, EBITDA November, Managers) instead of fixed 12/13/14; rows carry `ebitdaNov` on Combined. Slack Combined tables and thread pictures get "EBITDA Nov" before "EBITDA Combined"; context lines and the headline say EBITDA Combined. Page senior manager card finds the EBITDA and Managers columns from the header; cache key `lq_manager_ebitda_v4`. November and October views unchanged.
 - **Checked live:** Combined page tables end "Total cost | EBITDA November | EBITDA Combined"; Slack preview tables have 9 columns; senior manager picture rendered (Shafein Nov -8.3 L, Combined -8.3 L ... Mohd Saud Khan -38.2 L / -1.02 Cr). Nothing sent to Slack.
 - How It Works (live) row 149.
+
+## 52. 14 Nov 2026: Slack Combined report, EBITDA Nov is the last column
+
+- Owner: only change is the column order in the Slack report. Slack tables, thread pictures and context lines now read "... Total cost | EBITDA Combined | EBITDA Nov" (`0f70dde`). Sorting still by EBITDA Combined. Sheet and Quantum page unchanged (EBITDA November before EBITDA Combined there).
+- Checked on the live preview (table headings, first row, picture). The 18:12 test post to #dashboard-testing had the old order.
