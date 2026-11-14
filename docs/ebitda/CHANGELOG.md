@@ -1175,3 +1175,10 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
   - Combined: cost 19,02,57,779, EBITDA -6,30,21,700 (= October + November).
   - Reconciliation 0 on October, November and Combined. Revenue unchanged.
 - How It Works (live sheet) row 147 logged. The October workbook's How It Works is a guide with no dated log, so this changelog is the record for it.
+
+## 50. 14 Nov 2026: October people cost switched to October actual
+
+- October workbook `'PnL Import'!U3`: typed 27666393 (was 27439397, +2,26,996). Source: live sheet `'PnL Import'!AA3` (October actual).
+- October: people cost 2,74,87,636 -> 2,77,14,632; total cost 14,25,53,968 -> 14,27,80,964; EBITDA -3,57,63,011 -> -3,59,90,007.
+- Combined: cost 19,04,84,775, EBITDA -6,32,48,696. Reconciliation 0 on October and Combined (sheet and Quantum).
+- Live sheet `U3` (November actual 2,68,43,439) unchanged. How It Works (live) row 148 logged.
