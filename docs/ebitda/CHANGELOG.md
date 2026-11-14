@@ -1126,3 +1126,38 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - A180 / A205 / A230 senior manager formulas: `IF(ISNUMBER(MATCH(k,$A$256:$A$260,0)),x,k)`.
 - Now 13 senior managers: Shafein Tauheid, Varsha Baliyan, Kunal Ramani, Shubham Sharma, Rishabh Mahajan, Priyansh Singh Solanki, Rahul Agarwal, Soumitra Chaturvedi, Shubham Sachdeva, Gautam Makhija, Himanshu Gupta, Deepak Panwar, Mohd Saud Khan. Totals unchanged. Page and Slack checked live (13 rows).
 - No change in Team Mapping.
+
+---
+
+## 46. 14 Nov 2026: why Deepak Panwar's senior manager figure differs from a Team Mapping column K filter (no change)
+
+- Team Mapping filtered on column K = "Deepak Panwar" gives AC 6,62,841 (Piyush Thakur 4,24,341, Aryan Gupta 1,26,000, Harsh Bhardwaj 90,000, Pratik Sharma 22,500).
+- Quantum / Slack senior manager row gives 6,85,341. The 22,500 gap is Khushi Yadav (`'Revenue Adjustments'` row 5, not in Team Mapping), counted under Aman Raj Keshari, whose senior manager is Deepak.
+- Senior manager list source: Team Mapping column K, read on each MANAGER's own row (manager name matched to column B); the manager's whole team row (incl. Revenue Adjustments coaches) rolls up to that senior manager. A K value in the "Not a senior manager" list (Manish Kumar Singh) makes the manager their own senior manager.
+- So a column K filter over all rows always misses Revenue Adjustments coaches.
+
+## 47. 14 Nov 2026: Combined -- Kunal Ramani and Shafein Tauheid moved out of "Not in a manager's team"
+
+- **Why Kunal sat alone (October only):** a team row adds up rows whose Reporting To (column I) is the manager. Kunal's own Team Mapping row has Reporting To = NA, and his centres' October costs (marketing 5,27,095, offline centre 3,43,951) sit on his own row, so they fell into the Difference block. November was already fixed on 6 Nov (section 31). Gautam's October leftover row was 0.
+- **Shafein Tauheid:** his own October sales (AC 81,000 + VAS 2,09,714 = 2,90,714, product cost 2,04,943) also sat in Difference. Owner chose Ravi Pratap Singh Chauhan's VAS row.
+- **EBITDA - Combined** (done through the Sheets UI in Chrome):
+  - 4 rows inserted above the old row 169 (Rishabh Mahajan), so the moves range in all four block LETs became `$A$163:$N$173`:
+    - 169 `Kunal Ramani`, size 0, C169 `=CHOOSEROWS(FILTER('EBITDA - October'!$C$110:$N$149,'EBITDA - October'!$A$110:$A$149="Kunal Ramani"),1)`
+    - 170 `Difference: Kunal Ramani`, size 0, C170 `=ARRAYFORMULA(-C169:N169)`
+    - 171 `Ravi Pratap Singh Chauhan`, size 0, same lookup for "Shafein Tauheid"
+    - 172 `Difference: Shafein Tauheid`, size 0, C172 `=ARRAYFORMULA(-C171:N171)`
+    - Notes in O169:O172. Net row (now 174) still 0.
+  - A110 Difference formula: adds `SUMIFS(INDEX(m,,c),mn,"Difference: "&x)` (m = `$A$163:$N$173`) and drops rows where total revenue and total cost are both 0; shows "No one left" when empty (Gautam's zero row is gone too).
+  - Team title rows were October title + November title, which ignores moves that are not net zero inside a team. Now each title row adds up its own block: C16 `=BYCOL(C18:N47,LAMBDA(x,SUM(x)))`, C49 (51:70), C72 (74:83), C85 (87:106), C108 (110:149).
+  - Consolidated C8 `=LET(t,VSTACK(C16:N16,C49:N49,C72:N72,C85:N85,C108:N108),VSTACK(t,BYCOL(t,LAMBDA(x,SUM(x)))))` (was Oct + Nov of C8:N13).
+  - Everything below row 168 moved down 4 rows (senior manager tables now start at A182 / A207 / A232; "Not a senior manager" list now A260).
+- **Code (`116c296`):** sheet read ranges widened to row 320 (`'A1:O320'` in `api/send-report.mjs`, `'A1:N320'` in `lib/ebitdaManagerReport.mjs`).
+- **Checked live (Quantum API, combined):** Not in a manager's team = 0, Difference shows "No one left"; Kunal Ramani's Offline row cost includes the 8,71,046; Ravi's row revenue 2,94,98,239 incl. Shafein's 2,90,714; team-wise totals = senior manager totals (AC 5,92,40,805, revenue 12,72,36,079, cost 18,75,24,863); reconciliation 0. Totals unchanged.
+- October tab and October workbook not changed.
+- **Mistake made and fixed the same minute:** the How It Works log text was typed into `PnL Import`!A144:B145 by mistake (the tab is hidden, the click landed on PnL Import). That blocked the P&L IMPORTRANGE spill (A1 showed #REF!) for about 2 minutes; the two cells were cleared and the import came back. How It Works was NOT updated (hidden tab); this changelog is the record.
+
+## 48. 14 Nov 2026: November team-wise AC vs senior manager AC was off by 74
+
+- `'EBITDA - November'!D83` (empty row under the VAS table) held a hand-typed `=82.42*90%` (74.18). The VAS title row sums D74:D83, so team-wise AC was 74 higher than the senior manager AC (which reads named manager rows only).
+- The cell was found already cleared on 14 Nov. Now team-wise AC = senior manager AC = 76,22,969 (checked live). Revenue and cost totals were never affected.
+- Also seen, not touched: scratch numbers in `'EBITDA - November'!P87:P99` (outside the tables, some #DIV/0!). They do not feed anything read by Quantum.
