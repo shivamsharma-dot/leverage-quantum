@@ -1204,3 +1204,8 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 
 - Owner: only change is the column order in the Slack report. Slack tables, thread pictures and context lines now read "... Total cost | EBITDA Combined | EBITDA Nov" (`0f70dde`). Sorting still by EBITDA Combined. Sheet and Quantum page unchanged (EBITDA November before EBITDA Combined there).
 - Checked on the live preview (table headings, first row, picture). The 18:12 test post to #dashboard-testing had the old order.
+
+## 53. 14 Nov 2026: EBITDA Nov gets arrows in Slack (tables, context lines, pictures)
+
+- `ae76325`: EBITDA Nov cells use the same red / green arrow cell as EBITDA Combined in the native tables; the line above each table and the picture subtitle show the arrow; in the thread pictures the Nov column has the red / green fill and arrow too. "-" (no November row) stays plain.
+- Re-posted to #dashboard-testing at 18:28 IST (6 messages). A post at 18:27 went out without the Nov arrows because the page had loaded the report before the deploy finished; lesson: after a deploy, reload the page before sending from it.
