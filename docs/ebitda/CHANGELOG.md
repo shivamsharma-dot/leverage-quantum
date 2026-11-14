@@ -1161,3 +1161,17 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - `'EBITDA - November'!D83` (empty row under the VAS table) held a hand-typed `=82.42*90%` (74.18). The VAS title row sums D74:D83, so team-wise AC was 74 higher than the senior manager AC (which reads named manager rows only).
 - The cell was found already cleared on 14 Nov. Now team-wise AC = senior manager AC = 76,22,969 (checked live). Revenue and cost totals were never affected.
 - Also seen, not touched: scratch numbers in `'EBITDA - November'!P87:P99` (outside the tables, some #DIV/0!). They do not feed anything read by Quantum.
+
+## 49. 14 Nov 2026: Corp salary and Corp OH now October actuals (October workbook and live November)
+
+- Owner's clear yes to change the October workbook, because October actuals are now available.
+- **Live sheet `'PnL Import'`:** `U4` `=AA4` (was typed 85,34,624; now 1,04,93,018). `U5` `=AA5-U12-U13-U18` (was `=30465458.4-U12-U13-U18`; now 2,42,18,830). AA3:AA5 = "Oct (Actual) from rahul ag..." (People 2,76,66,393 / Corp salary 1,04,93,018 / Corp OH 3,04,13,750).
+- **October workbook `'PnL Import'`:** `U4` typed 10493018 (was 8534624). `U5` `=30413750-U12-U13-U18` (was `=30465458.4-U12-U13-U18`). That workbook has no AA column, so the numbers are typed.
+- Rent (`U12` 36,21,565), Laptop Rent (`U13` 9,30,970) and Mundus (`U18` 16,42,385.28) deductions kept as they are (owner: same for October).
+- People cost NOT changed: October workbook `U3` = 2,74,39,397 (what October used); October actual is 2,76,66,393 (+2,26,996). Live `U3` stays November's actual 2,68,43,439.
+- **Effect (checked on the sheets and on Quantum):**
+  - October: cost 14,06,47,282 -> 14,25,53,968 (+19,06,686), EBITDA -3,38,56,325 -> -3,57,63,011.
+  - November to date (13/30): cost 4,68,77,581 -> 4,77,03,811 (+8,26,230), EBITDA -2,64,32,459 -> -2,72,58,689.
+  - Combined: cost 19,02,57,779, EBITDA -6,30,21,700 (= October + November).
+  - Reconciliation 0 on October, November and Combined. Revenue unchanged.
+- How It Works (live sheet) row 147 logged. The October workbook's How It Works is a guide with no dated log, so this changelog is the record for it.
