@@ -8,7 +8,7 @@ import { HOME_REPORTS, menuBlocks, homeReportBlocks, publishHome, resolveQuantum
 // ever be reached via a dynamic import()).
 import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, B2C_DAILY_REPORT_VERSIONS } from '../src/lib/b2cReport.js'
 import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
-import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages, EBITDA_MONTHS, combineParsed, combineSections, ebitdaMonthStart, readEbitdaTab, extractSeniorManagers, EBITDA_COMBINED_TAB, EBITDA_SHEET_ID } from '../lib/ebitdaManagerReport.mjs'
+import { readEbitdaView, ebitdaYesterday, parseEbitdaView, buildEbitdaReport, extractEbitdaViewSections, materialiseMessages, EBITDA_MONTHS, combineParsed, combineSections, ebitdaMonthStart, readEbitdaTab, extractSeniorManagers, EBITDA_COMBINED_TAB, EBITDA_SHEET_ID, breakEvenNeed } from '../lib/ebitdaManagerReport.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -3096,8 +3096,16 @@ async function handleEbitdaManagerView(req, res) {
       const names = loaded.map(l => l.label.slice(0, 3)).join(' + ')
       // Combined = the Combined tab as it is (October + November, with the October moves), not a sum done here.
       const combinedParsed = parseEbitdaView(combinedGrid)
+      // "Nov break-even" column: revenue each manager / senior manager still needs by month end for EBITDA 0, from
+      // the latest month's own figures (same rule as the office TV). Days from the report's own cut-off date.
+      const daysDone = y.getUTCDate()
+      const beTeam = new Map()
+      last.parsed.teams.forEach(t => t.rows.forEach(r => beTeam.set(t.key + '|' + r.name, breakEvenNeed(r, daysDone, daysInMonth))))
+      const smLast = extractSeniorManagers(combinedGrid, last.label)
+      const beSm = new Map()
+      if (smLast) smLast.parsed.rows.forEach(r => beSm.set(r.name, breakEvenNeed(r, daysDone, daysInMonth)))
       report = buildEbitdaReport(combinedParsed, {
-        dateLabel, proRata, seniorManagers: sm && sm.parsed,
+        dateLabel, proRata, seniorManagers: sm && sm.parsed, breakEven: { team: beTeam, sm: beSm },
         headerTitle: 'Overall EBITDA, ' + names + ' (as on ' + dateLabel + ')',
         noteText: 'AC, SR, VAS and Offline only. ' + loaded.map(l => l.label).join(' plus ') + ' added together; the latest month is month to date, as on ' + dateLabel + '. Managers who have left are shown under the manager their people went to. Team shows the latest month headcount. Sorted by EBITDA, highest first. A picture of each table is in its thread.',
       })
