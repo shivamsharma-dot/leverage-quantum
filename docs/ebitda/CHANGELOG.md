@@ -1235,3 +1235,21 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
   - harsh.p01's SR deposit (above).
   - Combined Slack footnote still says "Sorted by EBITDA" (means EBITDA Combined).
   - Earlier: Akshay Chaturvedi is Rahul Agarwal's own column K; Saksham Tyagi (left) still has K = Manish; self-SMs Shubham Sachdeva / Rishabh / Gautam / Kunal; Mandeep Sharma in K on Kunal's team; one-off K values Sahil Goyal, Kartik Goel.
+
+## 56. 16 Nov 2026: October affiliate marketing (5,02,870) added, online pool only
+
+- **Why:** Finance's P&L marketing for October (`'PnL Import'` column N, October-2026 = 3,57,63,778, the October workbook's `'EBITDA - October'!S5`) leaves out affiliate. The Overall BigQuery page shows 3,57,63,596 for October without affiliate (agrees with the P&L to ~182) plus 5,02,870 affiliate from the manual entry (`app_preferences.affiliate_spend_manual['2026-10']`) = 3,62,66,466.
+- **Checked first (owner asked):**
+  - `S16` (offline share, 8.88%) = `SUM('Offline Mapping - Sep''26'!E2:E16)/'PnL Import'!U6` (September PM 3.58 Cr). It does not read S5, so the % is not affected. But the offline rupee amount is `S5 x S16`, so putting affiliate into S5 would have given offline centres ~44,652 of it.
+  - Combined October-moves rows (`'EBITDA - Combined'!C163:C173`) are live formulas (`MAP(... SUMIFS('EBITDA - October'!...,$A163))`, `HSTACK(C176..)` for Diksha, negations for the plus rows), not typed (an earlier message wrongly said typed: it had read spill values). So Combined follows October automatically.
+- **Change (October workbook only):**
+  - `'EBITDA - October'!R20` label, `S20` = 502870.
+  - `'Team Mapping'!Y3` online term changed from `(S5*(1-S16)-S9)/S11` to `(S5*(1-S16)+S20-S9)/S11` (all `'EBITDA - October'!$S$...`). Offline-centre and Nigeria/Malaysia terms unchanged. Formula checked char-for-char.
+- **Result (checked):**
+  - October: marketing 3,57,63,778 -> 3,62,66,648 (+5,02,870); AC +3,80,122, SR +1,22,748, VAS / Offline / Not-in-team unchanged; each of 127 online YES people 2,44,880 (+3,960). Cost 14,27,81,130 -> 14,32,84,000, EBITDA -3,59,90,173 -> -3,64,93,043. Reconciliation 0.
+  - Combined: cost 19,68,07,637, EBITDA -6,60,37,989 (= October + November exactly), reconciliation 0, moves net 0, Not-in-team 0. Vishal row marketing -979,521 (his 4 YES people), Diksha -> Mayur 2,44,880.
+  - Quantum API (oct / nov / combined): senior-manager totals = team totals, reconciliation 0, Combined headline -6.60 Cr, no Vishal in Combined or November.
+  - October's starting figure had moved by +166 since 14 Nov (Finance edited October P&L marketing 3,57,63,612 -> 3,57,63,778).
+- **Already-sent #b2c-extension post (14 Nov 18:41, as on 13 Nov, Combined -6.32 Cr):** now stale. Today's Combined is -6.60 Cr = more days (through 15 Nov incl. P&L marketing for 14-15 Nov) plus this 5.03 L affiliate. Not re-posted. Thread there (15 Nov): Akshay asked about sort order; Shubham explained it is by Combined EBITDA and offered sorting by November with Combined as info; Akshay agreed it was correct.
+- **For later:** November P&L marketing also excludes affiliate and there is no 2026-11 affiliate entry yet; same treatment needed for November once the amount is known.
+- How It Works (live) row 151.
