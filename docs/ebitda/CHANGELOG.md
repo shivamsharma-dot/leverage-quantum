@@ -1253,3 +1253,12 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Already-sent #b2c-extension post (14 Nov 18:41, as on 13 Nov, Combined -6.32 Cr):** now stale. Today's Combined is -6.60 Cr = more days (through 15 Nov incl. P&L marketing for 14-15 Nov) plus this 5.03 L affiliate. Not re-posted. Thread there (15 Nov): Akshay asked about sort order; Shubham explained it is by Combined EBITDA and offered sorting by November with Combined as info; Akshay agreed it was correct.
 - **For later:** November P&L marketing also excludes affiliate and there is no 2026-11 affiliate entry yet; same treatment needed for November once the amount is known.
 - How It Works (live) row 151.
+
+## 57. 16 Nov 2026: "Nov break-even" column in the Combined Slack report (code only, nothing sent)
+
+- Owner asked for the break-even column from the office TV ("OND Source update" session, `withBreakEven_`) in the Slack report, placed after EBITDA Nov.
+- Rule (same as the TV): revenue still needed by month end for EBITDA 0. `share` = product cost / revenue (0 if no revenue, capped 95%); `fixedFull` = (total cost - product cost) x days in month / days done; target = fixedFull / (1 - share); need = max(0, target - revenue). Shows the amount, or "Covered" when need is 0.
+- Figures: the latest month's own numbers (November tab team rows, and the "Senior managers: November" table for senior managers). Days done = the report's cut-off day (as on date), days total = days in that month.
+- Where: Combined Slack report only (tables, thread pictures, line above each table). Team / senior-manager line shows the sum of the rows' needs. November-only and October views and the Quantum page are unchanged; the sheet is unchanged.
+- Code `6e6ec85`: `breakEvenNeed()` in `lib/ebitdaManagerReport.mjs` (rows now also carry `product` = column G), `opts.breakEven` in `buildEbitdaReport`, computed in `handleEbitdaManagerView` (combined branch) in `api/send-report.mjs`.
+- Checked on the live preview (as on 15 Nov): Mamta Ojha 0.7 L (TV showed 69.5 K), SR team 1.45 Cr, senior managers total 11.27 Cr; picture renders with the extra column. Note: senior-manager break-even is computed on the senior manager's own November totals, so it can differ from adding up their managers' needs (a covered manager counts 0 there).
