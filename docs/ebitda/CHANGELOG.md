@@ -1262,3 +1262,13 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - Where: Combined Slack report only (tables, thread pictures, line above each table). Team / senior-manager line shows the sum of the rows' needs. November-only and October views and the Quantum page are unchanged; the sheet is unchanged.
 - Code `6e6ec85`: `breakEvenNeed()` in `lib/ebitdaManagerReport.mjs` (rows now also carry `product` = column G), `opts.breakEven` in `buildEbitdaReport`, computed in `handleEbitdaManagerView` (combined branch) in `api/send-report.mjs`.
 - Checked on the live preview (as on 15 Nov): Mamta Ojha 0.7 L (TV showed 69.5 K), SR team 1.45 Cr, senior managers total 11.27 Cr; picture renders with the extra column. Note: senior-manager break-even is computed on the senior manager's own November totals, so it can differ from adding up their managers' needs (a covered manager counts 0 there).
+
+## 58. 17 Nov 2026: Anushka Sharma inactive 16-30 Nov (corp salary + OH stop, rest spread equally)
+
+- Rule (owner, agreed with Shubham Bansal on 16 Nov): for 16-30 Nov, her salary and marketing stay under Vishesh Garg; her other costs (corp salary, corp OH incl. rent and laptop) are distributed equally among everyone else. Revenue: none.
+- Not done on 16 Nov because that day's report only ran through 15 Nov (her inactive days had not started). Done 17 Nov, first report that includes 16 Nov.
+- `'EBITDA - November'!R21/S21` = label + `anushka.sharma@leverageedu.com`; `R22/S22` = label + `=15/30` (her share counts up to and including 15 Nov). Clear S21 to switch the rule off.
+- `'Team Mapping'!W3` (corp salary) and `X3` (corp OH: U5 + rent U12 + laptop U13, each with its own headcount S2 / S7 / S8): per component, `a` = S21, `s` = S4, `m` = MIN(s, S22): her share = P/N x m; everyone else in that base = P x (s - m/N)/(N - 1); if S21 is blank the old P/N x s. Totals unchanged by construction.
+- Checked (data through 16 Nov, S4 = 16/30): her W 21,279 -> 19,949, X 61,452 -> 57,611 (x 15/16); others e.g. Tarun Kumar W +5, X +16; her U/V (salary) and Y (marketing) unchanged; sum of W, X and AB identical before/after; reconciliation 0 on November and Combined; Quantum "as on 16 Nov".
+- Same day, unrelated: Finance filled the 16 Nov P&L marketing (7,37,070); S5 12,390,541 -> 13,127,611. November cost 5.87 Cr, EBITDA -3.01 Cr; Combined EBITDA -6.65 Cr.
+- How It Works (live) row 152.
