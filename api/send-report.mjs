@@ -2995,18 +2995,31 @@ async function handleFutworkDailyReport(req, res) {
       const v = pr.ok ? ((await pr.json())[0] || {}).value : null
       target = (typeof v === 'string' && v) || FUTWORK_REPORT_DEFAULT_RECIPIENT
     }
-    // A user id is turned into the bot's DM channel with that person.
-    let channel = target
-    if (target[0] === 'U') {
-      const o = await (await fetch('https://slack.com/api/conversations.open', {
-        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ users: target }),
-      })).json().catch(() => ({}))
-      if (!o.ok) throw new Error('Slack could not open a DM with ' + target + ': ' + (o.error || 'unknown') + (o.error === 'missing_scope' ? ' (the app needs the im:write scope)' : ''))
-      channel = o.channel.id
-    }
+    // The bot has chat:write and files:write but not im:write, so it cannot open a DM channel itself. Instead the
+    // picture is uploaded without sharing it anywhere, then posted with chat.postMessage to the target id: a user id
+    // there lands in that person's DMs with the Quantum app (needs only chat:write).
     const up = await slackUploadFile(token, { filename: 'daily-conversion-report-' + rep.win.yIso + '.png', buffer: png, title: 'Daily Conversion Report ' + rep.win.yIso })
-    await slackCompleteUpload(token, { files: [up], channel, initialComment: comment })
+    const done = await fetch('https://slack.com/api/files.completeUploadExternal', {
+      method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ files: [up] }),
+    }).then(r => r.json()).catch(() => ({}))
+    if (!done.ok) throw new Error('Slack upload: ' + (done.error || 'unknown error'))
+    const blocks = [
+      { type: 'section', text: { type: 'mrkdwn', text: comment } },
+      { type: 'image', slack_file: { id: up.id }, alt_text: 'Daily Conversion Report ' + rep.win.yIso },
+    ]
+    let post = null
+    // A freshly uploaded file can take a few seconds before Slack lets a message show it.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      post = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ channel: target, text: comment.replace(/\*/g, ''), blocks, unfurl_links: false }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (post.ok || !/invalid_blocks|file|downloading/i.test(String(post.error || ''))) break
+      await new Promise(r => setTimeout(r, 3000))
+    }
+    if (!post || !post.ok) throw new Error('Slack post to ' + target + ': ' + ((post && post.error) || 'unknown error'))
+    const channel = post.channel
     await logReport({ report_type: 'futwork daily report', recipients: ['slack:' + target], status: 'sent', triggered_by: triggeredBy })
     return res.status(200).json({ ok: true, sentTo: target, channel, summary })
   } catch (e) {
