@@ -1,8 +1,8 @@
 name: Futwork Daily Conversion Report (Slack DM)
 
 # Sends the Futwork daily conversion report (yesterday + month to date by source, as a picture) as a Slack DM
-# through the Quantum bot. Built by lib/futworkDailyReport.mjs, endpoint type futwork_daily_report in
-# api/send-report.mjs. Recipient: app_preferences.futwork_report_recipient, else Sneha Dubey (Futwork).
+# AS Shivam Sharma (SLACK_USER_TOKEN) into his DM with Sneha (Futwork is a Slack Connect org, bots cannot DM her). Built by lib/futworkDailyReport.mjs, endpoint type futwork_daily_report in
+# api/send-report.mjs. DM: app_preferences.futwork_report_channel, else D0B4TF3H4N7.
 #
 # Intended for 11:00 AM IST every day, after the 9 AM and 10:10 AM Overall BigQuery syncs. If yesterday has
 # no data yet the endpoint sends nothing and this run fails, so a missing report shows up as a red run.

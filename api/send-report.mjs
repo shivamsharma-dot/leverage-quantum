@@ -2959,9 +2959,10 @@ async function handleSlackReport(req, res) {
 // yesterday + month to date, sent as a Slack DM to Futwork (our calling partner) every day at 11 AM IST.
 // Built by lib/futworkDailyReport.mjs. Cron: x-cron-secret / Bearer CRON_SECRET (workflow
 // futwork-daily-report.yml, triggered by cron-job.org). Admin overrides: dryRun:true (build only, returns the
-// picture as base64), to:'<Slack user or channel id>' (send somewhere else, for testing).
-// Recipient: app_preferences.futwork_report_recipient if set, else Sneha Dubey (sneha@futwork.com).
-const FUTWORK_REPORT_DEFAULT_RECIPIENT = 'U039XBT9HUK'
+// picture as base64), to:'<channel or DM id>' (send somewhere else, for testing).
+// Sent as Shivam Sharma (SLACK_USER_TOKEN) into his DM with Sneha Dubey (sneha@futwork.com).
+// Shivam Sharma's DM with Sneha Dubey (sneha@futwork.com). Override: app_preferences.futwork_report_channel.
+const FUTWORK_REPORT_DEFAULT_CHANNEL = 'D0B4TF3H4N7'
 async function handleFutworkDailyReport(req, res) {
   const bearer = req.headers.authorization || ''
   const isCron = !!process.env.CRON_SECRET && (bearer === 'Bearer ' + process.env.CRON_SECRET || req.headers['x-cron-secret'] === process.env.CRON_SECRET)
@@ -2987,47 +2988,21 @@ async function handleFutworkDailyReport(req, res) {
     const comment = slackComment(rep)
     const summary = { day: rep.win.yIso, yesterday: rep.yday.total, mtd: rep.mtd.total, syncedAt: rep.syncedAt }
     if (dryRun) return res.status(200).json({ ok: true, dryRun: true, comment, summary, png: png.toString('base64') })
-    const token = process.env.SLACK_BOT_TOKEN
-    if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
-    let target = isAdmin && typeof req.body?.to === 'string' && /^[UCGD][A-Z0-9]{8,}$/.test(req.body.to) ? req.body.to : null
+    // Sent AS Shivam Sharma, not as the Quantum bot (2026-11-17): Sneha is in Futwork's own Slack workspace
+    // (Slack Connect), and apps cannot open or post in DMs with another company's users (user_not_found /
+    // channel_not_found). A person can, so this uses Shivam's user token from the Quantum app (user scopes
+    // chat:write + files:write), stored in Vercel as SLACK_USER_TOKEN, and posts into his existing DM with her.
+    const token = process.env.SLACK_USER_TOKEN
+    if (!token) return res.status(500).json({ error: 'SLACK_USER_TOKEN is not configured -- add the Quantum app\'s User OAuth Token to Vercel' })
+    let target = isAdmin && typeof req.body?.to === 'string' && /^[CGD][A-Z0-9]{8,}$/.test(req.body.to) ? req.body.to : null
     if (!target) {
-      const pr = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.futwork_report_recipient`, { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } })
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.futwork_report_channel`, { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } })
       const v = pr.ok ? ((await pr.json())[0] || {}).value : null
-      target = (typeof v === 'string' && v) || FUTWORK_REPORT_DEFAULT_RECIPIENT
-    }
-    // A user id is turned into the bot's DM channel with that person (conversations.open, needs im:write, added
-    // 2026-11-17). The picture is uploaded without sharing it anywhere, then posted in that DM as an image block.
-    let dest = target
-    if (target[0] === 'U') {
-      const o = await fetch('https://slack.com/api/conversations.open', {
-        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ users: target }),
-      }).then(r => r.json()).catch(() => ({}))
-      if (!o.ok) throw new Error('Slack could not open a DM with ' + target + ': ' + (o.error || 'unknown'))
-      dest = o.channel.id
+      target = (typeof v === 'string' && v) || FUTWORK_REPORT_DEFAULT_CHANNEL
     }
     const up = await slackUploadFile(token, { filename: 'daily-conversion-report-' + rep.win.yIso + '.png', buffer: png, title: 'Daily Conversion Report ' + rep.win.yIso })
-    const done = await fetch('https://slack.com/api/files.completeUploadExternal', {
-      method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ files: [up] }),
-    }).then(r => r.json()).catch(() => ({}))
-    if (!done.ok) throw new Error('Slack upload: ' + (done.error || 'unknown error'))
-    const blocks = [
-      { type: 'section', text: { type: 'mrkdwn', text: comment } },
-      { type: 'image', slack_file: { id: up.id }, alt_text: 'Daily Conversion Report ' + rep.win.yIso },
-    ]
-    let post = null
-    // A freshly uploaded file can take a few seconds before Slack lets a message show it.
-    for (let attempt = 0; attempt < 5; attempt++) {
-      post = await fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ channel: dest, text: comment.replace(/\*/g, ''), blocks, unfurl_links: false }),
-      }).then(r => r.json()).catch(() => ({}))
-      if (post.ok || !/invalid_blocks|file|downloading/i.test(String(post.error || ''))) break
-      await new Promise(r => setTimeout(r, 3000))
-    }
-    if (!post || !post.ok) throw new Error('Slack post to ' + target + ': ' + ((post && post.error) || 'unknown error'))
-    const channel = post.channel
+    await slackCompleteUpload(token, { files: [up], channel: target, initialComment: comment })
+    const channel = target
     await logReport({ report_type: 'futwork daily report', recipients: ['slack:' + target], status: 'sent', triggered_by: triggeredBy })
     return res.status(200).json({ ok: true, sentTo: target, channel, summary })
   } catch (e) {
