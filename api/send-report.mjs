@@ -2955,6 +2955,66 @@ async function handleSlackReport(req, res) {
   }
 }
 
+// Futwork daily conversion report (2026-11-17): a picture of the Overall (BigQuery) funnel by source,
+// yesterday + month to date, sent as a Slack DM to Futwork (our calling partner) every day at 11 AM IST.
+// Built by lib/futworkDailyReport.mjs. Cron: x-cron-secret / Bearer CRON_SECRET (workflow
+// futwork-daily-report.yml, triggered by cron-job.org). Admin overrides: dryRun:true (build only, returns the
+// picture as base64), to:'<Slack user or channel id>' (send somewhere else, for testing).
+// Recipient: app_preferences.futwork_report_recipient if set, else Sneha Dubey (sneha@futwork.com).
+const FUTWORK_REPORT_DEFAULT_RECIPIENT = 'U039XBT9HUK'
+async function handleFutworkDailyReport(req, res) {
+  const bearer = req.headers.authorization || ''
+  const isCron = !!process.env.CRON_SECRET && (bearer === 'Bearer ' + process.env.CRON_SECRET || req.headers['x-cron-secret'] === process.env.CRON_SECRET)
+  let triggeredBy = 'cron', isAdmin = false
+  if (!isCron) {
+    const { getSessionUser } = await import('../lib/auth.mjs')
+    const me = getSessionUser(req)
+    if (!me) return res.status(401).json({ error: 'Not signed in' })
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    triggeredBy = me.email; isAdmin = true
+  }
+  const dryRun = isAdmin && req.body?.dryRun === true
+  try {
+    const { loadFutworkReportData, computeFutworkReport, renderFutworkReportPng, slackComment } = await import('../lib/futworkDailyReport.mjs')
+    const data = await loadFutworkReportData({ sbUrl: SUPABASE_URL, sbKey: SUPABASE_SERVICE_KEY })
+    const rep = computeFutworkReport(data)
+    // Never send a report of zeros: if yesterday has no leads the overnight sync has not landed.
+    if (!(rep.yday.total.leads > 0)) {
+      await logReport({ report_type: 'futwork daily report', recipients: [], status: 'failed', error: 'no data for ' + rep.win.yIso, triggered_by: triggeredBy })
+      return res.status(503).json({ ok: false, error: 'No leads for ' + rep.win.yIso + ' yet -- the Overall sync has not landed. Nothing was sent.' })
+    }
+    const png = renderFutworkReportPng(rep)
+    const comment = slackComment(rep)
+    const summary = { day: rep.win.yIso, yesterday: rep.yday.total, mtd: rep.mtd.total, syncedAt: rep.syncedAt }
+    if (dryRun) return res.status(200).json({ ok: true, dryRun: true, comment, summary, png: png.toString('base64') })
+    const token = process.env.SLACK_BOT_TOKEN
+    if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+    let target = isAdmin && typeof req.body?.to === 'string' && /^[UCGD][A-Z0-9]{8,}$/.test(req.body.to) ? req.body.to : null
+    if (!target) {
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.futwork_report_recipient`, { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } })
+      const v = pr.ok ? ((await pr.json())[0] || {}).value : null
+      target = (typeof v === 'string' && v) || FUTWORK_REPORT_DEFAULT_RECIPIENT
+    }
+    // A user id is turned into the bot's DM channel with that person.
+    let channel = target
+    if (target[0] === 'U') {
+      const o = await (await fetch('https://slack.com/api/conversations.open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ users: target }),
+      })).json().catch(() => ({}))
+      if (!o.ok) throw new Error('Slack could not open a DM with ' + target + ': ' + (o.error || 'unknown') + (o.error === 'missing_scope' ? ' (the app needs the im:write scope)' : ''))
+      channel = o.channel.id
+    }
+    const up = await slackUploadFile(token, { filename: 'daily-conversion-report-' + rep.win.yIso + '.png', buffer: png, title: 'Daily Conversion Report ' + rep.win.yIso })
+    await slackCompleteUpload(token, { files: [up], channel, initialComment: comment })
+    await logReport({ report_type: 'futwork daily report', recipients: ['slack:' + target], status: 'sent', triggered_by: triggeredBy })
+    return res.status(200).json({ ok: true, sentTo: target, channel, summary })
+  } catch (e) {
+    await logReport({ report_type: 'futwork daily report', recipients: [], status: 'failed', error: String(e.message || e).slice(0, 500), triggered_by: triggeredBy })
+    return res.status(500).json({ ok: false, error: e.message })
+  }
+}
+
 // Manager-level EBITDA report (AC, SR, VAS, Offline), read straight off the 'EBITDA View' tab of the ops sheet
 // and posted through the Quantum bot: header + one native table per team, and a picture of each team in that
 // team's own thread (lib/ebitdaManagerReport.mjs). Meant for the 3 PM IST schedule, but an admin can run it by
@@ -3439,6 +3499,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_delete_bot_messages') {
     return handleSlackDeleteBotMessages(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'futwork_daily_report') {
+    return handleFutworkDailyReport(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'ebitda_manager_view') {
     return handleEbitdaManagerView(req, res)
