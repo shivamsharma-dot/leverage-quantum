@@ -6539,6 +6539,10 @@ async function handleGA4(req, res, me) {
       const range = await fetchGA4WebsiteUsers(creds, since, until);
       return res.status(200).json({ configured: true, range });
     }
+    if (mode === 'user_id_check' && me.role === 'admin') { // TEMP 2026-11-17, remove after use
+      const { fetchGA4SignedInSplit } = await import('../lib/ga4.mjs');
+      return res.status(200).json({ configured: true, ...(await fetchGA4SignedInSplit(creds, req.query.since, req.query.until)) });
+    }
     return res.status(400).json({ error: 'unknown mode' });
   } catch (e) {
     return res.status(502).json({ error: 'ga4 fetch failed', detail: String((e && e.message) || e) });
