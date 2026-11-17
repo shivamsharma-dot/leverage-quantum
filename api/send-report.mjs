@@ -2995,9 +2995,17 @@ async function handleFutworkDailyReport(req, res) {
       const v = pr.ok ? ((await pr.json())[0] || {}).value : null
       target = (typeof v === 'string' && v) || FUTWORK_REPORT_DEFAULT_RECIPIENT
     }
-    // The bot has chat:write and files:write but not im:write, so it cannot open a DM channel itself. Instead the
-    // picture is uploaded without sharing it anywhere, then posted with chat.postMessage to the target id: a user id
-    // there lands in that person's DMs with the Quantum app (needs only chat:write).
+    // A user id is turned into the bot's DM channel with that person (conversations.open, needs im:write, added
+    // 2026-11-17). The picture is uploaded without sharing it anywhere, then posted in that DM as an image block.
+    let dest = target
+    if (target[0] === 'U') {
+      const o = await fetch('https://slack.com/api/conversations.open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ users: target }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (!o.ok) throw new Error('Slack could not open a DM with ' + target + ': ' + (o.error || 'unknown'))
+      dest = o.channel.id
+    }
     const up = await slackUploadFile(token, { filename: 'daily-conversion-report-' + rep.win.yIso + '.png', buffer: png, title: 'Daily Conversion Report ' + rep.win.yIso })
     const done = await fetch('https://slack.com/api/files.completeUploadExternal', {
       method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
@@ -3013,7 +3021,7 @@ async function handleFutworkDailyReport(req, res) {
     for (let attempt = 0; attempt < 5; attempt++) {
       post = await fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ channel: target, text: comment.replace(/\*/g, ''), blocks, unfurl_links: false }),
+        body: JSON.stringify({ channel: dest, text: comment.replace(/\*/g, ''), blocks, unfurl_links: false }),
       }).then(r => r.json()).catch(() => ({}))
       if (post.ok || !/invalid_blocks|file|downloading/i.test(String(post.error || ''))) break
       await new Promise(r => setTimeout(r, 3000))
