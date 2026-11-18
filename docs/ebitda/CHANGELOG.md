@@ -1313,3 +1313,15 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Result (Quantum, as on 17 Nov):** Ritesh team 11, Nov EBITDA -22,41,726, Combined -36,61,862. Mayur team 7, Nov -6,02,039, Combined -17,62,667. Amit team 9, Nov -16,18,240, Combined -22,07,608. No "Shubham Sachdeva" manager row (managers 44 in Nov and Combined). Shubham Sachdeva as senior manager unchanged (27 people, Combined -76,32,137). Totals unchanged: Nov revenue 3,19,45,756 / EBITDA -3,15,44,147; Combined revenue 13,87,36,713 / cost 20,67,73,929 / EBITDA -6,80,37,216; senior-manager totals equal the team totals; Difference empty; reconciliation 0.
 - **Lesson:** any time a manager loses his whole November team, check the Combined moves table (A163:A173) for rows naming him.
 - How It Works (live) row 155.
+
+## 63. 18 Nov 2026: Robin Pal (left 4 Nov) taken out of Ashish's team, salary kept under Ashish
+
+- **Source:** Ashish Dhawan's Slack DM to the owner, 18 Nov 13:13-13:14 IST: "People mapping to be changed / Rajan tiwari mapping to be changed to siddharth Singh / Shankey Sharma and Robin Pal has resigned on 4th November". Rajan was done (section 61) and Shankey was already out (section 20); Robin had been missed. LeadSquared: Robin Pal's user (Robin.Pal@leverageedu.com) has StatusCode 1 (deactivated).
+- **Owner's rule for Robin:** count only his salary, and keep it under Ashish (his manager). No product cost, marketing, corp salary or overheads for him; those go to everyone else equally. Salary = Ashish's team average (Bharti gives team totals only). Ashish's team shows 5. Shankey stays as handled on 5 Nov. October unchanged.
+- **Team Mapping row 248:** D = 2026-11-04 (text, like the other leavers), I = NA, O (marketing) cleared. His row is now 0 in every cost column; cost base `'EBITDA - November'!S2` 263 -> 262 (rent / laptop / marketing counts follow).
+- **People-cost table row 329 (Ashish Dhawan):** B 6 -> 5, C kept at `=440167/7*6` (3,77,286). Per head 62,881 -> 75,457, so Ashish's 5 people carry the same salary total (2,13,795 month to date) including Robin's average share. Grand total unchanged (1,52,44,872.8; head count 262).
+- **Note:** the "People cost" column in the tables is own salary (U) + the shared people pool (V). Robin's V share (19,361) moved to the others with the corp costs, by design; his own salary (U) did not.
+- **Filter:** Team Mapping Category = VAS filter opened to edit row 248 and restored.
+- **Result (Quantum, as on 17 Nov):** Ashish team 5, November EBITDA -9,12,503 -> -7,22,649, Combined -14,41,166 -> -12,51,312. Everyone else's cost rose slightly (e.g. per person V 19,361 -> 19,437, W 22,619 -> 22,705, X 65,324 -> 65,591, marketing 87,152 -> 87,766). Totals unchanged (Nov EBITDA -3,15,44,147, Combined -6,80,37,216), team total 262, Difference empty, reconciliation 0.
+- **Ashish's report (not sent yet):** owner asked to see it first; it needs rebuilding with these numbers.
+- How It Works (live) row 156.
