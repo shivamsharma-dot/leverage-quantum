@@ -1286,3 +1286,9 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Result (checked on Quantum, as on 17 Nov):** Shashank team size 5 (unchanged), November AC 0 -> 1,84,063, EBITDA -8,99,026 -> -7,51,776; Combined -7,18,827 -> -5,71,577. Rishabh Mahajan's senior-manager row follows. Difference block empty on November and Combined; cost base 263; reconciliation 0 on both. Totals unchanged (November revenue 3,19,45,756, EBITDA -3,15,44,147; Combined revenue 13,87,36,713, cost 20,67,73,929, EBITDA -6,80,37,216). The Slack headline now includes this sale.
 - **Slip during the edit:** the first attempt typed the whole row into `A9` as one string (Tab did not move cells in the Chrome UI); cleared and re-entered cell by cell within a minute. The How It Works note was also corrected twice for the before figures.
 - How It Works (live) row 153.
+
+## 60. 18 Nov 2026: Combined report posted to #b2c-extension (as on 17 Nov)
+
+- Posted from the Quantum Manager EBITDA page (Combined, read from sheet 12:37 IST) to #b2c-extension (C0BV44145C5) at 12:38 IST, 6 messages, after the Anam Parveen move (section 59). Only that channel was selected; checked by reading the channel.
+- Headline: revenue 13.87 Cr, cost 20.68 Cr, EBITDA Combined -6.80 Cr, 3 of 45 managers in profit (Tushar Dutta, Kandiboina Raja, Harsha Sudan). EBITDA Nov -3.15 Cr; senior-manager Nov break-even total 10.86 Cr.
+- **Odd figure in the post:** Srishti Prasad's Nov break-even reads 2.10 Cr (AC team total 6.85 Cr, was 4.95 Cr yesterday). Her November revenue is only one VAS sale (2,59,749, product cost 2,33,774 = 90%), so the break-even rule takes her product share as 90% and divides her fixed cost by 0.10. The rule (section 57) uses the row's own product/revenue share; a team that normally sells AC (20% product cost) gets an inflated target when its only sale so far is VAS. Not changed.
