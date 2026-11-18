@@ -1272,3 +1272,17 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - Checked (data through 16 Nov, S4 = 16/30): her W 21,279 -> 19,949, X 61,452 -> 57,611 (x 15/16); others e.g. Tarun Kumar W +5, X +16; her U/V (salary) and Y (marketing) unchanged; sum of W, X and AB identical before/after; reconciliation 0 on November and Combined; Quantum "as on 16 Nov".
 - Same day, unrelated: Finance filled the 16 Nov P&L marketing (7,37,070); S5 12,390,541 -> 13,127,611. November cost 5.87 Cr, EBITDA -3.01 Cr; Combined EBITDA -6.65 Cr.
 - How It Works (live) row 152.
+
+## 59. 18 Nov 2026: day-on-day check, and Anam Parveen's November sale moved to Shashank Singh Sengar
+
+- **Day-on-day check (as on 17 Nov vs the 16 Nov post in #b2c-extension):** nobody edited the sheet; every change is new data. November revenue 2.86 -> 3.19 Cr: VAS +~10 L (Ravi Pratap Singh Chauhan; EBITDA barely moves because VAS product cost is ~90%), SR +7.9 L (deposits for Lakshay Gupta, Harsha Sudan, Ayushi Kushwaha), AC sales for Ashish Dhawan, Joydeep Mohanty, Kushal Sharma, Shubham Khare, Shonit Kumar Singh, plus a VAS sale in Srishti Prasad's AC team (2,59,749, product cost 2,33,774). Cost pro-rata 16/30 -> 17/30. Mamta Ojha's Combined went into loss (-25,925) and Harsha Sudan's into profit (+24,897), so "3 in profit" stays 3 with different names.
+- **Noted, not changed:** Ishant Sharma's offline team (13) has marketing 0 and offline centre 0, because centre marketing / centre cost sit only on "Centre Manager" rows and his role is "Manager".
+- **Anam Parveen:** left 31 Oct (Team Mapping, Reporting To NA, marked 5 Nov, section on leavers). A November AC sale is now credited to her in the CIB: 1,84,063 after the 10% refund, product cost 36,813. It sat alone in the Difference block ("Not in a manager's team") and was left out of the team tables, senior-manager tables and Slack headline.
+- **Change (owner: "move Anam's sale to Shashank"), same mechanism as Khushi Yadav (section 33):**
+  - `'Revenue Adjustments'!A9:D9` = anam.parveen@leverageedu.com / Anam Parveen / Shashank Singh Sengar / NO.
+  - `E9` / `F9` changed from the 'Missing coaches' lookup to the Team Mapping lookup (like row 7): `=IF($A9="","",IFERROR(INDEX('Team Mapping'!$Q$3:$Q$800,MATCH($A9,'Team Mapping'!$G$3:$G$800,0)),0))` and the same with `$R`. G9 / I9 (product cost, total cost) are the row's existing formulas.
+  - No other formula changed: the Difference filter and the reconciliation already exclude any email listed in `'Revenue Adjustments'!A4:A30`.
+  - Not done: changing her Reporting To to Shashank. That would add her to his team size and to the cost base `'EBITDA - November'!S2` (263 -> 264) and move corp salary / OH onto everyone.
+- **Result (checked on Quantum, as on 17 Nov):** Shashank team size 5 (unchanged), November AC 0 -> 1,84,063, EBITDA -8,99,026 -> -7,51,776; Combined -7,18,827 -> -5,71,577. Rishabh Mahajan's senior-manager row follows. Difference block empty on November and Combined; cost base 263; reconciliation 0 on both. Totals unchanged (November revenue 3,19,45,756, EBITDA -3,15,44,147; Combined revenue 13,87,36,713, cost 20,67,73,929, EBITDA -6,80,37,216). The Slack headline now includes this sale.
+- **Slip during the edit:** the first attempt typed the whole row into `A9` as one string (Tab did not move cells in the Chrome UI); cleared and re-entered cell by cell within a minute. The How It Works note was also corrected twice for the before figures.
+- How It Works (live) row 153.
