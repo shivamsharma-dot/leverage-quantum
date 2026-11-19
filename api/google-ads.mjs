@@ -32,61 +32,6 @@ if(req.method==='OPTIONS')return res.status(200).end()
 const miss=['GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CLIENT_ID','GOOGLE_ADS_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_CUSTOMER_ID'].filter(k=>!process.env[k])
 if(miss.length)return res.status(200).json({error:'missing_credentials',missing:miss})
 const cid=process.env.GOOGLE_ADS_CUSTOMER_ID.replace(/-/g,'')
-// TEMP 2026-11-19 (remove after use): admin-only state-spend pull + service-account sheet tool for the
-// "Centre states" tab of the lead route funnel sheet. Read-only on Google Ads; sheet writes are locked to one sheet ID.
-if(req.query.tab==='tmp_sheet'){
-if(me.role!=='admin')return res.status(403).json({error:'admin only'})
-const SID='1dgzC87eLJ8zaPYsdv7Pg9iOQ3Nwr0t4uAtMYtIH1qf0'
-const { JWT } = await import('google-auth-library')
-const auth=new JWT({email:process.env.GOOGLE_SHEETS_CLIENT_EMAIL,key:(process.env.GOOGLE_SHEETS_PRIVATE_KEY||'').replace(/\\n/g,'\n'),scopes:['https://www.googleapis.com/auth/spreadsheets']})
-const {access_token}=await auth.authorize()
-const b=req.body||{};const H={Authorization:`Bearer ${access_token}`,'Content-Type':'application/json'}
-const base=`https://sheets.googleapis.com/v4/spreadsheets/${SID}`
-let r
-if(b.op==='meta')r=await fetch(`${base}?fields=sheets.properties`,{headers:H})
-else if(b.op==='get')r=await fetch(`${base}/values:batchGet?valueRenderOption=${b.render||'FORMULA'}&`+(b.ranges||[]).map(x=>'ranges='+encodeURIComponent(x)).join('&'),{headers:H})
-else if(b.op==='values')r=await fetch(`${base}/values:batchUpdate`,{method:'POST',headers:H,body:JSON.stringify({valueInputOption:'USER_ENTERED',data:b.data})})
-else if(b.op==='batch')r=await fetch(`${base}:batchUpdate`,{method:'POST',headers:H,body:JSON.stringify({requests:b.requests})})
-else if(b.op==='fmt')r=await fetch(`${base}?ranges=${encodeURIComponent(b.range)}&fields=sheets.data.rowData.values.userEnteredFormat,sheets.data.rowData.values.formattedValue`,{headers:H})
-else return res.status(400).json({error:'bad op'})
-return res.status(r.status).json(await r.json())
-}
-if(req.query.tab==='tmp_gaql'){
-if(me.role!=='admin')return res.status(403).json({error:'admin only'})
-const q=String((req.body||{}).query||'');if(!/^\s*select\s/i.test(q))return res.status(400).json({error:'select only'})
-try{const token=await getAccessToken();const rows=await gaql(token,cid,q);return res.json({n:rows.length,rows})}catch(e){return res.status(500).json({error:e.message})}
-}
-if(req.query.tab==='tmp_geo_state'){
-if(me.role!=='admin')return res.status(403).json({error:'admin only'})
-const token=await getAccessToken()
-const root=(process.env.GOOGLE_ADS_MANAGER_ID||process.env.GOOGLE_ADS_CUSTOMER_ID).replace(/-/g,'')
-let accounts=[]
-try{const cc=await gaql(token,root,`SELECT customer_client.id,customer_client.descriptive_name,customer_client.manager,customer_client.status,customer_client.currency_code FROM customer_client`)
-accounts=cc.filter(x=>!x.customerClient.manager).map(x=>({id:String(x.customerClient.id),name:x.customerClient.descriptiveName,status:x.customerClient.status,currency:x.customerClient.currencyCode}))}catch(e){accounts=[{id:cid,name:'(env customer)',err:e.message}]}
-const ranges=JSON.parse(req.query.ranges||'[]')
-const out={root,accounts,results:[]}
-const ids=new Set()
-for(const a of accounts){
-for(const [f,t] of ranges){
-const item={account:a.id,from:f,to:t}
-try{
-const tot=await gaql(token,a.id,`SELECT metrics.cost_micros,metrics.conversions FROM customer WHERE segments.date BETWEEN '${f}' AND '${t}'`)
-item.total=tot.reduce((s,x)=>s+Number(x.metrics.costMicros||0),0)/1e6
-item.totalConv=tot.reduce((s,x)=>s+Number(x.metrics.conversions||0),0)
-if(item.total>0){
-const rows=await gaql(token,a.id,`SELECT user_location_view.country_criterion_id,segments.geo_target_region,metrics.cost_micros,metrics.conversions FROM user_location_view WHERE segments.date BETWEEN '${f}' AND '${t}'`)
-const agg={}
-rows.forEach(x=>{const c=String(x.userLocationView?.countryCriterionId||'');const rg=x.segments?.geoTargetRegion?x.segments.geoTargetRegion.split('/').pop():'';const k=c+'|'+rg;if(rg)ids.add(rg);if(!agg[k])agg[k]={country:c,region:rg,cost:0,conv:0};agg[k].cost+=Number(x.metrics.costMicros||0)/1e6;agg[k].conv+=Number(x.metrics.conversions||0)})
-item.rows=Object.values(agg)
-}
-}catch(e){item.err=e.message.slice(0,500)}
-out.results.push(item)
-}}
-const names={}
-if(ids.size){const list=[...ids];for(let i=0;i<list.length;i+=200){const nr=await gaql(token,accounts[0].id,`SELECT geo_target_constant.id,geo_target_constant.name,geo_target_constant.country_code,geo_target_constant.target_type FROM geo_target_constant WHERE geo_target_constant.id IN (${list.slice(i,i+200).join(',')})`);nr.forEach(x=>{names[x.geoTargetConstant.id]={name:x.geoTargetConstant.name,cc:x.geoTargetConstant.countryCode,type:x.geoTargetConstant.targetType}})}}
-out.names=names
-return res.json(out)
-}
 const{tab='campaigns',dateRange='LAST_30_DAYS',from,to}=req.query
 const dc=from&&to?`segments.date BETWEEN '${from}' AND '${to}'`:`segments.date DURING ${dateRange}`
 try{
