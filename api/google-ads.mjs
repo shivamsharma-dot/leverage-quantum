@@ -51,6 +51,11 @@ else if(b.op==='fmt')r=await fetch(`${base}?ranges=${encodeURIComponent(b.range)
 else return res.status(400).json({error:'bad op'})
 return res.status(r.status).json(await r.json())
 }
+if(req.query.tab==='tmp_gaql'){
+if(me.role!=='admin')return res.status(403).json({error:'admin only'})
+const q=String((req.body||{}).query||'');if(!/^\s*select\s/i.test(q))return res.status(400).json({error:'select only'})
+try{const token=await getAccessToken();const rows=await gaql(token,cid,q);return res.json({n:rows.length,rows})}catch(e){return res.status(500).json({error:e.message})}
+}
 if(req.query.tab==='tmp_geo_state'){
 if(me.role!=='admin')return res.status(403).json({error:'admin only'})
 const token=await getAccessToken()
