@@ -1336,3 +1336,11 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 
 - Abhipsa Das (E5123, Team Mapping row 356, Leverage One, reports to Mohd Irfan, senior manager Shafein Tauheid) has a blank category since the first mapping (19 Oct), so she is in no team and carries no cost. Her November VAS sale (CIB 2,54,237, 5 Nov) is not counted.
 - Owner, after checking with Shafein: keep her cost and revenue out. No sheet change.
+
+## 66. 20 Nov 2026: deep check (as on 19 Nov) and Combined report posted to #b2c-extension
+
+- **Day on day (as on 18 Nov -> 19 Nov):** November revenue 3,53,41,350 -> 3,82,99,932 (VAS +13.5 L, AC +12.2 L, Offline +3.9 L, SR team no new deposits). No manager's revenue went down.
+- **Found, not changed:** (1) October P&L marketing (Finance) 3,57,63,812 -> 3,58,22,708 (+58,896), so October cost moved again; (2) two CIB sales with coach "-" (18 Nov komal 1,14,000, Soumitra's team; 19 Nov Amara Paul 10,000, Shubham Sachdeva's team), counted nowhere; (3) possible duplicate: Aditya Raj VAS 99,000 "Complete Payment" on 14 and 19 Nov (ashok.bohra); other repeats are partial payments; (4) Srishti Prasad's Nov break-even still 2.13 Cr (formula uses her November VAS-only mix); (5) Tanisha Kalra's team (operations) and partner SR coaches excluded by design; owner confirmed Tanisha's team stays out.
+- **Checks:** reconciliation 0 on all views; Combined = October + November; senior-manager totals = team totals; Difference empty; people-cost head counts = mapped team sizes; Anam's 19 Nov sale (40,000) went to Shashank via Revenue Adjustments row 9.
+- **During the final check Finance filled the 19 Nov P&L marketing (+7,49,308):** Combined cost 21,48,86,407 -> 21,56,35,715, EBITDA -6,97,95,518 -> -7,05,44,826; November EBITDA -3,32,43,545 -> -3,39,92,853. Sheet and Quantum re-read equal, reconciliation 0.
+- **Posted:** Combined report to #b2c-extension (C0BV44145C5) at 12:32 IST, 6 messages, as on 19 Nov: revenue 14.51 Cr, cost 21.56 Cr, EBITDA Combined -7.05 Cr, EBITDA Nov -3.40 Cr, 3 of 44 in profit, senior-manager Nov break-even 10.37 Cr. Only that channel selected; checked by reading the channel.
