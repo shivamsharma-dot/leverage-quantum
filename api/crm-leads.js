@@ -5266,7 +5266,6 @@ async function handleBigQuery(req, res, me) {
       })
       const emails = [...new Set(sheetRows.map(r => r.email).filter(e => /@/.test(e)))]
       const pids = [...new Set(sheetRows.map(r => r.pid).filter(Boolean))]
-      const lit = a => a.length ? a.map(x => "'" + x + "'").join(',') : "''"
       const opts = { maxBytes: 8_000_000_000, mode: 'cib_vs_portal', dashboardId: 'settings', userEmail: me.email, timeoutMs: 50000 }
       const umCte = `um AS (SELECT user_id_uuid, LOWER(TRIM(leverage_email)) e1, LOWER(TRIM(leverage_email2)) e2, LOWER(CAST(prospect_id AS STRING)) pid FROM \`leverage_direct.users_meta\` WHERE user_id_uuid IS NOT NULL)`
       const portalSql = `WITH o AS (SELECT order_id, user_id_uuid, product_name, package_name, created_at, amount_after_discount, payment_plan FROM \`leverage_direct.pp_orders\` WHERE IFNULL(is_deleted, 0) = 0),
@@ -5282,11 +5281,17 @@ async function handleBigQuery(req, res, me) {
           o.product_name, o.package_name, o.amount_after_discount, o.payment_plan, o.user_id_uuid, u.e1, u.e2, u.pid
         FROM o LEFT JOIN u ON u.user_id_uuid = o.user_id_uuid`
       // Sheet emails / prospect ids -> portal users. Two plain joins (an OR join on two email columns timed out before).
-      const keysSql = `WITH ${umCte}
-        SELECT 'e' AS kt, um.e1 AS k, ANY_VALUE(um.user_id_uuid) AS uid FROM um WHERE um.e1 IN (${lit(emails)}) GROUP BY 2
-        UNION ALL SELECT 'e', um.e2, ANY_VALUE(um.user_id_uuid) FROM um WHERE um.e2 IN (${lit(emails)}) GROUP BY 2
-        UNION ALL SELECT 'p', um.pid, ANY_VALUE(um.user_id_uuid) FROM um WHERE um.pid IN (${lit(pids)}) GROUP BY 2`
-      const [portal, keys] = await Promise.all([bq.bigQuerySelectAll(portalSql, opts), bq.bigQuerySelectAll(keysSql, opts)])
+      // Keys go in as one '|'-joined string per query and in batches, because BigQuery caps a query at 100,000 characters.
+      const keyBatches = []
+      for (let i = 0; i < emails.length; i += 1800) keyBatches.push({ kt: 'e', list: emails.slice(i, i + 1800) })
+      for (let i = 0; i < pids.length; i += 1800) keyBatches.push({ kt: 'p', list: pids.slice(i, i + 1800) })
+      const keysSqlFor = b => `WITH ${umCte}, s AS (SELECT k FROM UNNEST(SPLIT('${b.list.join('|')}', '|')) AS k)
+        ` + (b.kt === 'e'
+          ? `SELECT 'e' AS kt, s.k, ANY_VALUE(um.user_id_uuid) AS uid FROM s JOIN um ON um.e1 = s.k GROUP BY 2
+        UNION ALL SELECT 'e', s.k, ANY_VALUE(um.user_id_uuid) FROM s JOIN um ON um.e2 = s.k GROUP BY 2`
+          : `SELECT 'p' AS kt, s.k, ANY_VALUE(um.user_id_uuid) AS uid FROM s JOIN um ON um.pid = s.k GROUP BY 2`)
+      const [portal, ...keyRuns] = await Promise.all([bq.bigQuerySelectAll(portalSql, opts), ...keyBatches.map(b => bq.bigQuerySelectAll(keysSqlFor(b), opts))])
+      const keys = { rows: keyRuns.flatMap(k => k.rows || []), totalBytesProcessed: keyRuns.reduce((t, k) => t + (Number(k.totalBytesProcessed) || 0), 0) }
       const keyMap = {}
       for (const r of keys.rows || []) if (r.k && r.uid) keyMap[(r.kt === 'p' ? 'p:' : 'e:') + r.k] = r.uid
       const body = {
