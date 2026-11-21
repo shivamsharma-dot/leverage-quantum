@@ -93,11 +93,14 @@ const SmallTable = ({ rows, cols }) => (
   </div>
 )
 
-function buildModel(data) {
+// Portal orders carry no AC/VAS flag. The sheet files Accommodation and L1E2E under VAS, so the same products count as VAS here.
+const portalType = product => (/accommodation|l1\s*e2e/i.test(product || '') ? 'VAS' : 'AC')
+
+function buildModel(data, typeFilter = 'all') {
   const keyMap = data.keyMap || {}
-  const sheet = (data.sheetRows || []).map(r => ({ ...r, uid: keyMap['e:' + r.email] || (r.pid && keyMap['p:' + r.pid]) || null }))
+  const sheet = (data.sheetRows || []).map(r => ({ ...r, uid: keyMap['e:' + r.email] || (r.pid && keyMap['p:' + r.pid]) || null })).filter(r => typeFilter === 'all' || r.type === typeFilter)
   const portalAll = data.portalRows || []
-  const pays = portalAll.filter(r => r.kind === 'pay').map(r => ({ ...r, mk: String(r.d || '').slice(0, 7) })).filter(r => r.mk >= '2026-04')
+  const pays = portalAll.filter(r => r.kind === 'pay' && (typeFilter === 'all' || portalType(r.product) === typeFilter)).map(r => ({ ...r, mk: String(r.d || '').slice(0, 7) })).filter(r => r.mk >= '2026-04')
   const counted = pays.filter(r => !BAD_STATUS.test(r.status || ''))
   const orders = portalAll.filter(r => r.kind === 'order')
   const orderUids = new Set(orders.map(o => o.uid).filter(Boolean))
@@ -196,6 +199,7 @@ export default function SalesDataCheckDashboard() {
   const [loading, setLoading] = useState(!cached)
   const [error, setError] = useState(null)
   const [month, setMonth] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
   const [side, setSide] = useState('sheet')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -217,7 +221,7 @@ export default function SalesDataCheckDashboard() {
   }, [])
   useEffect(() => { if (!cached) load(false) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const model = useMemo(() => (data ? buildModel(data) : null), [data])
+  const model = useMemo(() => (data ? buildModel(data, typeFilter) : null), [data, typeFilter])
   const s = useMemo(() => (model ? summarise(model, month) : null), [model, month])
   const monthRows = useMemo(() => {
     if (!model) return []
@@ -271,6 +275,7 @@ export default function SalesDataCheckDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '16px 28px 0', padding: '10px 12px', background: 'var(--bg2)', border: `0.5px solid ${C.border}`, borderRadius: 12 }}>
             <Dropdown options={monthOptions} value={month} onChange={v => { setMonth(v); setLimit(100) }} minWidth={210} />
+            <Dropdown options={[{ value: 'all', label: 'AC + VAS' }, { value: 'AC', label: 'AC only' }, { value: 'VAS', label: 'VAS only' }]} value={typeFilter} onChange={v => { setTypeFilter(v); setLimit(100) }} minWidth={130} />
             <div style={{ flex: 1 }} />
             {data && <span style={{ fontSize: 11.5, color: C.muted }} title={data.builtAt}>Built {new Date(data.builtAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
             <Button size="sm" variant="secondary" onClick={() => load(true)} disabled={loading}>
@@ -285,6 +290,7 @@ export default function SalesDataCheckDashboard() {
                   <div><b>Sheet:</b> Source wise CIB workbook. "FY 2027" tab for Apr to Sep 2026 (rows "Added by Quantum" skipped), "Oct Live 2026" onward for later months. Amount = CIB Amount / Net CIB.</div>
                   <div style={{ marginTop: 6 }}><b>Portal:</b> leverage_direct.pp_order_payments joined to pp_orders. Month = payment date (else the date the payment was entered), IST. Rejected and failed payments are left out; "Payment In Process" counts and is shown separately.</div>
                   <div style={{ marginTop: 6 }}><b>Matching:</b> each sheet email (or prospect ID) is looked up in users_meta to find the portal student, then compared by student and month. Amounts within 5% are "same"; "same once GST is removed" means the sheet equals the portal amount divided by 1.18.</div>
+                  <div style={{ marginTop: 6 }}><b>AC / VAS:</b> the sheet's own AC/VAS column. Portal orders have no such flag, so Accommodation and L1 E2E products count as VAS (the sheet files them there) and everything else as AC.</div>
                   <div style={{ marginTop: 6 }}>Data is cached for 30 minutes; Refresh rebuilds it (about ₹1 of BigQuery).</div>
                 </div>
               )}
@@ -380,7 +386,7 @@ export default function SalesDataCheckDashboard() {
 
               <div style={{ padding: '16px 28px 0' }}>
                 <Card title="Students" sub={fmtN(tableRows.length) + ' rows. Click a status above, or filter here.'}
-                  action={<ExportButton data={exportRows} filename={'sales_data_check_' + side + '_' + month} />}>
+                  action={<ExportButton data={exportRows} filename={'sales_data_check_' + side + '_' + typeFilter + '_' + month} />}>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
                     {[['sheet', 'Sheet side'], ['portal', 'Portal side']].map(([k, l]) => (
                       <button key={k} onClick={() => { setSide(k); setStatusFilter('all'); setLimit(100) }} style={{ padding: '7px 14px', borderRadius: 8, border: `0.5px solid ${side === k ? C.navy : C.border}`, background: side === k ? 'var(--navy-tint)' : 'var(--card)', color: side === k ? C.navy : C.sub, fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer' }}>{l}</button>
