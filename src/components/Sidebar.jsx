@@ -58,6 +58,7 @@ export const NAV = [
           { to: '/dashboard/ceo-b2c-pnl', label: 'Daily P&L', matchType: 'route' },
           { to: '/dashboard/ceo-b2c-cashflow', label: 'Daily Cash Flow', matchType: 'route' },
           { to: '/dashboard/manager-ebitda', label: 'Manager EBITDA', matchType: 'route' },
+          { to: '/dashboard/sales-data-check', label: 'Sales Data Check', matchType: 'route' },
         ]
       },
       { to: '/dashboard/marketing-review', icon: <MarketingReviewIcon />, label: 'Marketing Review', end: false },

@@ -50,6 +50,7 @@ export const PAGE_LIST = [
   { id:'ceo_b2c_pnl', label:'Daily P&L', path:'/dashboard/ceo-b2c-pnl', adminOnly:true },
   { id:'ceo_b2c_cashflow', label:'Daily Cash Flow', path:'/dashboard/ceo-b2c-cashflow', adminOnly:true },
   { id:'ceo_b2c_manager_ebitda', label:'Manager EBITDA', path:'/dashboard/manager-ebitda', adminOnly:true },
+  { id:'cib_vs_portal', label:'Sales Data Check', path:'/dashboard/sales-data-check', adminOnly:true },
   { id:'marketing_review', label:'Marketing Review', path:'/dashboard/marketing-review', adminOnly:true },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]

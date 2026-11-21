@@ -4670,6 +4670,7 @@ async function handleBigQuery(req, res, me) {
     : mode === 'ql_split_totals' ? 'overall'
     : (mode === 'marketing_review_cac' || mode === 'marketing_review_tabs') ? 'marketing_review'
     : mode === 'live_ql_daily_bq' ? 'live_qls'
+    : mode === 'cib_vs_portal' ? 'cib_vs_portal'
     : OVERALL_BQ_READ_MODES.includes(mode) ? 'overall_bigquery'
     : 'settings'
   // The Marketing Review deck reads the same Overall BigQuery cache rows, so anyone granted that page can
@@ -5182,6 +5183,120 @@ async function handleBigQuery(req, res, me) {
     // Coach NPS (pre-sales) mirror -- see callNpsSql above. Daily, cheap trailing
     // window by default; pass since/until (YYYY-MM-DD, IST) to backfill, one week
     // per call keeps each run well inside Vercel's 60s limit.
+    if (mode === 'cib_vs_portal') {
+      // Sales data check (2026-11-21): the Source wise CIB sheet (typed by the sales team via B2C-OND) against the
+      // Student Portal's own order tables in BigQuery (leverage_direct.pp_orders + pp_order_payments, views on
+      // sp_latest). Admin only. Returns raw rows; the page does the matching so it can filter and drill down.
+      // Sheet: "FY 2027" tab for Apr to Sep 2026 (rows "Added by Quantum" skipped, those are the Oct/Nov copies),
+      // "Oct Live 2026" and later Live tabs for Oct onward. Portal: payments dated from 1 Apr 2026, rejected and
+      // failed left out on the page (they are returned so the page can show them). Each sheet email / prospect id
+      // is resolved to a portal user (users_meta) so matching is by student, not by spelling of an email.
+      if (me.role !== 'admin') return res.status(403).json({ ok: false, error: 'Admin only' })
+      const force = req.query && req.query.refresh === '1'
+      if (!force && _cibVsPortalCache && Date.now() - _cibVsPortalCache.at < 30 * 60 * 1000) {
+        return res.status(200).json(Object.assign({}, _cibVsPortalCache.body, { fromCache: true }))
+      }
+      const SINCE = '2026-04-01'
+      const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
+      const token = await sheetsWriteToken()
+      const now = new Date(Date.now() + 5.5 * 3600 * 1000)
+      const liveTabs = []
+      for (let d = new Date(Date.UTC(2026, 9, 1)); d <= now; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
+        liveTabs.push({ name: MON_ABBR[d.getUTCMonth()] + ' Live ' + d.getUTCFullYear(), mk: d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') })
+      }
+      const readTab = async name => {
+        const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CIB_SHEET_ID}/values/${encodeURIComponent("'" + name + "'")}!A1:AH8000?valueRenderOption=UNFORMATTED_VALUE`, { headers: { Authorization: `Bearer ${token}` } })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok || !Array.isArray(d.values)) return { error: (d.error && d.error.message) || ('HTTP ' + r.status) }
+        return { values: d.values }
+      }
+      const cleanEmail = v => String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z0-9._%+@-]/g, '')
+      const cleanPid = v => { const x = String(v == null ? '' : v).trim().toLowerCase(); return /^[0-9a-f-]{36}$/.test(x) ? x : '' }
+      const money = v => { const n = typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) ? n : 0 }
+      const tabs = {}
+      const sheetRows = []
+      const tabReads = await Promise.all([readTab('FY 2027'), ...liveTabs.map(t => readTab(t.name))])
+      // FY 2027 tab: one row per sale, Month like "Apr-26", amount "Net CIB - As per Fin sheet".
+      {
+        const t = tabReads[0]
+        if (t.error) tabs['FY 2027'] = { error: t.error }
+        else {
+          const head = t.values[0].map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, ' '))
+          const f = (...n) => { for (const x of n) { const i = head.indexOf(x); if (i >= 0) return i } return -1 }
+          const iMail = f('student leverage email id', 'student leverage mail'), iPid = f('prospect id'), iStp = f('stp'), iMonth = f('month'), iYear = f('year')
+          const iType = f('ac/ vas', 'ac/vas'), iAmt = f('net cib - as per fin sheet', 'net cib', 'cib amount'), iPkg = f('correct package'), iAdded = f('added by quantum')
+          let n = 0, skipped = 0
+          t.values.slice(1).forEach((row, i) => {
+            const amt = money(row[iAmt]); const email = cleanEmail(row[iMail]); const type = String(row[iType] || '').trim().toUpperCase()
+            if (!amt && !email) return
+            if (iAdded >= 0 && String(row[iAdded] || '').trim()) { skipped++; return }
+            const m = String(row[iMonth] || '').trim().toLowerCase().match(/^([a-z]{3})/)
+            if (!m || !MONTHS[m[1]]) return
+            const yRaw = String(row[iMonth] || '').match(/(\d{2,4})\s*$/)
+            const yy = yRaw ? (yRaw[1].length === 2 ? '20' + yRaw[1] : yRaw[1]) : String(row[iYear] || '2026')
+            const mk = yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')
+            if (mk < SINCE.slice(0, 7) || mk > '2026-09') return
+            sheetRows.push({ tab: 'FY 2027', row: i + 2, mk, date: null, name: '', email, pid: cleanPid(row[iPid]), stp: String(row[iStp] || '').trim(), type: type === 'VAS' ? 'VAS' : type === 'AC' ? 'AC' : type || '?', pkg: String(row[iPkg] || '').trim(), amt })
+            n++
+          })
+          tabs['FY 2027'] = { rows: n, skippedAddedByQuantum: skipped }
+        }
+      }
+      // Live tabs: one row per payment, Date "03/11/26" (DD/MM/YY, sometimes a Sheets serial), amount "CIB Amount".
+      liveTabs.forEach((lt, k) => {
+        const t = tabReads[k + 1]
+        if (t.error) { tabs[lt.name] = { error: t.error }; return }
+        const head = t.values[0].map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, ' '))
+        const f = (...n) => { for (const x of n) { const i = head.indexOf(x); if (i >= 0) return i } return -1 }
+        const iMail = f('student leverage mail', 'student leverage email id'), iPid = f('prospect id'), iStp = f('stp'), iDate = f('date'), iName = f('student name')
+        const iType = f('ac/vas', 'ac/ vas'), iAmt = f('cib amount'), iPkg = f('country'), iMode = f('mode'), iPay = f('payment status'), iTeam = f('team')
+        let n = 0
+        t.values.slice(1).forEach((row, i) => {
+          const amt = money(row[iAmt]); const email = cleanEmail(row[iMail])
+          if (!amt) return
+          let date = null
+          const dv = row[iDate]
+          if (typeof dv === 'number' && dv > 30000) date = new Date(Date.UTC(1899, 11, 30) + dv * 86400000).toISOString().slice(0, 10)
+          else { const mm = String(dv || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (mm) date = (mm[3].length === 2 ? '20' + mm[3] : mm[3]) + '-' + mm[2].padStart(2, '0') + '-' + mm[1].padStart(2, '0') }
+          const type = String(row[iType] || '').trim().toUpperCase()
+          sheetRows.push({ tab: lt.name, row: i + 2, mk: lt.mk, date, name: String(row[iName] || '').trim(), email, pid: cleanPid(row[iPid]), stp: String(row[iStp] || '').trim(), type: type === 'VAS' ? 'VAS' : type === 'AC' ? 'AC' : type || '?', pkg: String(row[iPkg] || '').trim(), mode: String(row[iMode] || '').trim(), payStatus: String(row[iPay] || '').trim(), team: String(row[iTeam] || '').trim(), amt })
+          n++
+        })
+        tabs[lt.name] = { rows: n }
+      })
+      const emails = [...new Set(sheetRows.map(r => r.email).filter(e => /@/.test(e)))]
+      const pids = [...new Set(sheetRows.map(r => r.pid).filter(Boolean))]
+      const lit = a => a.length ? a.map(x => "'" + x + "'").join(',') : "''"
+      const opts = { maxBytes: 8_000_000_000, mode: 'cib_vs_portal', dashboardId: 'settings', userEmail: me.email, timeoutMs: 50000 }
+      const umCte = `um AS (SELECT user_id_uuid, LOWER(TRIM(leverage_email)) e1, LOWER(TRIM(leverage_email2)) e2, LOWER(CAST(prospect_id AS STRING)) pid FROM \`leverage_direct.users_meta\` WHERE user_id_uuid IS NOT NULL)`
+      const portalSql = `WITH o AS (SELECT order_id, user_id_uuid, product_name, package_name, created_at, amount_after_discount, payment_plan FROM \`leverage_direct.pp_orders\` WHERE IFNULL(is_deleted, 0) = 0),
+        ${umCte},
+        u AS (SELECT user_id_uuid, ANY_VALUE(e1) e1, ANY_VALUE(e2) e2, ANY_VALUE(pid) pid FROM um WHERE user_id_uuid IN (SELECT user_id_uuid FROM o) GROUP BY 1)
+        SELECT 'pay' AS kind, p.order_payment_id AS id, p.order_id, FORMAT_TIMESTAMP('%Y-%m-%d', COALESCE(p.date_of_payment, p.created_at), 'Asia/Kolkata') AS d,
+          p.date_of_payment IS NOT NULL AS dated, p.payment_amount AS amt, p.payment_status AS status, p.payment_type AS ptype, p.payment_via AS via,
+          o.product_name AS product, o.package_name AS package, o.amount_after_discount AS order_amt, o.payment_plan AS plan, o.user_id_uuid AS uid, u.e1, u.e2, u.pid
+        FROM \`leverage_direct.pp_order_payments\` p JOIN o USING (order_id) LEFT JOIN u ON u.user_id_uuid = o.user_id_uuid
+        WHERE IFNULL(p.is_deleted, 0) = 0 AND DATE(COALESCE(p.date_of_payment, p.created_at), 'Asia/Kolkata') >= DATE '${SINCE}'
+        UNION ALL
+        SELECT 'order', o.order_id, o.order_id, FORMAT_TIMESTAMP('%Y-%m-%d', o.created_at, 'Asia/Kolkata'), TRUE, o.amount_after_discount, NULL, NULL, NULL,
+          o.product_name, o.package_name, o.amount_after_discount, o.payment_plan, o.user_id_uuid, u.e1, u.e2, u.pid
+        FROM o LEFT JOIN u ON u.user_id_uuid = o.user_id_uuid`
+      // Sheet emails / prospect ids -> portal users. Two plain joins (an OR join on two email columns timed out before).
+      const keysSql = `WITH ${umCte}
+        SELECT 'e' AS kt, um.e1 AS k, ANY_VALUE(um.user_id_uuid) AS uid FROM um WHERE um.e1 IN (${lit(emails)}) GROUP BY 2
+        UNION ALL SELECT 'e', um.e2, ANY_VALUE(um.user_id_uuid) FROM um WHERE um.e2 IN (${lit(emails)}) GROUP BY 2
+        UNION ALL SELECT 'p', um.pid, ANY_VALUE(um.user_id_uuid) FROM um WHERE um.pid IN (${lit(pids)}) GROUP BY 2`
+      const [portal, keys] = await Promise.all([bq.bigQuerySelectAll(portalSql, opts), bq.bigQuerySelectAll(keysSql, opts)])
+      const keyMap = {}
+      for (const r of keys.rows || []) if (r.k && r.uid) keyMap[(r.kt === 'p' ? 'p:' : 'e:') + r.k] = r.uid
+      const body = {
+        ok: true, since: SINCE, builtAt: new Date().toISOString(), tabs, sheetRows,
+        portalRows: (portal.rows || []).map(r => ({ kind: r.kind, id: r.id, order_id: r.order_id, d: r.d, dated: r.dated, amt: Number(r.amt) || 0, status: r.status, product: r.product, package: r.package, order_amt: Number(r.order_amt) || 0, plan: r.plan, uid: r.uid, e1: r.e1, e2: r.e2, pid: r.pid })),
+        keyMap, bytes: (Number(portal.totalBytesProcessed) || 0) + (Number(keys.totalBytesProcessed) || 0),
+      }
+      _cibVsPortalCache = { at: Date.now(), body }
+      return res.status(200).json(body)
+    }
     if (mode === 'route_funnel') {
       // Lead-route funnel analysis (2026-10-17): offline / online x Futwork-queued or not, with SR deposits and AC sales.
       // Admin only. Reads the CIB workbook (AC sales, with Prospect ID) via the service account, joins to
@@ -6645,6 +6760,7 @@ async function handleCareersMetaAds(req, res, me) {
 //      call, cached per id for an hour.
 // Names are matched with shared/metaAdMatch.mjs (exact, normalised, unique prefix).
 // Only a link, a picture and a status come back; every number stays our own data.
+let _cibVsPortalCache = null // { at, body } for mode=cib_vs_portal, 30 min
 let _metaNameIndex = null // { at, byName: { name: { id, status, created } } }
 const _metaCreativeCache = new Map() // id -> { at, meta }
 const META_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'DISAPPROVED', 'WITH_ISSUES', 'IN_PROCESS', 'PENDING_REVIEW', 'PREAPPROVED', 'PENDING_BILLING_INFO']

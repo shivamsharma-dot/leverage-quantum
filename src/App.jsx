@@ -41,6 +41,7 @@ const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceRe
 const CeoB2CDashboard = lazy(COMPONENT_IMPORTS.CeoB2CDashboard)
 const ManagerEbitdaDashboard = lazy(COMPONENT_IMPORTS.ManagerEbitdaDashboard)
 const MarketingReviewDashboard = lazy(COMPONENT_IMPORTS.MarketingReviewDashboard)
+const SalesDataCheckDashboard = lazy(COMPONENT_IMPORTS.SalesDataCheckDashboard)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
 // Suspense fallback - slim skeleton shown while lazy chunk loads
@@ -54,6 +55,7 @@ const PAGE_TITLES = {
   '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
   '/dashboard/manager-ebitda': 'Manager EBITDA',
   '/dashboard/marketing-review': 'Marketing Review',
+  '/dashboard/sales-data-check': 'Sales Data Check',
   '/dashboard/meta-ads': 'Meta Ads',
   '/dashboard/leverage-careers': 'Leverage Careers',
   '/dashboard/apps': 'Apps',
@@ -296,6 +298,7 @@ export default function App() {
           <Route path="/dashboard/ceo-b2c-cashflow" element={<ProtectedRoute dashboardId="ceo_b2c_cashflow"> <CeoB2CDashboard statement="cashflow" /></ProtectedRoute>} />
           <Route path="/dashboard/manager-ebitda" element={<ProtectedRoute dashboardId="ceo_b2c_manager_ebitda"> <ManagerEbitdaDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/marketing-review" element={<ProtectedRoute dashboardId="marketing_review"> <MarketingReviewDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/sales-data-check" element={<ProtectedRoute dashboardId="cib_vs_portal"> <SalesDataCheckDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/revenue" element={<ProtectedRoute dashboardId="revenue"> <RevenueDashboard /></ProtectedRoute>} />

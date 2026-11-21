@@ -37,6 +37,7 @@ export const COMPONENT_IMPORTS = {
   CeoB2CDashboard: () => import('../pages/CeoB2CDashboard'),
   ManagerEbitdaDashboard: () => import('../pages/ManagerEbitdaDashboard'),
   MarketingReviewDashboard: () => import('../pages/MarketingReviewDashboard'),
+  SalesDataCheckDashboard: () => import('../pages/SalesDataCheckDashboard'),
   SettingsPage: () => import('../pages/SettingsPage'),
 }
 
@@ -74,6 +75,7 @@ const ROUTE_COMPONENT = {
   '/dashboard/ceo-b2c-cashflow': 'CeoB2CDashboard',
   '/dashboard/manager-ebitda': 'ManagerEbitdaDashboard',
   '/dashboard/marketing-review': 'MarketingReviewDashboard',
+  '/dashboard/sales-data-check': 'SalesDataCheckDashboard',
   '/settings': 'SettingsPage',
   '/settings/reports/email': 'SettingsPage',
   '/settings/reports/slack': 'SettingsPage',
