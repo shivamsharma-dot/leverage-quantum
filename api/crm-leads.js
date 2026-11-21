@@ -5230,11 +5230,17 @@ async function handleBigQuery(req, res, me) {
             const amt = money(row[iAmt]); const email = cleanEmail(row[iMail]); const type = String(row[iType] || '').trim().toUpperCase()
             if (!amt && !email) return
             if (iAdded >= 0 && String(row[iAdded] || '').trim()) { skipped++; return }
-            const m = String(row[iMonth] || '').trim().toLowerCase().match(/^([a-z]{3})/)
-            if (!m || !MONTHS[m[1]]) return
-            const yRaw = String(row[iMonth] || '').match(/(\d{2,4})\s*$/)
-            const yy = yRaw ? (yRaw[1].length === 2 ? '20' + yRaw[1] : yRaw[1]) : String(row[iYear] || '2026')
-            const mk = yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')
+            // Month is text ("Aug-26") on some rows and a real date cell (a Sheets serial number) on others (Apr to Jul).
+            let mk = ''
+            const mv = row[iMonth]
+            if (typeof mv === 'number' && mv > 30000) mk = new Date(Date.UTC(1899, 11, 30) + mv * 86400000).toISOString().slice(0, 7)
+            else {
+              const m = String(mv || '').trim().toLowerCase().match(/^([a-z]{3})/)
+              if (!m || !MONTHS[m[1]]) return
+              const yRaw = String(mv || '').match(/(\d{2,4})\s*$/)
+              const yy = yRaw ? (yRaw[1].length === 2 ? '20' + yRaw[1] : yRaw[1]) : String(row[iYear] || '2026')
+              mk = yy + '-' + String(MONTHS[m[1]]).padStart(2, '0')
+            }
             if (mk < SINCE.slice(0, 7) || mk > '2026-09') return
             sheetRows.push({ tab: 'FY 2027', row: i + 2, mk, date: null, name: '', email, pid: cleanPid(row[iPid]), stp: String(row[iStp] || '').trim(), type: type === 'VAS' ? 'VAS' : type === 'AC' ? 'AC' : type || '?', pkg: String(row[iPkg] || '').trim(), amt })
             n++
