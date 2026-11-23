@@ -326,7 +326,7 @@ function buildB2CFullTable(ctx) {
   FULL_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
   rows.push(row('cost', 'Total Cost', true))
   rows.push(row('ebitdaBeforeCorp', 'Contribution Profit', true))
-  rows.push(row('net', 'EBITDA After Corp. Overheads', true))
+  rows.push(row('net', 'EBITDA', true))
   const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
   const L = []
   L.push(':bar_chart: *B2C - Daily P & L*')
@@ -394,7 +394,7 @@ function buildB2CFullTableV2(ctx) {
   FULL_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
   rows.push(row('cost', 'Total Cost', true))
   rows.push(row('ebitdaBeforeCorp', 'Contribution Profit', true))
-  rows.push(row('net', 'EBITDA After Corp. Overheads', true))
+  rows.push(row('net', 'EBITDA', true))
   const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
   const partial = []
   if (h2.from && h2.complete === false) partial.push('H2 runs from 1 Oct to the cut-off day')
@@ -430,7 +430,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
     'Five columns in this order: Last Day, MTD, H2 (Oct-Mar), year to date, H1 (Apr-Sep)',
     'The month range sits in the H2 and H1 headers',
     'Revenue rows: SR, AC and Leverage One (each Online + Offline together), then Upskilling and Ancillary',
-    'Everything else as the Daily P&L page shows it: Total Revenue, each cost head, Total Cost, Contribution Profit, EBITDA After Corp. Overheads',
+    'Everything else as the Daily P&L page shows it: Total Revenue, each cost head, Total Cost, Contribution Profit, EBITDA',
     'This is the version the scheduled Daily Report posts',
   ],
   build: buildB2CFullTableV2,
@@ -441,7 +441,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   name: 'B2C - full particulars (native table)',
   tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / H1 / H2 / YTD.',
   what: [
-    'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, Contribution Profit, then EBITDA After Corp. Overheads',
+    'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, Contribution Profit, then EBITDA',
     'Five columns: Last Day, MTD, H1 (Apr-Sep), H2 (Oct-Mar) and year to date',
     'A real Slack table block, not a code block or an image',
     'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Cash Flow report',

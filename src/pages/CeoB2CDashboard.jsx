@@ -240,12 +240,12 @@ const STATEMENT_LABELS = {
     revGroup: 'Revenue', costGroup: 'Cost',
     // The sheet's own bottom line here is EBITDA, not a cash concept -- see
     // api/crm-leads.js's net column mapping. Named exactly as the sheet's own
-    // header ('EBITDA After Corp. Overheads') now that the Before/Corp split
-    // row sits right above it in the table -- plain 'EBITDA' alone would be
-    // ambiguous next to it. kpiNet below stays the short 'EBITDA' on purpose
+    // header ('EBITDA After Corp. Overheads') until 2026-11-23, when Shubham
+    // asked for plain 'EBITDA' (the row above is now 'Contribution Profit', so
+    // there is nothing left to confuse it with). kpiNet below is also 'EBITDA'
     // (KPI cards are meant to be terse); every P&L-only label below says so;
     // Cash Flow's own net/kpiNet/etc. (below) are untouched.
-    totalRev: 'Total Revenue', totalCost: 'Total Cost', net: 'EBITDA After Corp. Overheads',
+    totalRev: 'Total Revenue', totalCost: 'Total Cost', net: 'EBITDA',
     // Root words for the KPI cards -- the active date preset (MTD/Last Day/
     // Last 7D/Range) prefixes these at render time instead of hardcoding MTD.
     kpiRev: 'Revenue', kpiCost: 'Cost', kpiNet: 'EBITDA',
