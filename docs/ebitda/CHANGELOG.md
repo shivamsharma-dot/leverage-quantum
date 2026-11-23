@@ -1359,3 +1359,11 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Akintayo Oluwakemi V:** her 2 November SR deposits (5,25,000) are no longer in SR Deposits (BigQuery), so "Not in a manager's team" is empty and headcount is back to 262. Lakshay Gupta will discuss her mapping with the owner.
 - **Exits email (21 Nov):** Raviranjan Pandey (E4630) still active under Tarun Kumar (AC), cost 2,92,982, no LWD given; not changed (Wednesday exit process). Deepak Panwar (E4708) already NA, but still shows as senior manager of 21 people in the Senior managers table. Sonar Chary not in mapping.
 - **Posted:** Combined report to #b2c-extension (C0BV44145C5) at 12:27 IST, 6 messages, as on 22 Nov: revenue 15.15 Cr, cost 22.69 Cr, EBITDA Combined -7.54 Cr, EBITDA Nov -3.89 Cr, 2 of 44 in profit (Harsha Sudan, Kushal Sharma). Tushar Dutta and Dhiman Dey dropped just below zero. Srishti Prasad's Nov break-even still reads 2.16 Cr.
+
+## 69. 23 Nov 2026: Saloni Garg moved from Srishti Prasad to Aditya Gupta (November)
+
+- **Source:** Srishti Prasad's DMs to the owner. 5 Nov: map Saloni under her directly (that is how she ended up under Srishti). 17 Nov and 23 Nov: Saloni is under Aditya Gupta, from day 1 of the month. LeadSquared confirms Saloni's manager is Aditya Gupta. Owner: "go ahead with it". The 17 Nov message had been missed.
+- **Team Mapping row 416:** H = E2373 (was E1909), I = Aditya Gupta (was Srishti Prasad), J = E4708, same as Aditya Gupta's other people. No filter was hiding the row.
+- **People-cost table:** Srishti row 306: B 6 -> 5, C 378334 -> `=378334/6*5`. Aditya Gupta row 341: B 3 -> 4, C 162500 -> `=162500+378334/6`. One head moved at Srishti's per head. Grand total 262 / 1,52,44,872.8 unchanged.
+- **Result (Quantum, as on 22 Nov):** Srishti team 5, November EBITDA -15,74,423 -> -12,67,200, Combined -23,49,591 -> -20,42,368. Aditya Gupta team 4, November and Combined -9,02,113 -> -12,09,336. Saloni has no November revenue, so only her cost (3,07,223) moved. Totals unchanged (November -3,88,88,469, Combined -7,54,40,458), reconciliation 0. Saloni is not counted in October, so no Combined move row.
+- How It Works (live) row 157. The report already posted at 12:27 still shows the old split.
