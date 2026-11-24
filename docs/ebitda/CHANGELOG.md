@@ -1374,3 +1374,11 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Kept out by design:** Tanisha Kalra's team is operations, not sales, so its sales stay out of the mapping and the report.
 - **Mapping:** no changes today; pending exits are handled in the Wednesday update.
 - **Posted:** Combined report to #b2c-extension (C0BV44145C5) at 12:30 IST, 6 messages, as on 23 Nov: revenue 15.36 Cr, cost 23.08 Cr, EBITDA Combined -7.72 Cr, EBITDA Nov -4.06 Cr, 3 of 44 in profit (Harsha Sudan, Mamta Ojha, Kushal Sharma). Includes the Saloni Garg move (section 69).
+
+## 71. 24 Nov 2026: Kunal Ramani's October centre costs moved into his October team row
+
+- **Why:** his own row (Reporting To = NA) carries his Mumbai and Pune centre costs, so in the October view they sat in "Not in a manager's team" (marketing 5,27,966 + offline centre 3,43,951 = 8,71,917) and his October team row showed +9,78,488 without them. November (sections 31-32) and Combined (section 47) already put them on his row. Owner approved fixing October.
+- **October workbook:** Revenue Adjustments A35 = Kunal Ramani; new column C33:C35 = own offline centre cost (Team Mapping Z). EBITDA - October A87 (Offline LET) adds `ownz` to offline centre and total cost; A110 (Difference LET) removes own marketing + centre cost for listed managers (row filter unchanged, headcount stays 255). Note on the October 2026 record tab, rows 45-46.
+- **Live sheet:** EBITDA - Combined C169 wrapped in IFERROR (returns 0 now), so no double count. How It Works row 158.
+- **Slip, fixed:** one Name-box jump failed and the new A87 formula briefly went into A110; A110 was re-typed and checked equal to the intended formula before continuing.
+- **Result:** Kunal October +9,78,488 -> +1,06,571. October company totals unchanged, reconciliation 0. November and Combined unchanged (Combined -7,71,79,280, Kunal -11,47,066). Quantum's October headline now includes these costs (-3.66 Cr, was -3.58 Cr).
