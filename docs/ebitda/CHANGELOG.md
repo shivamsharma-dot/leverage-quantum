@@ -1419,3 +1419,12 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Result:** Srishti team 4, Nov EBITDA -14,02,586 -> -11,17,226, Combined -21,77,755 -> -18,92,395. Totals unchanged (Nov -4,10,82,615, Combined -7,76,34,608), reconciliation 0, Difference empty. Quantum matches. Her Nov break-even still uses a VAS-only mix (not fixed).
 - **Owner's emails** to Shabnam/Shafein (Shikha), Srishti (Shrey) and Srishti (Faiyez) were sent by the owner; Shikha's team move and Faiyez wait for Shafein / Shabnam.
 - How It Works (live) row 162.
+
+## 76. 25 Nov 2026: Shikha Martolia (VAS manager) left; her team moved to Ravi Pratap Singh Chauhan
+
+- **Source:** Shabnam (HR) asked to remove Shikha (last working day 23 Nov). Shafein confirmed on 25 Nov that Nandita Sharma, Khushee Negi and Ashok Singh Bohra moved to Ravi's team for now, until a new VAS manager is hired.
+- **Team Mapping:** row 344 Shikha D = 2026-11-23, I = NA. Rows 197, 210, 352: H = E3699, I = Ravi Pratap Singh Chauhan (J/K unchanged: E1840 / Shafein Tauheid).
+- **People-cost table:** Ravi row 303 B 10 -> 13, C `=553866+202467` (Shikha's whole team salary including hers stays with the team for the full month, section 73 rule). Shikha row 327 B 4 -> 0, C 0. Grand total 258 / 1,52,44,872.8.
+- **Combined moves:** rows 169/170 (were Kunal's rows, all 0 since section 71) reused: 169 Shikha Martolia (B/C copied from the Tushita row: minus her October size and row), 170 Ravi Pratap Singh Chauhan (`=-B169`, `=ARRAYFORMULA(-C169:N169)`); notes in O169/O170. Rows 171/172 (Shafein, 0) left as they are. October tab not changed.
+- **Result:** Nov: Ravi team 13, EBITDA -13,11,870 (was Ravi -8,08,346 + Shikha -6,49,443). Combined: Ravi -13,04,438 (was -3,79,903 + Shikha -10,70,454). Managers 44 -> 43, cost base 259 -> 258. Totals unchanged (Nov -4,10,82,615, Combined -7,76,34,608), reconciliation 0, moves net 0, no errors. Quantum matches; October view still shows Shikha (October unchanged, by design).
+- How It Works (live) row 163.
