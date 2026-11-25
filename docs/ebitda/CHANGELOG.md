@@ -1390,3 +1390,15 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Live sheet:** EBITDA - Combined C171 wrapped in IFERROR; rows 171/172 now 0, so no double count. How It Works row 159 (one row added to the tab).
 - **Slips, fixed:** a first A110 version multiplied the people/corp columns and showed wrong amounts (reverted before the list was filled); a stray copy of the old Difference formula landed in October N83 and broke the VAS title total (N72 #REF); N83 cleared, tabs scanned for errors (none).
 - **Result:** Ravi October +3,42,671 -> +4,28,443; October VAS team -78,340 -> +7,432; October "Not in a manager's team" 0. October company totals unchanged (255, revenue 10,67,90,957, cost 14,33,42,948, EBITDA -3,65,51,991), reconciliation 0. November and Combined unchanged (Combined -7,71,79,280, Ravi -4,20,991). Quantum's October headline now equals the sheet's October total; managers in profit 7 of 45.
+
+## 73. 25 Nov 2026: leaver rule; Niharika Marri and Nancy Gupta out of their team counts
+
+- **Rule (owner, after talking to Shubham Bansal):** a coach who leaves comes out of the team count, but their team-average salary stays with the same team for the full month, spread over the remaining members. Their share of corp salary, overheads and marketing goes to everyone else. Same as Robin Pal (section 63). Last working day = date of the exits email. Earlier leavers dated 31 Oct (and Rohan Singhal 2 Nov) stay as they are.
+- **Applied only to:**
+  - Niharika Marri (row 222, Kandiboina Raja): D = 2026-11-13, I = NA, O cleared. Raja asked Shubham for team 2 (screenshot 25 Nov).
+  - Nancy Gupta (row 120, Sidhanth Bedi): D = 2026-10-31, I = NA, O cleared. From Saud Khan's headcount email.
+- **People-cost table:** Raja row 328 B 3 -> 2, Sidhanth Bedi row 304 B 11 -> 10; C kept (2,49,166 and 6,20,500). Cost base 262 -> 260.
+- **Filter:** Team Mapping had a basic filter on Email (2 rows shown: Mohd Affan, Sumukh Sinha; another user had the sheet open). Opened to edit, then restored to the same two emails.
+- **Result (as on 24 Nov):** Raja team 2, Nov +1,46,212, Combined +2,85,801 (now in profit). Sidhanth Bedi team 10, Nov -18,32,971, Combined -48,20,885. Totals unchanged (Nov EBITDA -4,08,83,679, Combined -7,74,35,671), reconciliation 0, Difference empty.
+- **Drafts for the owner to send:** Gmail reply to Saud (also asks him to confirm Nishant Pandey's move to Mayur Bajaj), Slack DM to Raja.
+- How It Works (live) row 160 (one row added).
