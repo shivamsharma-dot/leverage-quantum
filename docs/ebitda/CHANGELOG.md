@@ -1402,3 +1402,11 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Result (as on 24 Nov):** Raja team 2, Nov +1,46,212, Combined +2,85,801 (now in profit). Sidhanth Bedi team 10, Nov -18,32,971, Combined -48,20,885. Totals unchanged (Nov EBITDA -4,08,83,679, Combined -7,74,35,671), reconciliation 0, Difference empty.
 - **Drafts for the owner to send:** Gmail reply to Saud (also asks him to confirm Nishant Pandey's move to Mayur Bajaj), Slack DM to Raja.
 - How It Works (live) row 160 (one row added).
+
+## 74. 25 Nov 2026: Nishant Pandey moved from Siddharth to Mayur Bajaj (November)
+
+- **Source:** Saud Khan's headcount email; on 25 Nov he replied "Yes, that is correct" to the owner asking whether Nishant had moved to Mayur's team. LeadSquared already shows Mayur Bajaj as his manager.
+- **Team Mapping row 404:** H = E0507, I = Mayur Bajaj, J = E4409, K = Shubham Sachdeva (same as Mayur's other people). Written with the Sheets connector.
+- **People-cost table:** Siddharth row 300 B 7 -> 6, C `=(394600+440167/7)/7*6`; Mayur Bajaj row 313 B 7 -> 8, C `=290166+299801/5*2+(394600+440167/7)/7`. One head at Siddharth's per head. Grand total 260 / 1,52,44,872.8 unchanged.
+- **Result:** Siddharth team 6, November -18,78,702 -> -15,36,607, Combined -37,39,337 -> -33,97,243. Mayur team 8, November -4,64,152 -> -8,06,246, Combined -16,27,317 -> -19,69,411. Nishant has no November revenue, so only his cost (3,42,094) moved. Totals unchanged (Nov -4,10,82,615, Combined -7,76,34,608), reconciliation 0, Combined moves net 0. Quantum matches. Not counted in October.
+- How It Works (live) row 161.
