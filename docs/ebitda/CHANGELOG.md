@@ -1428,3 +1428,10 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Combined moves:** rows 169/170 (were Kunal's rows, all 0 since section 71) reused: 169 Shikha Martolia (B/C copied from the Tushita row: minus her October size and row), 170 Ravi Pratap Singh Chauhan (`=-B169`, `=ARRAYFORMULA(-C169:N169)`); notes in O169/O170. Rows 171/172 (Shafein, 0) left as they are. October tab not changed.
 - **Result:** Nov: Ravi team 13, EBITDA -13,11,870 (was Ravi -8,08,346 + Shikha -6,49,443). Combined: Ravi -13,04,438 (was -3,79,903 + Shikha -10,70,454). Managers 44 -> 43, cost base 259 -> 258. Totals unchanged (Nov -4,10,82,615, Combined -7,76,34,608), reconciliation 0, moves net 0, no errors. Quantum matches; October view still shows Shikha (October unchanged, by design).
 - How It Works (live) row 163.
+
+## 77. 25 Nov 2026: Faiyez Khan out of Srishti Prasad's team count; full check
+
+- **Faiyez Khan (row 236):** resigned "effective immediately" on 24 Nov; Srishti asked to remove him; Shabnam's confirmation not yet received. Owner: remove for now. D = 2026-11-24, I = NA, O cleared; people-cost Srishti row 306 B 4 -> 3, C kept (leaver rule, section 73). No revenue. Cost base 258 -> 257.
+- **Full check (as on 24 Nov, 24/30):** sheet November / Combined / October totals = Quantum (Nov revenue 5,15,83,347, cost 9,26,65,962, EBITDA -4,10,82,615; Combined -7,76,34,608; October -3,65,51,993, unchanged). Reconciliation 0 on all three, Combined moves net 0, no formula errors on EBITDA - November / Combined / October / View. No leftover rows for Shikha, Faiyez, Shrey, Nancy or Niharika in November or Combined (October still shows Shikha by design). Slack preview builds 6 messages. Managers in profit: Nov 6 of 43, Combined 4 of 43.
+- **Watch:** Finance's 24 Nov marketing reads 6,22,135 (low next to the usual ~9-12 L; 23 Nov was revised 8,58,308 -> 11,55,709), so 24 Nov may still be partial.
+- How It Works (live) row 164.
