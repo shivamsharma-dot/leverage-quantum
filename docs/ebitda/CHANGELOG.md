@@ -1410,3 +1410,12 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **People-cost table:** Siddharth row 300 B 7 -> 6, C `=(394600+440167/7)/7*6`; Mayur Bajaj row 313 B 7 -> 8, C `=290166+299801/5*2+(394600+440167/7)/7`. One head at Siddharth's per head. Grand total 260 / 1,52,44,872.8 unchanged.
 - **Result:** Siddharth team 6, November -18,78,702 -> -15,36,607, Combined -37,39,337 -> -33,97,243. Mayur team 8, November -4,64,152 -> -8,06,246, Combined -16,27,317 -> -19,69,411. Nishant has no November revenue, so only his cost (3,42,094) moved. Totals unchanged (Nov -4,10,82,615, Combined -7,76,34,608), reconciliation 0, Combined moves net 0. Quantum matches. Not counted in October.
 - How It Works (live) row 161.
+
+## 75. 25 Nov 2026: Shrey Bamola out of Srishti Prasad's team count (leaver rule)
+
+- **Source:** Srishti's email asking to remove Shrey; HR (Shabnam) confirmed last working day 20 Nov. Owner: his November sale stays with Srishti.
+- **Team Mapping row 88:** D = 2026-11-20, I = NA, O cleared. **People-cost table:** Srishti row 306 B 5 -> 4, C kept (salary stays with the team, section 73 rule). Cost base 260 -> 259.
+- **Revenue Adjustments row 10:** shrey.bamola@ / Shrey Bamola / Srishti Prasad / NO, E:I copied from row 9 (reads Team Mapping Q/R by email). VAS 2,59,749, product cost 2,33,774 now counted under Srishti.
+- **Result:** Srishti team 4, Nov EBITDA -14,02,586 -> -11,17,226, Combined -21,77,755 -> -18,92,395. Totals unchanged (Nov -4,10,82,615, Combined -7,76,34,608), reconciliation 0, Difference empty. Quantum matches. Her Nov break-even still uses a VAS-only mix (not fixed).
+- **Owner's emails** to Shabnam/Shafein (Shikha), Srishti (Shrey) and Srishti (Faiyez) were sent by the owner; Shikha's team move and Faiyez wait for Shafein / Shabnam.
+- How It Works (live) row 162.
