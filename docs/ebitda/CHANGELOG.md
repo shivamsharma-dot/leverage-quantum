@@ -1435,3 +1435,8 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - **Full check (as on 24 Nov, 24/30):** sheet November / Combined / October totals = Quantum (Nov revenue 5,15,83,347, cost 9,26,65,962, EBITDA -4,10,82,615; Combined -7,76,34,608; October -3,65,51,993, unchanged). Reconciliation 0 on all three, Combined moves net 0, no formula errors on EBITDA - November / Combined / October / View. No leftover rows for Shikha, Faiyez, Shrey, Nancy or Niharika in November or Combined (October still shows Shikha by design). Slack preview builds 6 messages. Managers in profit: Nov 6 of 43, Combined 4 of 43.
 - **Watch:** Finance's 24 Nov marketing reads 6,22,135 (low next to the usual ~9-12 L; 23 Nov was revised 8,58,308 -> 11,55,709), so 24 Nov may still be partial.
 - How It Works (live) row 164.
+
+## 78. 25 Nov 2026: Combined report posted to #b2c-extension
+
+- Posted at 14:30 IST to #b2c-extension (C0BV44145C5), 6 messages, as on 24 Nov: revenue 15.84 Cr, cost 23.60 Cr, EBITDA Combined -7.76 Cr, EBITDA Nov -4.11 Cr, 4 of 43 in profit (Harsha Sudan, Kandiboina Raja, Mamta Ojha, Kushal Sharma). Includes today's changes (Niharika, Nancy, Nishant, Shrey, Shikha -> Ravi, Faiyez). Checked by reading the channel.
+- Still showing: Deepak Panwar as a senior manager (19 people); Srishti's Nov break-even 1.04 Cr (VAS-only mix, not fixed).
