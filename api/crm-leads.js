@@ -6404,6 +6404,36 @@ export async function fetchB2CData() {
   return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, cashflowStatement: cashflowStatement, cashflowStatementV2: cashflowStatementV2, ts: Date.now() };
 }
 
+// SR deposits by day from the B2C workbook's PM tab (deposit_date, SR_Online_Revenue,
+// SR_Offline_Revenue, columns N to T). Daily P&L's SR Online / SR Offline columns are
+// SUMIFS of these by date, so the Daily Report's direct-post check (lib/b2cDailyChecks.mjs)
+// compares the two. Returns { 'YYYY-MM-DD': { srOnline, srOffline } }, or null if the tab
+// could not be read. deposit_date reads like '24-Nov-26'.
+export async function fetchB2CPmSrByDate() {
+  try {
+    const id = await getB2CSheetId();
+    if (!id) return null;
+    const r = await fetch('https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv&sheet=PM&range=N1:T20000', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!r.ok) return null;
+    const p = b2cRows(await r.text(), { date: 'deposit_date', on: 'sr_online_revenue', off: 'sr_offline_revenue' });
+    if (!(p.at.date >= 0 && p.at.on >= 0 && p.at.off >= 0)) return null;
+    const out = {};
+    for (const row of p.rows) {
+      const m = String(row[p.at.date] == null ? '' : row[p.at.date]).trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
+      if (!m) continue;
+      const mon = MONTHS[m[2].toLowerCase()];
+      if (mon == null) continue;
+      const iso = (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + String(mon + 1).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+      const o = out[iso] || (out[iso] = { srOnline: 0, srOffline: 0 });
+      o.srOnline += b2cNum(row[p.at.on]) || 0;
+      o.srOffline += b2cNum(row[p.at.off]) || 0;
+    }
+    return out;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Full-fidelity B2C Gazette data (2026-08-25 rebuild) -- revenue/cost LINE
 // ITEMS with % share (not just totals), a day-by-day series for the dual
 // revenue-vs-cost chart, and a fiscal-year YTD rollup (Apr 1 to `until`).

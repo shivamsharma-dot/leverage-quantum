@@ -159,6 +159,11 @@ const PREF_KEYS = Array.from(new Set([
   // ctx.revVsCashflowNote, matching what CeoB2CDashboard.jsx's own on-demand
   // Send-to-Slack path already does client-side.
   'b2c_rev_vs_cashflow_note',
+  // B2C Daily Report delivery for the 3 PM schedule: 'review' (default -- review
+  // copy in #dashboard-testing, Approve + CEO PIN) or 'direct' (post straight to
+  // the approval destination when every check in lib/b2cDailyChecks.mjs passes;
+  // any failure falls back to 'review').
+  'b2c_daily_mode',
 ]
   .concat(SLACK_CHANNELS.map(function (c) { return c.pref }))
   .concat(SLACK_CHANNELS.map(function (c) { return c.altPref }))
@@ -2216,6 +2221,16 @@ async function fetchB2CDataSafe() {
   return fetchB2CData()
 }
 
+// Runs lib/b2cDailyChecks.mjs on the data the report is built from. The Cash Flow
+// statement checked is the one the chosen Daily Report version posts.
+async function runB2CDailyChecks(data, throughDate, dailyVersionId) {
+  const { checkB2CDaily } = await import('../lib/b2cDailyChecks.mjs')
+  const { fetchB2CPmSrByDate } = await import('./crm-leads.js')
+  const dv = B2C_DAILY_REPORT_VERSIONS.find(v => v.id === dailyVersionId) || B2C_DAILY_REPORT_VERSIONS.find(v => v.scheduled) || B2C_DAILY_REPORT_VERSIONS[0]
+  const cf = dv.cashflowId === 'b2c_cashflow_v2' ? (data.cashflowStatementV2 || data.cashflowStatement) : data.cashflowStatement
+  return checkB2CDaily({ pnlDays: (data.pnl && data.pnl.days) || [], pmByDate: await fetchB2CPmSrByDate(), cashflowStatement: cf, throughDate })
+}
+
 function findTestChannelId(cfg, wantedName) {
   const list = Array.isArray(cfg.slack_test_channels) ? cfg.slack_test_channels : []
   const hit = list.find(c => c && c.id && String(c.name || '').toLowerCase() === wantedName.toLowerCase())
@@ -2411,7 +2426,8 @@ async function handleB2CDailyPreview(req, res) {
     }
     const cfg = await getReportConfig()
     const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.dailyVersion)
-    return res.status(200).json({ ok: true, jobs: built })
+    const checks = await runB2CDailyChecks(data, throughDate, req.body && req.body.dailyVersion).catch(e => ({ ok: false, problems: ['Checks could not run: ' + e.message] }))
+    return res.status(200).json({ ok: true, jobs: built, checks, mode: cfg.b2c_daily_mode === 'direct' ? 'direct' : 'review' })
   } catch (e) {
     return res.status(500).json({ error: e.message })
   }
@@ -2491,6 +2507,41 @@ async function handleB2CDailyReport(req, res) {
     // buildB2CDailyMessages is the SAME builder handleB2CDailyPreview calls,
     // so a preview shown before sending can never disagree with this.
     const built = await buildB2CDailyMessages(data, cfg, throughDate, req.body && req.body.dailyVersion)
+
+    // Direct delivery (b2c_daily_mode = 'direct', set in the Daily Report popover): the
+    // SCHEDULED run posts straight to the approval destination, with no Approve or PIN,
+    // but only when every check in lib/b2cDailyChecks.mjs passes. A manual send from the
+    // page never posts directly: it always goes to the sandbox for Approve + PIN. If a
+    // check fails, the report falls back to the sandbox below with the reasons listed.
+    let heldProblems = null
+    if ((isVercelCron || isManualCron) && cfg.b2c_daily_mode === 'direct') {
+      const checks = await runB2CDailyChecks(data, throughDate, req.body && req.body.dailyVersion)
+        .catch(e => ({ ok: false, problems: ['Checks could not run: ' + e.message] }))
+      const realHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true })
+      if (checks.ok && realHook.mode === 'bot' && realHook.channel) {
+        for (const job of built) {
+          for (const m of job.messages) await slackPostReportMessage(realHook.token, realHook.channel, m)
+          if (job.image) {
+            try {
+              const files = [await slackUploadFile(realHook.token, {
+                filename: job.image.filename + '.png', buffer: Buffer.from(job.image.pngBase64, 'base64'), title: 'Cash Flow statement',
+              })]
+              await slackCompleteUpload(realHook.token, { files, channel: realHook.channel, initialComment: ':bar_chart: *B2C Student Mobility - Cash Flow*' })
+            } catch (e) { console.error('[b2c daily report] cashflow image upload (direct) failed', e.message) }
+          }
+        }
+        const destLabel = approvalDestinationLabel(realHook)
+        await logReport({ report_type: 'b2c daily report (direct)', recipients: ['slack:' + (realHook.label || '?')], status: 'sent', triggered_by: triggeredBy })
+        // One line in the sandbox, so there is a record of what went out and why.
+        await slackPostReportMessage(hook.token, hook.channel, {
+          text: 'B2C Daily Report posted directly',
+          blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *B2C Daily Report posted directly to ' + destLabel + '* (through ' + checks.cutoff + '). All ' + checks.daysChecked + ' days of the month passed the checks.' } }],
+        }).catch(() => {})
+        return res.status(200).json({ ok: true, direct: true, destination: destLabel, checks })
+      }
+      heldProblems = checks.ok ? ['The destination channel is not available.'] : checks.problems
+    }
+
     const posted = []
     for (const job of built) {
       const { statement, messages, image } = job // pristine -- this exact array is what gets stored AND what the real channel receives on approval
@@ -2515,8 +2566,16 @@ async function handleB2CDailyReport(req, res) {
       }
       posted.push({ statement, pendingId, ts })
     }
+    if (heldProblems) {
+      const list = heldProblems.slice(0, 12).map(x => '• ' + x).join('\n') + (heldProblems.length > 12 ? '\n• ...and ' + (heldProblems.length - 12) + ' more' : '')
+      await slackPostReportMessage(hook.token, hook.channel, {
+        text: 'B2C Daily Report held for review',
+        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':warning: *Not posted to ' + approvalLabel + ' automatically.* The sheet failed these checks:\n' + list + '\nFix the sheet, then press Daily Report > Send report now, or Approve the copy above if it is right.' } }],
+      }).catch(() => {})
+      await logReport({ report_type: 'b2c daily report (direct held)', recipients: ['slack:' + hook.label], status: 'failed', error: heldProblems.join(' | ').slice(0, 500), triggered_by: triggeredBy })
+    }
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: triggeredBy })
-    return res.status(200).json({ ok: true, posted })
+    return res.status(200).json({ ok: true, posted, held: heldProblems || undefined })
   } catch (e) {
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: [], status: 'failed', error: e.message, triggered_by: 'cron' })
     return res.status(500).json({ error: e.message })

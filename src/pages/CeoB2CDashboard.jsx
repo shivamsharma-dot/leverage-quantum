@@ -737,6 +737,11 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const [dailyPreview, setDailyPreview] = useState(null)
   const [dailyPreviewLoading, setDailyPreviewLoading] = useState(false)
   const [dailyPreviewErr, setDailyPreviewErr] = useState('')
+  // The sheet checks the 3 PM run must pass to post directly (lib/b2cDailyChecks.mjs),
+  // and the saved delivery mode for that run ('review' or 'direct'). Both come back
+  // with every preview.
+  const [dailyChecks, setDailyChecks] = useState(null)
+  const [dailyMode, setDailyMode] = useState('review')
   // Which of the two jobs the left-hand list is showing a preview for --
   // matches SlackReportPanel's own versionId, just fixed to 2 choices since
   // Daily Report always sends both, never lets you pick one instead of the
@@ -784,6 +789,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         if (!alive) return
         if (!res.ok) throw new Error(res.d.error || 'Could not load preview')
         setDailyPreview(res.d.jobs || [])
+        setDailyChecks(res.d.checks || null)
+        if (res.d.mode) setDailyMode(res.d.mode)
       })
       .catch(function (e) { if (alive) { setDailyPreviewErr(e.message); setDailyPreview(null) } })
       .finally(function () { if (alive) setDailyPreviewLoading(false) })
@@ -804,6 +811,16 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       body: JSON.stringify({ key: 'b2c_approve_destination', value }),
     }).catch(function () {})
   }, [])
+
+  const saveDailyMode = useCallback(function (value) {
+    const prev = dailyMode
+    setDailyMode(value)
+    fetch('/api/preferences', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'b2c_daily_mode', value }),
+    }).then(function (r) { if (!r.ok) setDailyMode(prev) }).catch(function () { setDailyMode(prev) })
+  }, [dailyMode])
 
   const sendDailyReportNow = async function () {
     setDailySending(true); setDailyMsg('')
@@ -1109,6 +1126,29 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                         />
                       </div>
                     </div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <div style={{ flex: 1, minWidth: 220 }}>
+                        <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                          3 PM schedule
+                        </label>
+                        <Dropdown
+                          value={dailyMode}
+                          onChange={saveDailyMode}
+                          fullWidth
+                          disabled={!user || user.role !== 'admin'}
+                          options={[
+                            { value: 'review', label: 'Review first: #dashboard-testing, then Approve + PIN' },
+                            { value: 'direct', label: 'Post directly when every check passes' },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.5 }}>
+                      {dailyMode === 'direct'
+                        ? 'The 3 PM run posts straight to the channel above, with no Approve or PIN, only if every check below passes. If any check fails it goes to #dashboard-testing for review instead. Send report now always goes for review.'
+                        : 'The 3 PM run and Send report now both post a review copy to #dashboard-testing. Approve + PIN sends it on.'}
+                      {(!user || user.role !== 'admin') ? ' Only an admin can change this.' : ''}
+                    </div>
                     <div style={{ fontSize: 10.5, color: 'var(--text3)' }}>
                       Can't go later than {d1} - today's row is still filling in. Cash Flow ignores this date -- it always shows the CF tab's own figures, which have no daily grain to cut off.
                     </div>
@@ -1165,6 +1205,26 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                         })}
                         <span style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>Both are sent together.</span>
                       </div>
+                      {!dailyPreviewLoading && dailyChecks ? (
+                        <div style={{
+                          border: '1px solid ' + (dailyChecks.ok ? 'rgba(76,174,111,0.45)' : 'rgba(180,35,24,0.35)'),
+                          background: dailyChecks.ok ? 'rgba(76,174,111,0.07)' : 'rgba(180,35,24,0.05)',
+                          borderRadius: 11, padding: '10px 14px', marginBottom: 14, fontSize: 11.5, lineHeight: 1.55,
+                        }}>
+                          <div style={{ fontWeight: 800, color: dailyChecks.ok ? '#2E7D4F' : '#B42318' }}>
+                            {dailyChecks.ok
+                              ? 'Sheet checks passed: all ' + dailyChecks.daysChecked + ' days of the month, through ' + dailyChecks.cutoff + '.'
+                              : 'Sheet checks failed (' + (dailyChecks.problems || []).length + '). A direct post would be held for review.'}
+                          </div>
+                          {!dailyChecks.ok ? (
+                            <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--text)' }}>
+                              {(dailyChecks.problems || []).slice(0, 10).map(function (p, i) { return <li key={i}>{p}</li> })}
+                            </ul>
+                          ) : (
+                            <div style={{ color: 'var(--text3)' }}>Total Revenue, Total Cost, Contribution Profit and EBITDA add up on every day, SR matches the PM tab, and the Cash Flow statement balances.</div>
+                          )}
+                        </div>
+                      ) : null}
                       {dailyPreviewLoading ? (
                         <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Building preview…</div>
                       ) : dailyPreviewErr ? (
