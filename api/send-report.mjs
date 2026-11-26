@@ -2306,20 +2306,21 @@ async function postB2CReviewCopies(built, hook, approvalLabel) {
 }
 
 // ── Slack trigger for the B2C Daily Report (2026-11-26) ─────────────────────────
-// A scheduled routine that can only post Slack messages as Shivam sends one of these, as a
-// plain message in #dashboard-testing, once every B2C cell for yesterday is filled:
-//   "quantum send b2c daily report"  -> checks, then posts straight to the approval destination
-//                                        (#b2c-leverage-core) if every check passes and nothing
-//                                        went out today; otherwise the review copy + the reasons.
-//   "quantum check b2c daily report" -> only runs the checks and replies; posts nothing else.
-// Only messages from the Slack users in app_preferences.b2c_trigger_slack_users (default: Shivam)
-// count. Every outcome is answered in a thread under the trigger message.
-const B2C_TRIGGER_SEND = 'quantum send b2c daily report'
-const B2C_TRIGGER_CHECK = 'quantum check b2c daily report'
+// Shivam's scheduled routine (it can only post Slack messages as Shivam) sends one of these in
+// Shivam's private chat with the Quantum app, once every B2C cell for yesterday is filled:
+//   "send b2c daily report"  -> checks, then the Quantum bot posts straight to the approval
+//                               destination (#b2c-leverage-core) if every check passes and nothing
+//                               went out today; otherwise the review copy goes to #dashboard-testing
+//                               and the reasons come back in the chat.
+//   "check b2c daily report" -> only runs the checks and replies; posts nothing else.
+// A leading "quantum" is allowed. Only the Slack users in app_preferences.b2c_trigger_slack_users
+// (default: Shivam) count. Needs the bot event message.im and scope im:history.
+const B2C_TRIGGER_SEND = 'send b2c daily report'
+const B2C_TRIGGER_CHECK = 'check b2c daily report'
 const B2C_TRIGGER_DEFAULT_USERS = ['U08NNBB7FBP'] // Shivam Sharma
 
 function b2cTriggerKind(text) {
-  const first = String(text || '').split('\n')[0].toLowerCase().replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim()
+  const first = String(text || '').split('\n')[0].toLowerCase().replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim().replace(/^quantum[,:]?\s+/, '')
   if (first.startsWith(B2C_TRIGGER_SEND)) return 'send'
   if (first.startsWith(B2C_TRIGGER_CHECK)) return 'check'
   return null
@@ -2330,11 +2331,15 @@ async function handleB2CSlackTrigger(event) {
   if (!event || event.subtype || event.thread_ts) return false
   const kind = b2cTriggerKind(event.text)
   if (!kind) return false
+  // Only in a private chat with the app (Slack DM channel ids start with D).
+  if (event.channel_type !== 'im' && !String(event.channel || '').startsWith('D')) return false
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return false
   const cfg = await getReportConfig()
   const testId = findTestChannelId(cfg, 'dashboard-testing')
   const hook = resolveSlackTarget(cfg, testId ? 'test:' + testId : 'test', {})
-  if (hook.mode !== 'bot' || !hook.channel || event.channel !== hook.channel) return false
-  const reply = (text) => slackPostBlocks(hook.token, hook.channel, text.replace(/[*_]/g, ''), [{ type: 'section', text: { type: 'mrkdwn', text } }], event.ts).catch(() => {})
+  const reply = (text) => slackPostBlocks(token, event.channel, text.replace(/[*_]/g, ''), [{ type: 'section', text: { type: 'mrkdwn', text } }], event.ts).catch(() => {})
+  if (hook.mode !== 'bot' || !hook.channel) { await reply(':warning: The #dashboard-testing channel is not set up in Quantum, nothing was sent.'); return true }
   let allowed = B2C_TRIGGER_DEFAULT_USERS
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.b2c_trigger_slack_users`, { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } })
@@ -2358,14 +2363,14 @@ async function handleB2CSlackTrigger(event) {
       return true
     }
     const built = await buildB2CDailyMessages(data, cfg, null, null)
-    const r = await tryB2CDirectPost({ data, cfg, built, throughDate: null, dailyVersionId: null, sandboxHook: hook, triggeredBy, auditThreadTs: event.ts })
-    if (r.posted) return true // the audit line was posted in this thread
+    const r = await tryB2CDirectPost({ data, cfg, built, throughDate: null, dailyVersionId: null, sandboxHook: hook, triggeredBy })
+    if (r.posted) { await reply(':white_check_mark: *Posted* the B2C Daily P&L and Cash Flow to ' + r.destination + ' (through ' + r.checks.cutoff + '). All ' + r.checks.daysChecked + ' days passed the checks.'); return true }
     if (r.alreadySent) { await reply(':information_source: The B2C Daily Report has already gone out today, so nothing was posted.'); return true }
     const approvalHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
     const approvalLabel = approvalHook.mode === 'bot' && (approvalHook.channel || approvalHook.guarded) ? approvalDestinationLabel(approvalHook) : '(destination not configured)'
     await postB2CReviewCopies(built, hook, approvalLabel)
     const problems = r.problems || []
-    await reply(':warning: *Not posted to ' + approvalLabel + '.* The sheet failed these checks:\n' + problems.slice(0, 12).map(x => '• ' + x).join('\n') + (problems.length > 12 ? '\n• ...and ' + (problems.length - 12) + ' more' : '') + '\nThe review copy is in this channel: fix the sheet and send the trigger again, or Approve the copy if it is right.')
+    await reply(':warning: *Not posted to ' + approvalLabel + '.* The sheet failed these checks:\n' + problems.slice(0, 12).map(x => '• ' + x).join('\n') + (problems.length > 12 ? '\n• ...and ' + (problems.length - 12) + ' more' : '') + '\nThe review copy is in #dashboard-testing: fix the sheet and send the message again, or Approve the copy there if it is right.')
     await logReport({ report_type: 'b2c daily report (direct held)', recipients: ['slack:' + hook.label], status: 'failed', error: problems.join(' | ').slice(0, 500), triggered_by: triggeredBy })
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: triggeredBy })
   } catch (e) {
