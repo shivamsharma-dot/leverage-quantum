@@ -1440,3 +1440,8 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 
 - Posted at 14:30 IST to #b2c-extension (C0BV44145C5), 6 messages, as on 24 Nov: revenue 15.84 Cr, cost 23.60 Cr, EBITDA Combined -7.76 Cr, EBITDA Nov -4.11 Cr, 4 of 43 in profit (Harsha Sudan, Kandiboina Raja, Mamta Ojha, Kushal Sharma). Includes today's changes (Niharika, Nancy, Nishant, Shrey, Shikha -> Ravi, Faiyez). Checked by reading the channel.
 - Still showing: Deepak Panwar as a senior manager (19 people); Srishti's Nov break-even 1.04 Cr (VAS-only mix, not fixed).
+
+## 79. 26 Nov 2026: two leavers out of Soumitra Chaturvedi's team count (November only)
+
+- From Soumitra's email (26 Nov, exit mails attached). Team Mapping rows 25 and 27: leaver rule (section 73), D = exit date, I = NA, O cleared. People-cost row 298 B 17 -> 15, C kept. November only; October tab not changed.
+- Checked: totals unchanged, reconciliation 0, sheet = Quantum. Details in How It Works (live) row 165.
