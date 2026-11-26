@@ -1453,3 +1453,7 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - 'EBITDA - Combined' A261: Rahul taken off the "Not a senior manager" list (undoes section 54), so Lakshay Gupta and Ummi Adibah Binti Robai roll up to Rahul too. Senior managers 14 -> 12.
 - The October senior manager table reads the same column K, so it also shows Rahul in place of Deepak / Lakshay / Ummi / Vishal Jain. October team numbers unchanged.
 - Checked: team numbers and totals unchanged, reconciliation 0 on all three, sheet = Quantum. How It Works (live) row 166.
+
+## 81. 26 Nov 2026: Combined report posted to #b2c-extension
+
+- Posted from Quantum (Send to Slack, Combined, 6 messages) at 13:48 IST, as on 25 Nov. Includes sections 79 and 80 (Soumitra's two leavers; Rahul Agarwal as senior manager in place of Deepak Panwar). Checked by reading the channel.
