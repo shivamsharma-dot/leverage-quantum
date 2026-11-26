@@ -1445,3 +1445,11 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 
 - From Soumitra's email (26 Nov, exit mails attached). Team Mapping rows 25 and 27: leaver rule (section 73), D = exit date, I = NA, O cleared. People-cost row 298 B 17 -> 15, C kept. November only; October tab not changed.
 - Checked: totals unchanged, reconciliation 0, sheet = Quantum. Details in How It Works (live) row 165.
+
+## 80. 26 Nov 2026: Deepak Panwar's managers moved under Rahul Agarwal (senior manager)
+
+- Deepak Panwar left (last working day 23 Nov, Rahul's email). Owner: his 4 managers (Srishti Prasad, Aditya Gupta, Tarun Kumar, Aman Raj Keshari) go under Rahul Agarwal, shown as one senior manager row.
+- Team Mapping: the 4 managers' H = E0068, K = Rahul Agarwal; their team rows J = E0068, K = Rahul Agarwal. Deepak's own row unchanged.
+- 'EBITDA - Combined' A261: Rahul taken off the "Not a senior manager" list (undoes section 54), so Lakshay Gupta and Ummi Adibah Binti Robai roll up to Rahul too. Senior managers 14 -> 12.
+- The October senior manager table reads the same column K, so it also shows Rahul in place of Deepak / Lakshay / Ummi / Vishal Jain. October team numbers unchanged.
+- Checked: team numbers and totals unchanged, reconciliation 0 on all three, sheet = Quantum. How It Works (live) row 166.
