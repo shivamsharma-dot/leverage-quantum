@@ -2231,6 +2231,151 @@ async function runB2CDailyChecks(data, throughDate, dailyVersionId) {
   return checkB2CDaily({ pnlDays: (data.pnl && data.pnl.days) || [], pmByDate: await fetchB2CPmSrByDate(), cashflowStatement: cf, throughDate })
 }
 
+// Posts the B2C Daily Report straight to the approval destination (#b2c-leverage-core), with no
+// Approve or PIN, but only if every sheet check in lib/b2cDailyChecks.mjs passes and the report has
+// not already gone out today (IST). Used by the scheduled run in 'direct' mode and by the Slack
+// trigger message. Returns { posted, destination, checks } or { alreadySent } or { problems, checks }.
+async function b2cDailySentTodayIST() {
+  const istMidnight = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30').toISOString()
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/report_logs?select=report_type&status=eq.sent&sent_at=gte.${encodeURIComponent(istMidnight)}&report_type=in.(${encodeURIComponent('"b2c pnl report (approved)","b2c daily report (direct)"')})&limit=1`, {
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+  })
+  if (!r.ok) throw new Error('could not read report_logs (' + r.status + ')')
+  const rows = await r.json().catch(() => [])
+  return Array.isArray(rows) && rows.length > 0
+}
+
+async function tryB2CDirectPost({ data, cfg, built, throughDate, dailyVersionId, sandboxHook, triggeredBy, auditThreadTs }) {
+  if (await b2cDailySentTodayIST()) return { alreadySent: true }
+  const checks = await runB2CDailyChecks(data, throughDate, dailyVersionId)
+    .catch(e => ({ ok: false, problems: ['Checks could not run: ' + e.message] }))
+  const realHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true })
+  if (!checks.ok || realHook.mode !== 'bot' || !realHook.channel) {
+    return { checks, problems: checks.ok ? ['The destination channel is not available.'] : checks.problems }
+  }
+  for (const job of built) {
+    for (const m of job.messages) await slackPostReportMessage(realHook.token, realHook.channel, m)
+    if (job.image) {
+      try {
+        const files = [await slackUploadFile(realHook.token, {
+          filename: job.image.filename + '.png', buffer: Buffer.from(job.image.pngBase64, 'base64'), title: 'Cash Flow statement',
+        })]
+        await slackCompleteUpload(realHook.token, { files, channel: realHook.channel, initialComment: ':bar_chart: *B2C Student Mobility - Cash Flow*' })
+      } catch (e) { console.error('[b2c daily report] cashflow image upload (direct) failed', e.message) }
+    }
+  }
+  const destination = approvalDestinationLabel(realHook)
+  await logReport({ report_type: 'b2c daily report (direct)', recipients: ['slack:' + (realHook.label || '?')], status: 'sent', triggered_by: triggeredBy })
+  // One line in the sandbox, so there is a record of what went out and why.
+  if (sandboxHook && sandboxHook.channel) {
+    await slackPostBlocks(sandboxHook.token, sandboxHook.channel, 'B2C Daily Report posted directly', [
+      { type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *B2C Daily Report posted directly to ' + destination + '* (through ' + checks.cutoff + '). All ' + checks.daysChecked + ' days of the month passed the checks.' } },
+    ], auditThreadTs).catch(() => {})
+  }
+  return { posted: true, destination, checks }
+}
+
+// Posts the review copy of each built B2C job to the sandbox with Approve / Disapprove buttons
+// (the image threaded under it). Shared by the Daily Report endpoint and the Slack trigger.
+async function postB2CReviewCopies(built, hook, approvalLabel) {
+  const posted = []
+  for (const job of built) {
+    const { statement, messages, image } = job // pristine -- this exact array is what gets stored AND what the real channel receives on approval
+    const pendingId = await savePendingB2CReport(statement, messages, image)
+    const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButtons(messages[0], pendingId, approvalLabel))
+    // The sandbox copy gets the image threaded under the approval message
+    // (this is only the preview the approver checks before deciding) --
+    // the real send on approval posts it as its own top-level message
+    // instead (handleSlackViewSubmission), matching how the on-page
+    // manual send already does for the same reason: the image IS the
+    // report, not an attachment to one.
+    if (image) {
+      try {
+        const files = [await slackUploadFile(hook.token, {
+          filename: image.filename + '.png', buffer: Buffer.from(image.pngBase64, 'base64'), title: 'Cash Flow statement',
+        })]
+        if (image.csv) files.push(await slackUploadFile(hook.token, {
+          filename: image.filename + '.csv', buffer: Buffer.from(image.csv, 'utf8'), title: 'Cash Flow statement (CSV)',
+        }))
+        await slackCompleteUpload(hook.token, { files, channel: hook.channel, threadTs: ts })
+      } catch (e) { console.error('[b2c daily report] cashflow image upload (sandbox) failed', e.message) }
+    }
+    posted.push({ statement, pendingId, ts })
+  }
+  return posted
+}
+
+// ── Slack trigger for the B2C Daily Report (2026-11-26) ─────────────────────────
+// A scheduled routine that can only post Slack messages as Shivam sends one of these, as a
+// plain message in #dashboard-testing, once every B2C cell for yesterday is filled:
+//   "quantum send b2c daily report"  -> checks, then posts straight to the approval destination
+//                                        (#b2c-leverage-core) if every check passes and nothing
+//                                        went out today; otherwise the review copy + the reasons.
+//   "quantum check b2c daily report" -> only runs the checks and replies; posts nothing else.
+// Only messages from the Slack users in app_preferences.b2c_trigger_slack_users (default: Shivam)
+// count. Every outcome is answered in a thread under the trigger message.
+const B2C_TRIGGER_SEND = 'quantum send b2c daily report'
+const B2C_TRIGGER_CHECK = 'quantum check b2c daily report'
+const B2C_TRIGGER_DEFAULT_USERS = ['U08NNBB7FBP'] // Shivam Sharma
+
+function b2cTriggerKind(text) {
+  const first = String(text || '').split('\n')[0].toLowerCase().replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim()
+  if (first.startsWith(B2C_TRIGGER_SEND)) return 'send'
+  if (first.startsWith(B2C_TRIGGER_CHECK)) return 'check'
+  return null
+}
+
+// Returns true when the event was a B2C trigger (handled or refused), so the caller stops there.
+async function handleB2CSlackTrigger(event) {
+  if (!event || event.subtype || event.thread_ts) return false
+  const kind = b2cTriggerKind(event.text)
+  if (!kind) return false
+  const cfg = await getReportConfig()
+  const testId = findTestChannelId(cfg, 'dashboard-testing')
+  const hook = resolveSlackTarget(cfg, testId ? 'test:' + testId : 'test', {})
+  if (hook.mode !== 'bot' || !hook.channel || event.channel !== hook.channel) return false
+  const reply = (text) => slackPostBlocks(hook.token, hook.channel, text.replace(/[*_]/g, ''), [{ type: 'section', text: { type: 'mrkdwn', text } }], event.ts).catch(() => {})
+  let allowed = B2C_TRIGGER_DEFAULT_USERS
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.b2c_trigger_slack_users`, { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } })
+    const v = r.ok ? ((await r.json())[0] || {}).value : null
+    if (Array.isArray(v) && v.length) allowed = v.map(String)
+  } catch (_) { /* default list */ }
+  if (!allowed.includes(String(event.user || ''))) {
+    await reply(':no_entry: Only Shivam can trigger the B2C Daily Report from here.')
+    return true
+  }
+  const triggeredBy = 'slack:' + event.user
+  try {
+    const data = await fetchB2CDataSafe()
+    if (!data || data.configured === false) { await reply(':warning: The B2C sheet is not configured, nothing was sent.'); return true }
+    if (kind === 'check') {
+      const checks = await runB2CDailyChecks(data, null, null)
+      const sent = await b2cDailySentTodayIST().catch(() => null)
+      await reply(checks.ok
+        ? ':white_check_mark: *All checks passed* for ' + checks.daysChecked + ' days, through ' + checks.cutoff + '.' + (sent ? ' The report has already gone out today.' : ' Nothing was sent.')
+        : ':warning: *Checks failed* (through ' + checks.cutoff + '):\n' + checks.problems.slice(0, 12).map(x => '• ' + x).join('\n') + '\nNothing was sent.')
+      return true
+    }
+    const built = await buildB2CDailyMessages(data, cfg, null, null)
+    const r = await tryB2CDirectPost({ data, cfg, built, throughDate: null, dailyVersionId: null, sandboxHook: hook, triggeredBy, auditThreadTs: event.ts })
+    if (r.posted) return true // the audit line was posted in this thread
+    if (r.alreadySent) { await reply(':information_source: The B2C Daily Report has already gone out today, so nothing was posted.'); return true }
+    const approvalHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
+    const approvalLabel = approvalHook.mode === 'bot' && (approvalHook.channel || approvalHook.guarded) ? approvalDestinationLabel(approvalHook) : '(destination not configured)'
+    await postB2CReviewCopies(built, hook, approvalLabel)
+    const problems = r.problems || []
+    await reply(':warning: *Not posted to ' + approvalLabel + '.* The sheet failed these checks:\n' + problems.slice(0, 12).map(x => '• ' + x).join('\n') + (problems.length > 12 ? '\n• ...and ' + (problems.length - 12) + ' more' : '') + '\nThe review copy is in this channel: fix the sheet and send the trigger again, or Approve the copy if it is right.')
+    await logReport({ report_type: 'b2c daily report (direct held)', recipients: ['slack:' + hook.label], status: 'failed', error: problems.join(' | ').slice(0, 500), triggered_by: triggeredBy })
+    await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: triggeredBy })
+  } catch (e) {
+    console.error('[b2c slack trigger] failed', e)
+    await reply(':x: Something went wrong, nothing may have been sent: ' + String(e.message || e).slice(0, 300))
+    await logReport({ report_type: 'b2c daily report (slack trigger)', recipients: [], status: 'failed', error: String(e.message || e).slice(0, 500), triggered_by: triggeredBy })
+  }
+  return true
+}
+
 function findTestChannelId(cfg, wantedName) {
   const list = Array.isArray(cfg.slack_test_channels) ? cfg.slack_test_channels : []
   const hit = list.find(c => c && c.id && String(c.name || '').toLowerCase() === wantedName.toLowerCase())
@@ -2515,57 +2660,13 @@ async function handleB2CDailyReport(req, res) {
     // check fails, the report falls back to the sandbox below with the reasons listed.
     let heldProblems = null
     if ((isVercelCron || isManualCron) && cfg.b2c_daily_mode === 'direct') {
-      const checks = await runB2CDailyChecks(data, throughDate, req.body && req.body.dailyVersion)
-        .catch(e => ({ ok: false, problems: ['Checks could not run: ' + e.message] }))
-      const realHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true })
-      if (checks.ok && realHook.mode === 'bot' && realHook.channel) {
-        for (const job of built) {
-          for (const m of job.messages) await slackPostReportMessage(realHook.token, realHook.channel, m)
-          if (job.image) {
-            try {
-              const files = [await slackUploadFile(realHook.token, {
-                filename: job.image.filename + '.png', buffer: Buffer.from(job.image.pngBase64, 'base64'), title: 'Cash Flow statement',
-              })]
-              await slackCompleteUpload(realHook.token, { files, channel: realHook.channel, initialComment: ':bar_chart: *B2C Student Mobility - Cash Flow*' })
-            } catch (e) { console.error('[b2c daily report] cashflow image upload (direct) failed', e.message) }
-          }
-        }
-        const destLabel = approvalDestinationLabel(realHook)
-        await logReport({ report_type: 'b2c daily report (direct)', recipients: ['slack:' + (realHook.label || '?')], status: 'sent', triggered_by: triggeredBy })
-        // One line in the sandbox, so there is a record of what went out and why.
-        await slackPostReportMessage(hook.token, hook.channel, {
-          text: 'B2C Daily Report posted directly',
-          blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *B2C Daily Report posted directly to ' + destLabel + '* (through ' + checks.cutoff + '). All ' + checks.daysChecked + ' days of the month passed the checks.' } }],
-        }).catch(() => {})
-        return res.status(200).json({ ok: true, direct: true, destination: destLabel, checks })
-      }
-      heldProblems = checks.ok ? ['The destination channel is not available.'] : checks.problems
+      const r = await tryB2CDirectPost({ data, cfg, built, throughDate, dailyVersionId: req.body && req.body.dailyVersion, sandboxHook: hook, triggeredBy })
+      if (r.posted) return res.status(200).json({ ok: true, direct: true, destination: r.destination, checks: r.checks })
+      if (r.alreadySent) return res.status(200).json({ ok: true, direct: false, alreadySent: true })
+      heldProblems = r.problems
     }
 
-    const posted = []
-    for (const job of built) {
-      const { statement, messages, image } = job // pristine -- this exact array is what gets stored AND what the real channel receives on approval
-      const pendingId = await savePendingB2CReport(statement, messages, image)
-      const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButtons(messages[0], pendingId, approvalLabel))
-      // The sandbox copy gets the image threaded under the approval message
-      // (this is only the preview the approver checks before deciding) --
-      // the real send on approval posts it as its own top-level message
-      // instead (handleSlackViewSubmission), matching how the on-page
-      // manual send already does for the same reason: the image IS the
-      // report, not an attachment to one.
-      if (image) {
-        try {
-          const files = [await slackUploadFile(hook.token, {
-            filename: image.filename + '.png', buffer: Buffer.from(image.pngBase64, 'base64'), title: 'Cash Flow statement',
-          })]
-          if (image.csv) files.push(await slackUploadFile(hook.token, {
-            filename: image.filename + '.csv', buffer: Buffer.from(image.csv, 'utf8'), title: 'Cash Flow statement (CSV)',
-          }))
-          await slackCompleteUpload(hook.token, { files, channel: hook.channel, threadTs: ts })
-        } catch (e) { console.error('[b2c daily report] cashflow image upload (sandbox) failed', e.message) }
-      }
-      posted.push({ statement, pendingId, ts })
-    }
+    const posted = await postB2CReviewCopies(built, hook, approvalLabel)
     if (heldProblems) {
       const list = heldProblems.slice(0, 12).map(x => '• ' + x).join('\n') + (heldProblems.length > 12 ? '\n• ...and ' + (heldProblems.length - 12) + ' more' : '')
       await slackPostReportMessage(hook.token, hook.channel, {
@@ -3469,6 +3570,11 @@ export default async function handler(req, res) {
     } else if (event.type === 'app_mention' && !event.bot_id) {
       await handleSlackAppMention(event).catch(e => console.error('slack app_mention failed', e))
     } else if (event.type === 'message') {
+      if (b2cTriggerKind(event.text) && !event.subtype && !event.thread_ts) {
+        // The report takes longer than Slack's 3s ack window, so answer now and finish in the background.
+        waitUntil(handleB2CSlackTrigger(event).catch(e => console.error('b2c slack trigger failed', e)))
+        return res.status(200).end()
+      }
       await handleSlackThreadReply(event).catch(e => console.error('slack thread reply failed', e))
     }
     return res.status(200).end()
