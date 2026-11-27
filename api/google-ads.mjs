@@ -194,7 +194,7 @@ let changes=[],changeError=null
 try{
 const ist=d=>new Date(d.getTime()+19800000).toISOString().slice(0,10)
 const now=new Date(),since=new Date(now.getTime()-29*86400000)
-const ce=await gaql(token,cid,`SELECT change_event.change_date_time,change_event.change_resource_type,change_event.resource_change_operation,change_event.changed_fields,change_event.client_type,change_event.user_email,change_event.campaign,change_event.campaign_budget,change_event.old_resource,change_event.new_resource FROM change_event WHERE change_event.change_date_time >= '${ist(since)}' AND change_event.change_date_time <= '${ist(now)} 23:59:59' AND change_event.change_resource_type IN ('CAMPAIGN','CAMPAIGN_BUDGET') ORDER BY change_event.change_date_time DESC LIMIT 2000`)
+const ce=await gaql(token,cid,`SELECT change_event.change_date_time,change_event.change_resource_type,change_event.resource_change_operation,change_event.changed_fields,change_event.client_type,change_event.user_email,change_event.campaign,change_event.change_resource_name,change_event.old_resource,change_event.new_resource FROM change_event WHERE change_event.change_date_time >= '${ist(since)}' AND change_event.change_date_time <= '${ist(now)} 23:59:59' AND change_event.change_resource_type IN ('CAMPAIGN','CAMPAIGN_BUDGET') ORDER BY change_event.change_date_time DESC LIMIT 2000`)
 const pick=(res)=>{if(!res)return null;const c=res.campaign,b=res.campaignBudget;const o={}
 if(b&&b.amountMicros!=null)o.dailyBudget=mic(b.amountMicros)
 if(c){if(c.status)o.status=c.status;if(c.biddingStrategyType)o.biddingStrategy=c.biddingStrategyType
@@ -203,10 +203,10 @@ const tr=c.targetRoas?.targetRoas??c.maximizeConversionValue?.targetRoas;if(tr!=
 if(c.name)o.name=c.name}
 return Object.keys(o).length?o:null}
 for(const e of ce){const ch=e.changeEvent;const campId=(ch.campaign||'').split('/').pop()
-const name=byId[campId]||byBudget[ch.campaignBudget]||null
+const name=byId[campId]||byBudget[ch.changeResourceName]||null
 if(nameRaw&&!(name||'').toLowerCase().includes(nameRaw.toLowerCase()))continue
 changes.push({at:ch.changeDateTime,resource:ch.changeResourceType,operation:ch.resourceChangeOperation,fields:ch.changedFields||null,campaign:name,by:ch.userEmail||ch.clientType||null,before:pick(ch.oldResource),after:pick(ch.newResource)})}
-}catch(e){changeError=e.message.slice(0,300)}
+}catch(e){const m=e.message.match(/"message": "([^"]+)"/g);changeError=(m?m.join(' ; '):e.message).slice(0,1200)}
 return res.json({tab:'capacity',name:nameRaw||null,months,changes,changeHistoryWindowDays:30,isError,changeError})
 }
 if(tab==='trend'){const mode=req.query.mode==='month'?'month':'day';const seg=mode==='month'?'segments.month':'segments.date';const rows=await gaql(token,cid,`SELECT ${seg},metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM customer WHERE ${dc} ORDER BY ${seg} ASC`);const points=rows.map(r=>({period:mode==='month'?r.segments.month:r.segments.date,spend:mic(r.metrics.costMicros),impressions:+r.metrics.impressions||0,clicks:+r.metrics.clicks||0,ctr:pct(r.metrics.ctr),avgCpc:mic(r.metrics.averageCpc),conversions:+Number(r.metrics.conversions||0).toFixed(1),costPerConv:mic(r.metrics.costPerConversion)}));const total=points.reduce((t,p)=>({spend:t.spend+p.spend,impressions:t.impressions+p.impressions,clicks:t.clicks+p.clicks,conversions:t.conversions+p.conversions}),{spend:0,impressions:0,clicks:0,conversions:0});total.ctr=total.impressions?total.clicks/total.impressions:0;total.avgCpc=total.clicks?total.spend/total.clicks:0;total.costPerConv=total.conversions?total.spend/total.conversions:0;return respond(res,'google-ads:trend',{points,total,mode,tab:'trend'})}return res.status(400).json({error:'unknown tab'})
