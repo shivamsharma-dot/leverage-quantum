@@ -1463,3 +1463,7 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 - From Shafein Tauheid's email (27 Nov). Team Mapping row 350: leaver rule (section 73), D = exit date, I = NA. People-cost row 303 B 13 -> 12, C kept. November only; October unchanged.
 - His November revenue stays in Ravi's team through 'Revenue Adjustments' row 11 (reads Team Mapping, like row 7).
 - Checked: totals unchanged, Difference empty, reconciliation 0, sheet = Quantum. Details in How It Works (live) row 167.
+
+## 83. 27 Nov 2026: Combined report posted to #b2c-extension
+
+- Posted from Quantum (Send to Slack, Combined, 6 messages) at 13:52 IST, as on 26 Nov. Includes section 82 (Ravi's team 12). Before posting, every manager and senior manager row in the preview was checked against the sheet (no differences). Checked by reading the channel; each team table has its picture in the thread.
