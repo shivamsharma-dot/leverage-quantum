@@ -1457,3 +1457,9 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 ## 81. 26 Nov 2026: Combined report posted to #b2c-extension
 
 - Posted from Quantum (Send to Slack, Combined, 6 messages) at 13:48 IST, as on 25 Nov. Includes sections 79 and 80 (Soumitra's two leavers; Rahul Agarwal as senior manager in place of Deepak Panwar). Checked by reading the channel.
+
+## 82. 27 Nov 2026: one leaver out of Ravi Pratap Singh Chauhan's team count (November only)
+
+- From Shafein Tauheid's email (27 Nov). Team Mapping row 350: leaver rule (section 73), D = exit date, I = NA. People-cost row 303 B 13 -> 12, C kept. November only; October unchanged.
+- His November revenue stays in Ravi's team through 'Revenue Adjustments' row 11 (reads Team Mapping, like row 7).
+- Checked: totals unchanged, Difference empty, reconciliation 0, sheet = Quantum. Details in How It Works (live) row 167.
