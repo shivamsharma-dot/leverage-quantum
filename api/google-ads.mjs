@@ -173,6 +173,42 @@ standard=stdRows.map(r=>({source:'Search/Display',campaign:r.campaign.name,asset
 }catch(e){console.error('standard assets:',e.message)}
 return res.json({assets:[...pmax,...standard],tab:'assets'})
 }
+// tab=capacity (read only, 2026-11-27): monthly impression share incl. lost to budget / lost to rank,
+// daily budget, bid strategy, plus Google Ads change history for the matching campaigns.
+// ?name=<letters/digits> filters campaigns whose name contains it (any case), e.g. name=career.
+// Google keeps change_event history for 30 days only, so changes older than that cannot be read.
+if(tab==='capacity'){
+const nameRaw=String(req.query.name||'').replace(/[^A-Za-z0-9 _-]/g,'').slice(0,40)
+const nameCond=nameRaw?` AND campaign.name REGEXP_MATCH '(?i).*${nameRaw}.*'`:''
+const base=`segments.month,campaign.id,campaign.name,campaign.status,campaign.advertising_channel_type,campaign.bidding_strategy_type,campaign.campaign_budget,campaign_budget.amount_micros,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.conversions`
+const isCols=`metrics.search_impression_share,metrics.search_budget_lost_impression_share,metrics.search_rank_lost_impression_share,metrics.search_top_impression_share,metrics.search_absolute_top_impression_share`
+let rows,isError=null
+try{rows=await gaql(token,cid,`SELECT ${base},${isCols} FROM campaign WHERE ${dc}${nameCond} ORDER BY segments.month ASC`)}
+catch(e){isError=e.message.slice(0,300);rows=await gaql(token,cid,`SELECT ${base} FROM campaign WHERE ${dc}${nameCond} ORDER BY segments.month ASC`)}
+const share=v=>v==null?null:+Number(v).toFixed(4)
+const months=rows.filter(r=>Number(r.metrics.costMicros||0)>0||Number(r.metrics.impressions||0)>0).map(r=>({month:r.segments.month,campaignId:r.campaign.id,name:r.campaign.name,status:r.campaign.status,type:r.campaign.advertisingChannelType,biddingStrategy:r.campaign.biddingStrategyType||null,dailyBudgetNow:r.campaignBudget?.amountMicros?mic(r.campaignBudget.amountMicros):null,spend:mic(r.metrics.costMicros),impressions:+r.metrics.impressions||0,clicks:+r.metrics.clicks||0,conversions:+Number(r.metrics.conversions||0).toFixed(1),searchIS:share(r.metrics.searchImpressionShare),lostToBudget:share(r.metrics.searchBudgetLostImpressionShare),lostToRank:share(r.metrics.searchRankLostImpressionShare),topIS:share(r.metrics.searchTopImpressionShare),absTopIS:share(r.metrics.searchAbsoluteTopImpressionShare)}))
+const byId={},byBudget={}
+for(const r of rows){byId[r.campaign.id]=r.campaign.name;if(r.campaign.campaignBudget)byBudget[r.campaign.campaignBudget]=r.campaign.name}
+// Change history: last 30 days (Google's limit), campaign and budget changes only.
+let changes=[],changeError=null
+try{
+const ist=d=>new Date(d.getTime()+19800000).toISOString().slice(0,10)
+const now=new Date(),since=new Date(now.getTime()-29*86400000)
+const ce=await gaql(token,cid,`SELECT change_event.change_date_time,change_event.change_resource_type,change_event.resource_change_operation,change_event.changed_fields,change_event.client_type,change_event.user_email,change_event.campaign,change_event.campaign_budget,change_event.old_resource,change_event.new_resource FROM change_event WHERE change_event.change_date_time >= '${ist(since)}' AND change_event.change_date_time <= '${ist(now)} 23:59:59' AND change_event.change_resource_type IN ('CAMPAIGN','CAMPAIGN_BUDGET') ORDER BY change_event.change_date_time DESC LIMIT 2000`)
+const pick=(res)=>{if(!res)return null;const c=res.campaign,b=res.campaignBudget;const o={}
+if(b&&b.amountMicros!=null)o.dailyBudget=mic(b.amountMicros)
+if(c){if(c.status)o.status=c.status;if(c.biddingStrategyType)o.biddingStrategy=c.biddingStrategyType
+const tc=c.targetCpa?.targetCpaMicros??c.maximizeConversions?.targetCpaMicros;if(tc!=null)o.targetCpa=mic(tc)
+const tr=c.targetRoas?.targetRoas??c.maximizeConversionValue?.targetRoas;if(tr!=null)o.targetRoas=+Number(tr).toFixed(2)
+if(c.name)o.name=c.name}
+return Object.keys(o).length?o:null}
+for(const e of ce){const ch=e.changeEvent;const campId=(ch.campaign||'').split('/').pop()
+const name=byId[campId]||byBudget[ch.campaignBudget]||null
+if(nameRaw&&!(name||'').toLowerCase().includes(nameRaw.toLowerCase()))continue
+changes.push({at:ch.changeDateTime,resource:ch.changeResourceType,operation:ch.resourceChangeOperation,fields:ch.changedFields||null,campaign:name,by:ch.userEmail||ch.clientType||null,before:pick(ch.oldResource),after:pick(ch.newResource)})}
+}catch(e){changeError=e.message.slice(0,300)}
+return res.json({tab:'capacity',name:nameRaw||null,months,changes,changeHistoryWindowDays:30,isError,changeError})
+}
 if(tab==='trend'){const mode=req.query.mode==='month'?'month':'day';const seg=mode==='month'?'segments.month':'segments.date';const rows=await gaql(token,cid,`SELECT ${seg},metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM customer WHERE ${dc} ORDER BY ${seg} ASC`);const points=rows.map(r=>({period:mode==='month'?r.segments.month:r.segments.date,spend:mic(r.metrics.costMicros),impressions:+r.metrics.impressions||0,clicks:+r.metrics.clicks||0,ctr:pct(r.metrics.ctr),avgCpc:mic(r.metrics.averageCpc),conversions:+Number(r.metrics.conversions||0).toFixed(1),costPerConv:mic(r.metrics.costPerConversion)}));const total=points.reduce((t,p)=>({spend:t.spend+p.spend,impressions:t.impressions+p.impressions,clicks:t.clicks+p.clicks,conversions:t.conversions+p.conversions}),{spend:0,impressions:0,clicks:0,conversions:0});total.ctr=total.impressions?total.clicks/total.impressions:0;total.avgCpc=total.clicks?total.spend/total.clicks:0;total.costPerConv=total.conversions?total.spend/total.conversions:0;return respond(res,'google-ads:trend',{points,total,mode,tab:'trend'})}return res.status(400).json({error:'unknown tab'})
 }catch(e){console.error('Google Ads:',e.message);return res.status(500).json({error:e.message})}
 }
