@@ -1467,3 +1467,9 @@ Changed on `EBITDA - Combined` (no code change; page and Slack read this tab):
 ## 83. 27 Nov 2026: Combined report posted to #b2c-extension
 
 - Posted from Quantum (Send to Slack, Combined, 6 messages) at 13:52 IST, as on 26 Nov. Includes section 82 (Ravi's team 12). Before posting, every manager and senior manager row in the preview was checked against the sheet (no differences). Checked by reading the channel; each team table has its picture in the thread.
+
+## 84. 28 Nov 2026: Combined report posted to #b2c-extension
+
+- Posted from Quantum (Send to Slack, Combined, 6 messages) at 11:40 IST, as on 27 Nov. Checked before posting: every manager and senior manager row matched the sheet, reconciliation 0. Marketing included the 27 Nov PM spend that reached the sheet between the check and the post (recon still 0).
+- Finance P&L 27 Nov row was incomplete (AC, VAS, product cost blank). It only feeds marketing here, which was filled.
+- HR exits list (27 Nov) has two people still counted in November; not changed until their managers ask.
